@@ -1,0 +1,66 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+vendor/
+node_modules/
+
+# Python environments and generated files
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local product images
+# Keep up to 20 sample images in scraper-results/samples/
+scraper/images/
+scraper-results/images/
+scraper-results/photos/
+
+# PrestaShop uploads and generated images
+shop/img/
+shop/upload/
+shop/download/
+
+# Cache and logs
+cache/
+logs/
+*.log
+shop/var/cache/
+shop/var/log/
+shop/var/logs/
+
+# Local Docker data and backups
+deploy/data/
+deploy/backups/
+
+# Local certificates and private keys
+deploy/certs/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Playwright reports and artifacts
+playwright-report/
+test-results/
+blob-report/
+
+# Build artifacts
+dist/
+build/
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
