@@ -29,6 +29,22 @@ Projekt ma charakter dydaktyczny. Sklep z pobranymi danymi nie jest przeznaczony
 | Paweł Krajewski | s203918 |
 | Wiktor Adamczyk | s203519 |
 
+## Zasady współpracy
+
+Każdą zmianę realizujemy według procesu:
+
+GitHub Issue → osobna gałąź → Pull Request → recenzja → scalenie do main.
+
+1. **Issue** — tworzymy zadanie z opisem, kryteriami zakończenia i przypisaną osobą odpowiedzialną za wykonanie.
+2. **Gałąź** — wykonawca tworzy osobną gałąź od aktualnego main, np. chore/1-repository-setup.
+3. **Pull Request** — po wykonaniu zadania otwiera PR do main. Opisuje zmiany, sposób ich sprawdzenia i łączymy z PR z Issue.
+4. **Recenzja** — inna osoba z zespołu sprawdza zmiany i dodaje merytoryczne komentarze. Autor wprowadza potrzebne poprawki.
+5. **Scalenie** — po akceptacji i przejściu skonfigurowanych kontroli zmiany są scalane do main. Zadanie w Jirze zostaje oznaczone jako zakończone.
+
+Nie wykonujemy bezpośrednich commitów ani pushów do main, poza commitem inicjalnym. Nie nadpisujemy historii main przez force push.
+
+PR zawierające istotne fragmenty wygenerowane przez AI oznaczamy etykietą ai-assisted. W tym samym PR uzupełniamy docs/AI_LOG.md i opisujemy sposób weryfikacji wyników.
+
 ## Struktura repozytorium
 
 | Katalog | Zawartość |
