@@ -1,0 +1,53 @@
+[
+  {
+    "product_id": "815",
+    "name": "Zawias niewidoczny 111x29 do drzwi bezprzylgowych",
+    "description": "<p><b>Przeznaczenie:</b></p><ul><li>zawias stosowany(...) <li>całkowicie niewidoczny</li></ul> ",
+    "breadcrumbs": [
+      "Strona główna",
+      "Produkty polecane"
+    ],
+    "price_brutto": 61.11,
+    "vat_rate": 23,
+    "weight": 0.3,
+    "images": [
+      "https://pandomu.com.pl/2276-medium_default/zawias-niewidoczny-111x29-do-drzwi-bezprzylgowych.jpg",
+    ],
+    "variants": [
+      {
+        "variant_id": "25",
+        "attributes": {
+          "Wersja": "prawa"
+        },
+        "stock": 10,
+        "price_modifier": 0.0
+      },
+      {
+        "variant_id": "26",
+        "attributes": {
+          "Wersja": "lewa"
+        },
+        "stock": 5,
+        "price_modifier": 0.0
+      }
+    ]
+  },
+  {
+    "product_id": "359",
+    "name": "Kłódka lob okrągła szyfrowa",
+    "description": "PRZEZNACZENIE: kłódka okrągła szyfrowa...",
+    "breadcrumbs": [
+      "Strona główna",
+	"Okucia drzwiowe",
+	"kłódki",
+	"kłódki szyfrowe""
+    ],
+    "price_brutto": 18.691057,
+    "vat_rate": 23.0,
+    "weight": 0.49,
+    "images": [
+	"K%C5%82%C3%B3dka%20lob%20okr%C4%85g%C5%82a%20szyfrowa,%20k%C5%82%C3%B3dka%20KOSY,%20k%C5%82%C3%B3dki%20lob%20-%20PAN%20DOMU_files/klodka-lob-okragla-szyfrowa_002_BVIH.jpg"
+    ],
+    "variants": []
+  }
+]
