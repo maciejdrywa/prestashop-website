@@ -9,6 +9,7 @@ class Product(BaseModel):
     description: str
     breadcrumbs: List[str]
     price_brutto: float
+    price_netto: float
     vat_rate: float
     weight: Optional[float] = None
     images: List[str]
