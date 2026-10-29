@@ -69,4 +69,5 @@ Projekt wykorzystuje następujące technologie:
 
 ## Uruchomienie
 
-Instrukcja uruchomienia środowiska, inicjalizacji danych i wykonania testów zostanie uzupełniona wraz z implementacją.
+Instrukcja uruchomienia sklepu, przygotowania lokalnego certyfikatu
+i weryfikacji HTTPS znajduje się w [deploy/README.md](deploy/README.md).
