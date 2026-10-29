@@ -37,9 +37,6 @@ services:
       db:
         condition: service_healthy
 
-    ports:
-      - "127.0.0.1:${SHOP_PORT:-8080}:80"
-
     environment:
       DB_SERVER: db
       DB_NAME: ${DB_NAME:?Uzupełnij DB_NAME}
@@ -54,12 +51,36 @@ services:
       PS_COUNTRY: pl
       PS_FOLDER_ADMIN: admin-dev
       PS_DEV_MODE: "0"
+      PS_ENABLE_SSL: "1"
 
       ADMIN_MAIL: ${ADMIN_EMAIL:?Uzupełnij ADMIN_EMAIL}
       ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
 
     volumes:
       - shop_data:/var/www/html
+
+    networks:
+      - shop_network
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+
+    depends_on:
+      - shop
+
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - type: bind
+        source: ${TLS_CERT_DIR:?Uzupełnij TLS_CERT_DIR}
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
 
     networks:
       - shop_network
