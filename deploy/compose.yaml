@@ -52,6 +52,7 @@ services:
       PS_FOLDER_ADMIN: admin-dev
       PS_DEV_MODE: "0"
       PS_ENABLE_SSL: "1"
+      PS_SSL_ENABLED_EVERYWHERE: "1"
 
       ADMIN_MAIL: ${ADMIN_EMAIL:?Uzupełnij ADMIN_EMAIL}
       ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
