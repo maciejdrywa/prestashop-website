@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-from ProductVariant import ProductVariant
+from parser_classes.ProductVariant import ProductVariant
 
 class Product(BaseModel):
     product_id: str
