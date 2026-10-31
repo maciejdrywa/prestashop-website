@@ -14,3 +14,4 @@ class Product(BaseModel):
     weight: Optional[float] = None
     images: List[str]
     variants: List[ProductVariant] = []
+    stock: Optional[int] = None

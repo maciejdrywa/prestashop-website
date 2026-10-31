@@ -1,5 +1,5 @@
 from pathlib import Path
-from scraper_parser import parse_product
+from parse_product import parse_product
 
 HTML_DIR = Path(__file__).parent / "html_files_and_robots"
 
@@ -59,3 +59,25 @@ def test_parse_4():
         assert product is not None, "Parser zwrócił None dla Kłódki trzpieniowej bez wagi!"
         assert product.product_id == "912"
         assert product.images is not None
+
+
+#Test z roznymi wariantami
+def test_parse_5():
+    file_path = HTML_DIR / "klamka_duzo_wariantow.html"
+    with open(file_path, "r", encoding="utf-8") as f:
+        html = f.read()
+    product = parse_product(html, "https://pandomu.com.pl/test-klamka-lotus")
+
+    print(product.variants)
+    assert product is not None, "Parser zwrocił None dla klamki z wieloma wariantami!"
+    assert product.product_id == "119"
+    assert product.name == "Klamka do drzwi zewnętrznych LOTUS"
+    assert product.price_brutto == 74.99
+    assert product.weight == 1.0
+    assert len(product.variants) == 7, f"Oczekiwano 7 wariantow, a otrzymano {len(product.variants)}"
+    variant_ids = [v.variant_id for v in product.variants]
+    assert "22" in variant_ids
+    assert "24" in variant_ids
+    assert "25" in variant_ids
+    assert "26" in variant_ids
+    assert "11" in variant_ids
