@@ -8,6 +8,7 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 |---|---|---|---|---|---|
 | 2026-10-27, Maciej Drywa | ChatGPT; model: DO UZUPEŁNIENIA | W1.4 — Potwierdzenie dziannika wykorzystania AI | Wygeneruj tabelę do trzyamanai log-ów dotyczących korzystania z AI | DO UZUPEŁNIENIA: Brak błędów, tabela została wygenerowana poprawnie | Ręczna weryfikacja otrzymanej tabeli w skompilowanym pliku .md |
 | 2026-10-28, Paweł Krajewski | Gemini | W2.1/W2.2 — Oszacowanie liczby produktów w sklepie źródłowym | Sposoby na sprawdzenie liczby asortymentu oraz szacunkową liczbę produktów. | Brak błędów. AI poprawnie wskazało ograniczenia i zaproponowało skuteczne obejście problemu. | Ręczna weryfikacja ze stanem faktycznym na stronie sklepu i dodanie informacji do .md |
+| 2026-11-02, Wiktor Adamczyk | Claude, model Sonnet 5.5 | W4.1 — Konfiguracja środowiska testów Playwright | Wyjaśnienie zadania i kryteriów, kolejność kroków, omówienie wygenerowanego playwright.config.ts i propozycje zmian | Brak błędów merytorycznych. Przedstawione atrybuty wymagały dopasowania do Projektu | Uruchomienie `npm test` na https://pandomu.com.pl (test zielony), zmiana BASE_URL bez edycji kodu, celowo oblany test: powstał raport HTML, JUnit XML i zrzut ekranu; ręczne porównanie plików z kryteriami zadania |
 ## Etap 1 — refleksja zespołu
 
 Do uzupełnienia przed odbiorem etapu, należy opisać:
@@ -15,3 +16,5 @@ Do uzupełnienia przed odbiorem etapu, należy opisać:
 - Jakie błędy lub nietrafne propozycje wymagały poprawienia.
 - Jak zespół sprawdzał otrzymane wyniki.
 - Czego członkowie zespołu musieli nauczyć się samodzielnie.
+
+
