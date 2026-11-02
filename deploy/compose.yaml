@@ -58,7 +58,18 @@ services:
 
     volumes:
       - shop_data:/var/www/html
+      - ./init:/opt/shop/init:ro
 
+    networks:
+      - shop_network
+
+  mailpit:
+    image: axllent/mailpit:v1.33
+    restart: unless-stopped
+    
+    ports:
+      - "127.0.0.1:8025:8025"
+    
     networks:
       - shop_network
 
