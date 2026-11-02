@@ -2,8 +2,12 @@
 - `db` - baza dancyh MariaDB.
 - `shop` - PrestaShop z serwerem Apache.
 - `nginx` - obsługa HTTPS i przekierowania HTTP na HTTPS.
+- `mailpit` - obsługa pozwalająca przetestować wiadomości email.
 
-Sklep jest dostępny pod adresem https://localhost.
+Adresy:
+- Sklep: https://localhost
+- Panel administracyjny: https://localhost/admin-dev
+- Panel poczty testowej Mailpit: http://localhost:8025
 
 Nginx publikuje porty 80 i 443 wyłącznie na interfejsie lokalnym komputera. Porty sklepu i bazy nie są publikowane w hoście.
 
