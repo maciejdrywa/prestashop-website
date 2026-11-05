@@ -11,6 +11,9 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 
 | 2026-10-27, Maciej Drywa | ChatGPT; model: DO UZUPEŁNIENIA | W1.4 — Potwierdzenie dziannika wykorzystania AI | Wygeneruj tabelę do trzyamanai log-ów dotyczących korzystania z AI | DO UZUPEŁNIENIA: Brak błędów, tabela została wygenerowana poprawnie | Ręczna weryfikacja otrzymanej tabeli w skompilowanym pliku .md |
 | 2026-10-28, Paweł Krajewski | Gemini | W2.1/W2.2 — Oszacowanie liczby produktów w sklepie źródłowym | Sposoby na sprawdzenie liczby asortymentu oraz szacunkową liczbę produktów. | Brak błędów. AI poprawnie wskazało ograniczenia i zaproponowało skuteczne obejście problemu. | Ręczna weryfikacja ze stanem faktycznym na stronie sklepu i dodanie informacji do .md |
+
+| 2026-11-05, Maciej Drywa | docex 6.1 sol | W3.2 - Konfiguracja HTTPS - przekierowania HTTP | Implementacja generowania certyfikatów dla macos | Brak błędów. AI poprawnie wygenerowało skrypt generujacy certyfikaty i zapisuje je w odpowiednim miejscu na dysku. | Certyfikaty zostały wygenerowane w odpowiednim folderze na dysku |
+
 ## Etap 1 — refleksja zespołu
 
 Do uzupełnienia przed odbiorem etapu, należy opisać:
