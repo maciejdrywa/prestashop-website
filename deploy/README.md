@@ -9,9 +9,9 @@ Nginx publikuje porty 80 i 443 wyłącznie na interfejsie lokalnym komputera. Po
 
 ## Wymagania
 
-- Docker z obsługą komputerów Linux.
+- Docker z obsługą kontenerów Linux (na macOS: uruchomiony Docker Desktop).
 - Docker Compose V2.
-- OpsenSSL dosepny w zmiennych środowiskowych.
+- OpenSSL lub systemowy LibreSSL dostępny w `PATH`.
 
 Sprawdzenie narzędzi:
 ```
@@ -32,11 +32,16 @@ Przy pierwszym uruchomieniu utwórz lokjalny plik `.env` na podstawie pliku `.en
 Plik `.env` zawiera sekrety i nie może być dodawany do Git.
 Nie nadpisuj isniejącego `.env` przy kolejnych uruchomieniach.
 
-33 2. Generowanie lokalnego certyfikatu
+## 2. Generowanie lokalnego certyfikatu
 
 Na windows:
 ```powershell
 .\deploy\generate-cert.ps1
+```
+
+Na MacOS:
+```
+./deploy/start-macos.sh --trust
 ```
 
 Skrypt tworzy samodzielnie przypisany certyfikat ważny przez 365 dni dla adresów `localhost` i `127.0.0.1`.
@@ -82,7 +87,7 @@ docker compose --env-file .env -f deploy/compose.yaml config --quiet
 Zbuduj i uruchom środowisko:
 
 ```powershell
-docker compose --env-file .env -f deploy/compose.yaml logs -f shop
+docker compose --env-file .env -f deploy/compose.yaml up -d --build
 ```
 
 Podgląd postępu instalacji:
