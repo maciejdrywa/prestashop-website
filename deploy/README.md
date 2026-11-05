@@ -117,7 +117,7 @@ Sprawdź czy możesz otworzyć stronę:
 http://localhost:8025
 ```
 
-Jeżeli po otwarci zobaczysz ionterfejs graficzny Mailplit ot wszystko działa poprawnie. 
+Jeżeli po otwarciu zobaczysz interfejs graficzny Mailplit to wszystko działa poprawnie. 
 
 ## 5. Weryfikacja HTTPS
 Sprawdź przekierowania HTTP:
