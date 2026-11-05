@@ -8,8 +8,8 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-from store_crawler import store_crawler
-from parse_product import parse_product
+from Scrapping_products.store_crawler import store_crawler
+from Scrapping_products.parse_product import parse_product
 
 def load_existing_products(filepath) -> list[dict]:
     if filepath.exists():

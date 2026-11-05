@@ -1,4 +1,4 @@
-from parse_category import parse_category
+from Scrapping_products.parse_category import parse_category
 
 
 def test_parse_category_offline():

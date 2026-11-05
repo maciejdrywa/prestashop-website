@@ -3,7 +3,7 @@ import time
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from parse_category import parse_category
+from Scrapping_products.parse_category import parse_category
 
 
 class store_crawler:
@@ -12,7 +12,7 @@ class store_crawler:
         self.playwright = sync_playwright().start()
 
         self.context = self.playwright.chromium.launch_persistent_context(
-            user_data_dir="./.browser_profile",
+            user_data_dir="../.browser_profile",
             headless=False, # To zmienic pozniej na True zeby caly czas nie zmienialy sie te karty na widoku
             user_agent= "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0",
             locale="pl-PL",
