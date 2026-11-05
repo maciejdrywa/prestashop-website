@@ -1,0 +1,73 @@
+services:
+  db:
+    image: mariadb:10.11.14
+    platform: linux/amd64
+    restart: unless-stopped
+
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:?Uzupełnij DB_NAME}
+      MARIADB_USER: ${DB_USER:?Uzupełnij DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Uzupełnij DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Uzupełnij DB_ROOT_PASSWORD}
+
+    volumes:
+      - db_data:/var/lib/mysql
+
+    networks:
+      - shop_network
+
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  shop:
+    image: prestashop-website:8.2.8
+    platform: linux/amd64
+
+    build:
+      context: ../shop
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:${SHOP_PORT:-8080}:80"
+
+    environment:
+      DB_SERVER: db
+      DB_NAME: ${DB_NAME:?Uzupełnij DB_NAME}
+      DB_USER: ${DB_USER:?Uzupełnij DB_USER}
+      DB_PASSWD: ${DB_PASSWORD:?Uzupełnij DB_PASSWORD}
+      DB_PREFIX: ps_
+
+      PS_INSTALL_AUTO: "1"
+      PS_ERASE_DB: "0"
+      PS_DOMAIN: ${PS_DOMAIN:?Uzupełnij PS_DOMAIN}
+      PS_LANGUAGE: pl
+      PS_COUNTRY: pl
+      PS_FOLDER_ADMIN: admin-dev
+      PS_DEV_MODE: "0"
+
+      ADMIN_MAIL: ${ADMIN_EMAIL:?Uzupełnij ADMIN_EMAIL}
+      ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
+
+    volumes:
+      - shop_data:/var/www/html
+
+    networks:
+      - shop_network
+
+volumes:
+  db_data:
+  shop_data:
+
+networks:
+  shop_network:
+    driver: bridge

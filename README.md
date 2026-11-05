@@ -56,6 +56,17 @@ PR zawierające istotne fragmenty wygenerowane przez AI oznaczamy etykietą ai-a
 | deploy/ | Konfiguracja kontenerów i skrypty obsługi środowiska |
 | docs/ | Dokumentacja, dziennik AI i decyzje architektoniczne |
 
+## Technologie
+
+Projekt wykorzystuje następujące technologie:
+
+- **PrestaShop 8.2.8** – platforma e-commerce.
+- **PHP** – język programowania wykorzystywany przez PrestaShop.
+- **MariaDB 10.11.14** – relacyjna baza danych.
+- **Docker** – konteneryzacja aplikacji.
+- **Docker Compose v2** – zarządzanie środowiskiem kontenerowym.
+- **Playwright** – automatyczne testy E2E.
+
 ## Uruchomienie
 
 Instrukcja uruchomienia środowiska, inicjalizacji danych i wykonania testów zostanie uzupełniona wraz z implementacją.
