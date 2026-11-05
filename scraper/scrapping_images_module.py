@@ -7,8 +7,8 @@ from playwright.sync_api import sync_playwright
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-from create_zip import create_zip_archive
-from process_and_save_images import process_and_save_images
+from scrapping_images.create_zip_archive import create_zip_archive
+from scrapping_images.process_and_save_images import process_and_save_images
 
 
 BASE_DIR = Path(__file__).parent.parent
@@ -50,7 +50,7 @@ def main():
 
     # Cookiesy do uzupelnienia inaczej nie bedzie dzialac
 
-    cookies = "CsyFJ5TFmf5dIfWUbnY_C6CVfoO60ncG3Y1S5JFfR6uDQqBHnTu4-XN0FnAXnw70pkL0yoGKXW77NlbReU6Js9TvcbM3UssiNIdrBV8O6vnFBvr_SUYhUrRkkzrIsfrv6BXn2l2RT7ksCi7IefXQ3OCEPLpoXo6n2XZEX8Zg58OjXPVWtPzYXSGT9twsVweI2lPG-UgWEaW4_Kq5QQu6QozKaS7z6vYJUh2lf-2IKGmvQncCLaX6w_RxhkzVR_DyxQ2mt-M1lrqbrTvWo2BE_DM-NQbnlYxbUfL9ZJo9p1wSUgvyau4SyXQRIjmOX0ZJJmdzQlStnL-_qofi73ctLN7I7e65y2ohV6pRKu_id-UQXIQM4PzI4DAoMo6ry__5uSBZZ-cb8mhQFGoHdst0QFu_okn9v-Clsjgevdj4mG_96IcKt-8FdRNFq1J9i0g6jKn49XZ7z1Xt2bybVx2I2K4Fxfl0bm3SyWSkxm_G9-XWq0Ps"
+    cookies = ""
 
     with sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(

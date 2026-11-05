@@ -8,8 +8,8 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-from store_crawler import store_crawler
-from parse_product import parse_product
+from Scrapping_products.store_crawler import store_crawler
+from Scrapping_products.parse_product import parse_product
 
 def load_existing_products(filepath) -> list[dict]:
     if filepath.exists():
@@ -31,7 +31,7 @@ RESULTS_FILE = RESULTS_DIR / "products.json"
 if __name__ == "__main__":
 
     # Zmieniac cookies na swoje bo nie bedzie dzialac
-    cookies = "Cv7Jlx-J3E0wT-8G9jXz-wnetweD7XOX2MnZjnyej5Zg2YDJF0oTvbU0DcRRt-DDUTAEGuv1IFZNmj_4K2JU7Y7v6VvNbSjLnNaT1h6_yQfAUmkOPACYjRSIwswomid-eVW_UfdQ7rEEGssEHY8pVpZqdahxncfn1z7cPockgKkjliNLo98z9jYp-133FB_PeYb6-sYLA_hLuedVepE7RaYnMNF13X2eQTByD0PB8ngx3nynw49r03J6YqMKBYHPVEuYU3UI1X2TBMHAsqCHbPP5nOGcn3zcOZLPG9xBTIJSDeYrxP8Y-FBPf7ZcsMv-_DZThZy9YuGmNVr2YV3qAoWpAhnjsqYDJPXw_ymOKTMf5c29Bj3pBLKIz3sUyhPa5BJxTJh6XMdW2F6s4bdI4tcvoD44shSW4kT6bFcchVeSbDD_BBOeGFJejTC5HwVVEarvRTA1p8kO13M1eu-aI6ZstYS00BzzD8tCYm-7R9GFOA"
+    cookies = ""
     crawler = store_crawler(cookies= cookies)
 
     categories =[

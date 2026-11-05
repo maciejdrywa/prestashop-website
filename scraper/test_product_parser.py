@@ -1,5 +1,6 @@
 from pathlib import Path
-from parse_product import parse_product
+
+from Scrapping_products.parse_product import parse_product
 
 HTML_DIR = Path(__file__).parent / "html_files_and_robots"
 
