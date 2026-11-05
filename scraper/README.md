@@ -32,7 +32,6 @@ odpalamy test_category_parser przez:
 plan.json przedstawia przykladowy wyglad produktow, ktore beda zescrapowane w formacie json
 
 W2.3
-
 Dodanie main_scraper.py
 
 Poczatkowe wyciaganie produktow ze stron, ktore dziala. 
