@@ -108,6 +108,17 @@ Adresy:
 
 Dane administratora odpowiadają wartościom `ADMIN_EMAIL` i `ADMIN_PASSWORD` użytym podczas instalacji.
 
+## 5. Wyryfikacja kontenera Mailplit
+Sprawdź czy kontener Mailplit działa poprawnie.
+
+Sprawdź czy możesz otworzyć stronę:
+
+```
+http://localhost:8025
+```
+
+Jeżeli po otwarci zobaczysz ionterfejs graficzny Mailplit ot wszystko działa poprawnie. 
+
 ## 5. Weryfikacja HTTPS
 Sprawdź przekierowania HTTP:
 
