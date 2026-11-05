@@ -19,7 +19,7 @@ def parse_category(html_content: str, base_url: str) -> category_page | None:
 
         next_url = None
 
-        next_url_tag = soup.find('a', rel='next js-search-link')
+        next_url_tag = soup.find('a', rel='next')
         if next_url_tag and 'href' in next_url_tag.attrs:
             next_url = next_url_tag['href']
 

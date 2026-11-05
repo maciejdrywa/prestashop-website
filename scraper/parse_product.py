@@ -1,3 +1,5 @@
+import random
+
 from bs4 import BeautifulSoup
 import logging
 from parser_classes.Product import Product
@@ -12,9 +14,6 @@ from scraper_elements.scrap_pretax_price import scrap_pretax_price
 from scraper_elements.scrap_price import scrap_price
 from scraper_elements.scrap_variants import scrap_variants
 from scraper_elements.scrap_weight import scrap_weight
-
-
-logging.basicConfig(level=logging.ERROR, format = '%(levelname)s: %(message)s')
 
 def parse_product(html_content: str, source_url: str) -> Product | None:
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -51,6 +50,12 @@ def parse_product(html_content: str, source_url: str) -> Product | None:
         #variants
         variants = scrap_variants(soup, product_name)
 
+
+        if len(variants) == 0:
+            stock = random.randint(0,10)
+        else:
+            stock = None
+
         return Product(
             product_id=product_id,
             product_url=source_url,
@@ -62,7 +67,8 @@ def parse_product(html_content: str, source_url: str) -> Product | None:
             vat_rate=vat_rate,
             weight=weight,
             images=images,
-            variants=variants
+            variants=variants,
+            stock= stock
         )
     except Exception as e:
         logging.error(f"Niepoprawny rekord: {source_url} | Przyczyna: {e}")
