@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, Math } from '@playwright/test';
 
 test("cart test" async ({page}) => {
 const katA =[{'Śruby do łączenia blatów kompaktowych HLP (kpl 3szt.','https://pandomu.com.pl/akcesoria-meblowe/570-sruby-do-laczenia-blatow-kompaktowych-hlp-kpl-3szt.html',5},{'Zatrzask meblowy plastikowy','https://pandomu.com.pl/akcesoria-meblowe/530-zatrzask-meblowy-plastikowy.html', 5},{'Śruby do łączenia blatów 150mm EASIBOLT kpl 3szt.','https://pandomu.com.pl/elementy-konstrukcyjne/571-sruby-do-laczenia-blatow-zlacze-do-blatow-kuchennych-kpl-3szt.html',2},{'Stopka Meblowa Regulowana M8 (10szt)','https://pandomu.com.pl/elementy-konstrukcyjne/584-stopka-meblowa-regulowana-m8-10szt.html',7},{'Kołki meblowe montażowe 8x30, 100szt','https://pandomu.com.pl/elementy-konstrukcyjne/598-kolki-meblowe-8x30.html',2}];
@@ -12,6 +12,26 @@ for(const p of produkt)
 
 
 
+const wyniki = getShearchBarResults('https://pandomu.com.pl','klamka')
+const karty = await wyniki.all();
+const dostepne: locator[]= [];
+for( const k of karty)
+{
+    const maBtn= // zrobić to bo nie zrobiłem ;
+    if(maBtn)
+    {
+        dostepne.push(k);
+    }
+
+    if (dostepne.length === 0) {
+    test.skip(true, 'Brak dostępnych produktów w wynikach');
+
+    const indeks = Math.floor(Math.random() * dostepne.length);
+    const wybrana = dostepne[indeks];
+    const nazwa = await wybrana.locator(/* selektor nazwy */).innerText();
+    console.log('Wylosowano:', nazwa);
+}
+}
 
 })
 
@@ -32,11 +52,37 @@ await expect(potwierdzenie).toBeVisible();
 }
 
 
-async function checkCart(page:Page,url:string)
+async function checkCart(page:Page,urlCart:string,produkt:Produkt)
 {
-    await page.goto(url);
+    await page.goto(urlCart);
+    await wiersze.locator('cart-items');
+    await expect(wiersze).tHaveCount(10);
 
-    const ile = get.locator('cart-products-count');
-    await ile.toHaveCount(10);
 
+    for( const w of await wiersze.all()){
+        const nazwa = await w.locator('.product-line-info a').innerText();
+        const ile = await w.locator('js-cart-line-product-quantity');
+        if( produkt.nazwa == nazwa)
+        {
+            if(produkt.ilosc != ile)
+            {
+                // log jesli zle
+            }
+        }
+    }
+}
+
+
+async function getShearchBarResults(page:Page, tekst:string){
+    await page.goto('https://pandomu.com.pl/');
+
+    const s = await page.locator('ui-autocomplete-input');
+    await s.fill(tekst);
+    await s.press('Enter');
+
+    const wynik = page.locator('ui-autocomplete ui-front ui-menu ui-widget ui-widget-content ui-corner-all searchbar-autocomplete');
+    await expect(wynik.first()).toBeVisible();
+
+
+    return wynik;
 }
