@@ -61,6 +61,7 @@ services:
     volumes:
       - shop_data:/var/www/html
       - ./init:/opt/shop/init:ro
+      - ../scraper-results:/opt/shop/scraper-results:ro
 
     networks:
       - shop_network
