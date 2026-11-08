@@ -50,7 +50,9 @@ def parse_product(html_content: str, source_url: str) -> Product | None:
         breadcrumbs = scrap_catalog(soup)
 
         #variants
-        variants = scrap_variants(soup, product_name)
+        # HTML contains prices only for the selected combination. The crawler
+        # resolves the remaining selections through source refresh responses.
+        variants = scrap_variants(soup, product_name, price_netto)
 
 
         if len(variants) == 0:

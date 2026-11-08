@@ -36,16 +36,18 @@ def save_json(path: Path, data) -> None:
 
 
 def assign_categories(product: dict, discovered: dict) -> dict:
-    """Keep raw source breadcrumbs and expose a compatible complete primary path."""
+    """Expose one primary breadcrumb trail and all category memberships."""
     paths = discovered["category_paths"]
     if not paths:
         raise ValueError(f"Produkt {product['product_id']} nie ma przypisania kategorii.")
     original = product.get("source_breadcrumbs", product.get("breadcrumbs", []))
     preferred = original[1:-1] if len(original) >= 3 else None
     primary = preferred if preferred in paths else paths[0]
+    cleaned = dict(product)
+    # Read the legacy field above for migration, but never write it again.
+    cleaned.pop("source_breadcrumbs", None)
     return {
-        **product,
-        "source_breadcrumbs": original,
+        **cleaned,
         "category_paths": paths,
         "category_source_urls": discovered["category_source_urls"],
         "breadcrumbs": ["Strona główna", *primary, product["name"]],

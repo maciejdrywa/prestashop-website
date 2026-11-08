@@ -2,9 +2,12 @@ import logging
 import time
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 from Scrapping_products.catalog_discovery import discover_catalog, scan_category
+from Scrapping_products.variant_prices import collect_variants
 
 
 class store_crawler:
@@ -73,6 +76,40 @@ class store_crawler:
 
     def discover_catalog(self) -> dict:
         return discover_catalog(self.fetch_page)
+
+    def fetch_variants(self, html: str, product):
+        soup = BeautifulSoup(html, "html.parser")
+        form = soup.select_one("#add-to-cart-or-refresh")
+
+        def refresh_selection(selection):
+            if form is None:
+                raise ValueError("Brak formularza aktualizacji wariantu.")
+            # The form action is the CART endpoint. Refresh must target the
+            # product controller, exactly as the storefront's variant request.
+            endpoint = product.product_url.split("#", 1)[0]
+            fields = {
+                node["name"]: node.get("value", "")
+                for node in form.select('input[type="hidden"][name]')
+                if node["name"] not in {"id_product_attribute", "add"}
+            }
+            fields.update({
+                "id_product": str(product.product_id),
+                "ajax": "1", "action": "refresh", "quantity_wanted": "1",
+            })
+            fields.update({f"group[{group}]": value for group, value in selection.items()})
+            time.sleep(1)
+            response = self.context.request.post(
+                endpoint, form=fields, timeout=30000,
+                headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+            )
+            if not response.ok:
+                raise RuntimeError(f"Błąd HTTP {response.status} przy pobieraniu wariantu {selection}.")
+            try:
+                return response.json()
+            except Exception as error:
+                raise ValueError("Źródło nie zwróciło JSON z ceną wariantu.") from error
+
+        return collect_variants(html, product, refresh_selection)
 
     def is_challenge(self) -> bool:
         title = self.page.title().casefold()

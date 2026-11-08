@@ -70,8 +70,7 @@ Każdy produkt zawiera nowe pola:
 ```json
 {
   "category_paths": [["Akcesoria meblowe", "PODNOŚNIKI SZAFEK GÓRNYCH"]],
-  "category_source_urls": ["https://pandomu.com.pl/72-podnosniki-szafek-gornych"],
-  "source_breadcrumbs": ["Strona główna", "Nazwa produktu"]
+  "category_source_urls": ["https://pandomu.com.pl/72-podnosniki-szafek-gornych"]
 }
 ```
 
@@ -82,27 +81,74 @@ w kategorii nadrzędnej oraz jej podkategorii, redundantna ścieżka nadrzędna 
 pomijana. Przypisanie wyłącznie do kategorii głównej pozostaje tylko wtedy, gdy
 produktu nie odnaleziono w żadnej jej podkategorii.
 
-`source_breadcrumbs` zachowuje breadcrumbs ze strony produktu. Pole `breadcrumbs`
-otrzymuje pełną ścieżkę zgodną z dotychczasowymi importerami: strona główna,
-kategorie, nazwa produktu. Jeśli oryginalna ścieżka pasuje do odkrytych przypisań,
-jest preferowana; w przeciwnym razie wybierana jest najgłębsza ścieżka, a remisy
+Eksport zawiera tylko jedno pole `breadcrumbs`: stronę główną, główną ścieżkę
+kategorii i nazwę produktu. Dawne `source_breadcrumbs` jest usuwane również
+podczas aktualizacji istniejących rekordów. Jeśli dotychczasowa ścieżka pasuje
+do odkrytych przypisań, jest preferowana; inaczej wybierana jest najgłębsza, a remisy
 rozstrzygane alfabetycznie. To wybór głównej ścieżki eksportu, nie deklaracja
 domyślnej kategorii w źródle. Importer wszystkich przypisań powinien czytać
 `category_paths`, a nie wyłącznie `breadcrumbs`.
 
-Ponowne uruchomienie ponownie skanuje drzewo i aktualizuje przypisania również
-już zapisanych produktów, zachowując ich pozostałe dane, w tym `price_modifier`.
-Szczegóły pobierane są tylko dla nowych produktów. Aby ponownie pobrać również
-szczegóły istniejących produktów:
+Ponowne uruchomienie skanuje drzewo i aktualizuje przypisania już zapisanych
+produktów. Zweryfikowane ceny wariantów są zachowywane. Stare rekordy wariantów,
+które nie zawierają `price_netto` i `price_brutto`, są automatycznie ponownie
+pobierane — dawne zera `price_modifier` nie są uznawane za zweryfikowane ceny.
+W tym trybie odświeżane są ceny bazowe, VAT i kombinacje; pozostałe dane produktu
+pozostają zapisane. Aby ponownie pobrać również wszystkie szczegóły produktów:
 
 ```powershell
 .\venv\Scripts\python.exe scraper/main_scraper.py --refresh
 ```
 
-Ta zmiana dotyczy odkrywania katalogu i przypisań. Dotychczasowy parser wariantów
-nadal eksportuje opcje atrybutów oraz zerowe modyfikatory; pobranie rzeczywistych
-kombinacji i dopłat wymaga osobnego rozszerzenia. `--refresh` korzysta z tego
-parsera, więc nadpisuje wcześniejsze dane wariantów jego aktualnymi wynikami.
+## Rzeczywiste kombinacje i ceny wariantów
+
+Scraper odczytuje cenę wybranej kombinacji z `data-product`. Pozostałe wybory
+sprawdza żądaniami `action=refresh` do kontrolera produktu, korzystając z sesji
+przeglądarki. Nie wysyła żądań dodania produktu do koszyka. Sprawdza również
+kombinacje wielu grup, np. kolor + rozmiar + wersja, oraz opcje ujawnione przez
+kolejne odpowiedzi źródła. Każde żądanie jest poprzedzone sekundową przerwą.
+
+Źródło może zastąpić nieistniejący zestaw domyślną kombinacją. Taka odpowiedź
+jest pomijana, jeśli jej atrybuty nie odpowiadają żądanemu zestawowi. Brak ceny,
+błąd HTTP lub nieprawidłowa odpowiedź zatrzymuje aktualizację danego produktu
+i trafia do raportu; nie jest zastępowany modyfikatorem zero. Cały rekord produktu
+jest zapisywany dopiero po sprawdzeniu wszystkich kandydatów kombinacji.
+
+Niektóre adresy źródłowe wskazują starą kombinację, której grupy nie pasują już
+do aktualnego formularza (np. produkt 631: stary rozmiar zamiast kolorów).
+Scraper sprawdza wtedy aktualne opcje przez kontroler produktu, zamiast
+odrzucać produkt lub dodawać starą grupę jako nowy wybór. Stałe atrybuty,
+których formularz nie pokazuje jako osobnego wyboru, są zachowywane w danych
+potwierdzonej kombinacji. Wszystkie aktywnie wybrane atrybuty muszą się zgadzać.
+Raport `product_errors` zapisuje przyczynę błędu dla każdego ID produktu,
+a końcowy komunikat wymienia produkty, których aktualizacja się nie udała.
+
+`variant_id` oznacza teraz źródłowe ID rzeczywistej kombinacji
+(`id_product_attribute`), a nie ID pojedynczej opcji formularza. `attributes`
+zawiera wszystkie atrybuty tej kombinacji. Każda kombinacja zawiera ponadto:
+
+- `price_netto` i `price_brutto` — zaobserwowane ceny całej kombinacji;
+- `price_modifier` — różnicę NETTO względem `price_netto` produktu bazowego.
+
+Różnica jest obliczana przez `Decimal` i zaokrąglana do sześciu miejsc po
+przecinku. Obsługiwane są dopłaty, obniżki i rzeczywiste zera. Bazą jest cena
+produktu odczytana przy otwarciu strony; w ramach tego samego odświeżenia
+aktualizowane są zarówno cena bazowa, jak i zależne od niej modyfikatory.
+`parse_product()` bez sieci potwierdza tylko kombinację obecną w danym HTML;
+pełną listę zbiera dopiero crawler.
+
+Przykład zweryfikowany w źródle dla produktu 644: bazowe 23,89 zł brutto,
+wariant 29,89 zł brutto i różnica netto 4,878049 zł przy VAT 23%.
+Żeby odświeżyć także wcześniej zweryfikowane ceny wszystkich wariantów:
+
+```powershell
+.\venv\Scripts\python.exe scraper/main_scraper.py --refresh-variants
+```
+
+Pierwsze odświeżenie starego katalogu trwa dłużej: trzeba odczytać ceny
+kombinacji wszystkich 228 dotychczasowych produktów z wariantami.
+Pola raportu `variant_prices_complete` oraz
+`products_with_unverified_variant_prices` wskazują status tej migracji.
 
 Plik produktów zapisywany jest atomowo po każdym nowym lub odświeżonym produkcie.
 Uszkodzony istniejący JSON zatrzymuje pracę. Błąd kategorii, pętla paginacji lub
@@ -123,7 +169,7 @@ korzystaniu z nowego głównego scrapera.
 Testy drzewa, paginacji, błędów i wznawiania (bez sieci i dodatkowego runnera):
 
 ```powershell
-.\venv\Scripts\python.exe -m unittest discover -s scraper -p test_catalog_crawl.py -v
+.\venv\Scripts\python.exe -m unittest discover -s scraper -p "test_*.py" -v
 ```
 
 W2.4

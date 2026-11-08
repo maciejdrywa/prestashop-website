@@ -130,7 +130,7 @@ class CatalogTests(unittest.TestCase):
     def test_resume_updates_categories_without_fetching_or_losing_modifiers(self):
         saved = {
             "product_id": "5", "name": "Test", "breadcrumbs": ["Strona główna", "Test"],
-            "variants": [{"price_modifier": 12.5}],
+            "variants": [{"price_modifier": 12.5, "price_netto": 62.5, "price_brutto": 76.88}],
         }
         discovered = {
             "product_id": "5", "product_url": BASE + "5-item.html",
@@ -152,7 +152,7 @@ class CatalogTests(unittest.TestCase):
             scrape_catalog(FakeCrawler(), path)
             self.assertEqual(first, read_products(path / "products.json"))
             self.assertEqual(first[0]["breadcrumbs"], ["Strona główna", "Root", "Child", "Test"])
-            self.assertEqual(first[0]["source_breadcrumbs"], saved["breadcrumbs"])
+            self.assertNotIn("source_breadcrumbs", first[0])
             self.assertEqual(first[0]["variants"][0]["price_modifier"], 12.5)
 
     def test_new_product_saved_once_and_failed_refresh_reported(self):
@@ -171,6 +171,9 @@ class CatalogTests(unittest.TestCase):
 
             def fetch_page(self, url):
                 return "html"
+
+            def fetch_variants(self, html, parsed):
+                return []
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)

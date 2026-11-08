@@ -34,7 +34,10 @@ def test_parse_2():
     assert product.name == "Zawias niewidoczny 111x29 do drzwi bezprzylgowych"
     assert product.price_brutto == 61.11
     assert product.weight == 0.3
-    assert len(product.variants) == 2
+    # A static HTML snapshot confirms only the currently selected combination.
+    assert len(product.variants) == 1
+    assert product.variants[0].variant_id == "3844"
+    assert product.variants[0].price_brutto == 61.11
 
 #Brak wariantow
 
@@ -75,10 +78,9 @@ def test_parse_5():
     assert product.name == "Klamka do drzwi zewnętrznych LOTUS"
     assert product.price_brutto == 74.99
     assert product.weight == 1.0
-    assert len(product.variants) == 7, f"Oczekiwano 7 wariantow, a otrzymano {len(product.variants)}"
-    variant_ids = [v.variant_id for v in product.variants]
-    assert "22" in variant_ids
-    assert "24" in variant_ids
-    assert "25" in variant_ids
-    assert "26" in variant_ids
-    assert "11" in variant_ids
+    assert len(product.variants) == 1
+    variant = product.variants[0]
+    assert variant.variant_id == "646"
+    assert len(variant.attributes) == 3
+    assert set(variant.attributes.values()) == {"patyna", "72", "PRAWA"}
+    assert variant.price_modifier == 0
