@@ -1,0 +1,13 @@
+{
+  "complete": true,
+  "source_images_complete": false,
+  "categories": 80,
+  "discovered_products": 574,
+  "fetched_products": 1,
+  "reused_products": 573,
+  "failed_product_ids": [],
+  "previous_products_not_discovered": [],
+  "products_without_images": [
+    "539"
+  ]
+}

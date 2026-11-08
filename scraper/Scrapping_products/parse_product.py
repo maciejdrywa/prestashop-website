@@ -40,6 +40,8 @@ def parse_product(html_content: str, source_url: str) -> Product | None:
 
         # Images
         images = scrap_images(soup)
+        if not images:
+            logging.warning("Produkt źródłowy nie ma zdjęć w galerii: %s", source_url)
 
         #description
         description = scrap_description(soup)
