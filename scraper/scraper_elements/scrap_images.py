@@ -9,9 +9,10 @@ def scrap_images(soup: BeautifulSoup) -> List[str]:
     if images_tag:
         images_all = images_tag.find_all('img')
         for image in images_all:
-            images.append(image['data-image-large-src'])
+            url = image.get('data-image-large-src')
+            if url and url not in images:
+                images.append(url)
 
-    if not images:
-        raise ValueError("Nie znaleziono zdjec")
-
+    # Some real source products have no gallery. Export the product with an
+    # explicit empty list; do not drop it or treat the generic placeholder as a photo.
     return images

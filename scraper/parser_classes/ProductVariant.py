@@ -6,4 +6,6 @@ class ProductVariant(BaseModel):
     name: str
     attributes: Dict[str, str]
     price_modifier: float
+    price_netto: float
+    price_brutto: float
     stock: int
