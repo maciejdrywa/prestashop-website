@@ -64,3 +64,9 @@ build/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Playwright
+.browser_profile/
+
+# Isolated live scraper verification output
+.tmp-catalog-qa/
