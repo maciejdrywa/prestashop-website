@@ -36,8 +36,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      mailpit:
-        condition: service_started
+
+    ports:
+      - "127.0.0.1:${SHOP_PORT:-8080}:80"
 
     environment:
       DB_SERVER: db
@@ -53,48 +54,12 @@ services:
       PS_COUNTRY: pl
       PS_FOLDER_ADMIN: admin-dev
       PS_DEV_MODE: "0"
-      PS_ENABLE_SSL: "1"
 
       ADMIN_MAIL: ${ADMIN_EMAIL:?Uzupełnij ADMIN_EMAIL}
       ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
 
     volumes:
       - shop_data:/var/www/html
-      - ./init:/opt/shop/init:ro
-      - ../scraper-results:/opt/shop/scraper-results:ro
-
-    networks:
-      - shop_network
-
-  mailpit:
-    image: axllent/mailpit:v1.33
-    restart: unless-stopped
-    
-    ports:
-      - "127.0.0.1:8025:8025"
-    
-    networks:
-      - shop_network
-
-  nginx:
-    image: nginx:stable-alpine
-    restart: unless-stopped
-
-    depends_on:
-      - shop
-
-    ports:
-      - "127.0.0.1:80:80"
-      - "127.0.0.1:443:443"
-
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - type: bind
-        source: ${TLS_CERT_DIR:?Uzupełnij TLS_CERT_DIR}
-        target: /etc/nginx/certs
-        read_only: true
-        bind:
-          create_host_path: false
 
     networks:
       - shop_network
