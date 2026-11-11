@@ -27,6 +27,8 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-11, Maciej Drywa | Codex 6.1 sol | W3.4 - Rozdzielenie opisów produktów | Scraper i importer zapisują osobno description oraz description_short; pojedynczy opis trafia na dół strony. | Zachowano oba źródłowe opisy także przy identycznej treści; puste pole usuwa wcześniejszy krótki opis. | Zaktualizowano 574 produkty: 460 z dwoma opisami i 114 z jednym. Przeszły 52 testy, test importu i kontrola HTTP produktu 607. |
 | 2026-11-11, Maciej Drywa | Codex 6.1 sol | W3.4 - Stany i aktywacja produktów | Dodano plan stanów magazynowych 0–10, podział na kombinacje, aktywację i blokadę zamawiania bez stanu. | Limit 10 dotyczy sumy wariantów; dostępny produkt otrzymuje dostępny wariant domyślny. | 574 aktywne produkty, 57 niedostępnych (9,93%); warainty działąją (sprawdzone manualnie); złożenie zamówienia przy barku towaru również nie jest możliwe, więc działa poprawnie |
 
+| 2026-11-11, Maciej Drywa | Codex 6.1 sol | W3.4 - Jedna komenda inicjalizacji | Dodano init-shop.php z kontrolą lokalnych JSON-ów i zdjęć, ośmioma etapami importu, postępem i zatrzymaniem po błędzie. | Aktywacja następuje po walidacji danych i galerii; brak zdjęcia 539 jest raportowany. | Komenda działą poprawnie, produkty wraz z kategoriami zostały zaimplementowane do sklepu. Cały proces importu został przedstawiony w logach w konsoli. |
+
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:
 - W których zadaniach AI przyspieszyło pracę.

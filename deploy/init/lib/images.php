@@ -103,7 +103,7 @@ function thumbnailSignature(array $types): string
     return hash('sha256', json_encode([$types, \Configuration::get('PS_JPEG_QUALITY'), _PS_VERSION_], JSON_THROW_ON_ERROR));
 }
 
-function imagePlans(array $products, \Context $context, string $directory = SOURCE_IMAGE_DIR): array
+function imagePlans(array $products, \Context $context, string $directory = SOURCE_IMAGE_DIR, bool $allowMissingProducts = false): array
 {
     if (!extension_loaded('gd')) {
         throw new RuntimeException('PHP GD is required for product images.');
@@ -122,7 +122,7 @@ function imagePlans(array $products, \Context $context, string $directory = SOUR
             throw new RuntimeException("Invalid image legend: product {$sourceId}");
         }
         $id = productId('pandomu-' . $sourceId, $context);
-        if ($id === null) {
+        if ($id === null && !$allowMissingProducts) {
             throw new RuntimeException("Product {$sourceId} is missing; run import-products.php first.");
         }
         if (!is_array($source['images'] ?? null) || !array_is_list($source['images'])) {
@@ -149,7 +149,7 @@ function imagePlans(array $products, \Context $context, string $directory = SOUR
                 throw new RuntimeException('Source image is missing or outside the source directory: ' . $filename);
             }
             $validated[$path] ??= validateSourceImage($path);
-            $mapping = $mapped ? imageMapping($sourceId, $url, $context) : null;
+            $mapping = $mapped && $id !== null ? imageMapping($sourceId, $url, $context) : null;
             if ($mapping !== null && $mapping['id_image'] !== null) {
                 $image = new \Image((int) $mapping['id_image'], null, (int) $context->shop->id);
                 if (\Validate::isLoadedObject($image)) {
@@ -164,11 +164,14 @@ function imagePlans(array $products, \Context $context, string $directory = SOUR
                 'source' => $validated[$path], 'mapping' => $mapping,
             ];
         }
-        $query = new \DbQuery();
-        $query->select('i.id_image')->from('image', 'i');
-        $query->innerJoin('image_shop', 's', 's.id_image = i.id_image');
-        $query->where('i.id_product = ' . $id)->where('s.id_shop = ' . (int) $context->shop->id);
-        $rows = \Db::getInstance()->executeS($query, true, false);
+        $rows = [];
+        if ($id !== null) {
+            $query = new \DbQuery();
+            $query->select('i.id_image')->from('image', 'i');
+            $query->innerJoin('image_shop', 's', 's.id_image = i.id_image');
+            $query->where('i.id_product = ' . $id)->where('s.id_shop = ' . (int) $context->shop->id);
+            $rows = \Db::getInstance()->executeS($query, true, false);
+        }
         if ($rows === false) {
             throw new RuntimeException("Cannot read gallery: {$sourceId}");
         }

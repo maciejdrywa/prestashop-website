@@ -4,10 +4,65 @@ Uruchamiaj z głównego katalogu projektu, w działającym kontenerze:
 
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/NAZWA.php
 
-To elementy budowanej inicjalizacji. Import produktów, kategorii, kombinacji i galerii
-z lokalnego katalogu oraz stany magazynowe i aktywacja są dostępne.
-Brakuje jeszcze pobierania zdjęć z Release i adresów źródłowych
-oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
+## Jedna komenda inicjalizacji
+
+W działającym środowisku Docker, z głównego katalogu projektu, uruchom:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/init-shop.php
+
+Wymagane lokalne dane:
+
+    scraper-results/
+      products.json
+      categories.json
+      images/
+
+Pliki JSON muszą pochodzić z aktualnego scrapera: produkty zawierają oba opisy,
+pełne category_paths, zweryfikowane ceny kombinacji i cover_image.
+Każdy URL w images produktu musi mieć odpowiadający plik JPEG w images/.
+Istniejący mount Compose udostępnia cały folder w /opt/shop/scraper-results.
+PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
+wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
+powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
+
+Komenda wykonuje 8 etapów:
+
+1. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
+2. Grupy i wartości atrybutów.
+3. Kombinacje i modyfikatory cen.
+4. Galerie, okładki i miniatury z lokalnych plików.
+5. Kontrola produktów i kombinacji.
+6. Kontrola galerii.
+7. Stany 0–10 i aktywacja.
+8. Końcowa kontrola stanów, dostępności i aktywacji.
+
+Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
+kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
+obsługuje też świeżą bazę, w której produkty dopiero powstaną. Kategorie są
+przygotowywane przez import-products.php, więc osobna komenda nie jest potrzebna.
+Program pokazuje numer etapu, szczegółowy postęp importerów oraz czas wykonania.
+Blokada chroni przed równoległym wykonaniem init-shop.php. Nie uruchamiaj w tym
+czasie pojedynczych importerów ani scrapera zapisującego JSON/zdjęcia.
+
+Błąd podprocesu kończy inicjalizację kodem 1 z nazwą etapu i zatrzymuje dalsze
+kroki. Zmiana JSON w trakcie pracy również zatrzymuje proces. Zakończone etapy
+mogą pozostawić zapisy: popraw przyczynę i powtórz tę samą komendę. Importy
+rozpoznają istniejące rekordy. Nowe produkty są aktywowane po walidacji danych
+i galerii; aktywność produktów istniejących wcześniej jest zachowywana podczas
+wcześniejszych etapów. Ponowienie inicjalizacji odtwarza początkowy plan stanów.
+Produkty demonstracyjne PrestaShop pozostają poza zakresem importu.
+
+Pusta galeria źródłowa, np. produktu 539, jest jawnie raportowana. Taki przebieg
+kończy się COMPLETE WITH SOURCE WARNINGS; nie oznacza potwierdzenia wyjątku
+brakującego zdjęcia przy odbiorze projektu.
+
+Samą walidację i plan, bez importu lub aktywacji, uruchomisz poleceniem:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/init-shop.php --dry-run
+
+Pomoc jest dostępna przez --help. Na tym etapie wymagany jest lokalny folder
+images/. Pobieranie archiwum z Release, ścieżka zastępcza z URL-i i pozostała
+konfiguracja W3 nadal wymagają osobnych prac.
 
 ## Pliki i kolejność
 
@@ -112,6 +167,9 @@ oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
     każdą kombinację, sumy, domyślny wariant, aktywację oraz blokadę zamawiania
     niedostępnego towaru. Dla pełnego katalogu sprawdza też zakres 5–20% stanów 0.
     Stan 0 oznacza produkt aktywny, widoczny, ale niedostępny do zamówienia.
+14. **init-shop.php** sprawdza komplet lokalnych danych i uruchamia całą sekwencję.
+    Każdy etap działa w osobnym procesie PHP, żeby nie współdzielić pamięci cache
+    PrestaShop między kolejnymi importerami.
 
 Starszy eksport można uzupełnić samymi metadanymi okładek:
 
@@ -132,7 +190,7 @@ Skrypt uzupełnia wyłącznie description oraz description_short i zapisuje
 description-report.json. Opcje --product-id ID i --refresh działają jak dla okładek.
 Przy zwykłym nowym scrapowaniu ani wznowieniu dodatkowy skrypt nie jest wymagany.
 
-Diagnostyka pomaga wykryć błędy wcześniej. W docelowej jednej komendzie nie trzeba
+Diagnostyka pomaga wykryć błędy wcześniej. W jednej komendzie nie trzeba
 osobno uruchamiać podglądu wariantów: jego walidacja jest też używana przez import.
 
 ## Parametry importerów i podglądu
@@ -149,7 +207,8 @@ Podgląd import-combinations.php --dry-run sprawdza tylko źródło. Kontrola is
 produktów i atrybutów w sklepie następuje przy uruchomieniu bez tej opcji.
 check-price-settings.php domyślnie sprawdza cały katalog; można wskazać pojedyncze ID.
 
-Po resecie sklepu kolejność przygotowania danych to:
+Powyższy init-shop.php wykonuje cały proces. Do ręcznej diagnostyki kolejnych
+etapów można nadal używać następującej sekwencji:
 
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-products.php --all --dry-run
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-products.php --all
@@ -181,6 +240,8 @@ etapu. Żaden z tych skryptów nie usuwa demonstracyjnych produktów PrestaShop.
   zapis galerii, generowanie i sprawdzanie miniatur.
 - **lib/stock.php**: powtarzalny plan ilości według źródłowego ID, podział na
   kombinacje, zapis stanów, aktywacja i kontrola faktycznych stanów.
+- **lib/initialization.php**: walidacja wejścia, lista etapów, uruchamianie procesów
+  i zatrzymywanie po błędzie lub zmianie JSON.
   Biblioteki nie uruchamiają samodzielnie importu.
 
 Obliczenia cen używają dziesiętnej arytmetyki bcmath. Cena bazowa netto to
@@ -224,6 +285,7 @@ To osobny etap przygotowania plików, do dodania przed docelową jedną komendą
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/prestashop-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/images-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/stock-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/initialization-test.php
 
 source-test.php sprawdza cały aktualny katalog, ceny, kolejność kategorii oraz
 przypadki błędnych danych i ujemnych modyfikatorów.
@@ -250,3 +312,8 @@ stock-test.php sprawdza stabilność planu po zmianie kolejności JSON, granice
 brak duplikacji ilości po ponowieniu oraz odrzucenie brakujących kombinacji.
 Używa prywatnych ID 900000012 i 900000119; wyłącza hooki modułów w procesie
 testowym i wycofuje zapisy. Nie uruchamiaj równolegle z innymi importerami.
+
+initialization-test.php sprawdza brak wymaganych plików, minimalne kategorie,
+zmianę źródła, kod błędu procesu potomnego oraz zatrzymanie przed aktywacją po
+nieudanym imporcie. Sprawdza też walidację zdjęć przed istnieniem produktu
+w bazie, bez tworzenia rekordów testowych.
