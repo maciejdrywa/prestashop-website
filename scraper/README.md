@@ -178,10 +178,38 @@ Dodano scrapping_images_module scrapujacy wszystkie zdjecia, ktore sa w products
 
 Dodano pliki create_zip_archive (tworzacy zipa ze wszystkich zdjec) i process_and_save_images (sprawdzamy czy plik ma poprawny np format, skladnie i zapisujemy)
 
-odpalamy scrapping_images_module poprzez zmienie cookies w pliku w linii 53 
+Przed uruchomieniem ustaw wartość cookies w pliku scrapping_images_module.py:
 
 ``` cookies = "" ```
 
 i poprzez komende:
 
-``` python scrapping_images_module.py ```
+```powershell
+.\venv\Scripts\python.exe scraper/scrapping_images_module.py
+```
+
+### Wymagania zdjęć
+
+Zdjęcia są zapisywane jako JPEG RGB. Dłuższy bok musi mieć od 800 do 1600 px,
+a plik maksymalnie 300 000 bajtów (300 KB). Mniejsze źródła są powiększane,
+większe pomniejszane z zachowaniem proporcji. Obrót EXIF jest stosowany przed
+skalowaniem; przezroczystość zastępowana jest białym tłem.
+
+Skrypt najpierw obniża jakość JPEG. Jeżeli to nie wystarczy, zmniejsza wymiary,
+zachowując minimum 800 px. Gdy nie da się spełnić ograniczeń, zgłasza błąd
+i nie zapisuje niepoprawnego wyniku. Zapis odbywa się przez plik tymczasowy.
+
+Przy wznowieniu istniejące pliki są sprawdzane i w razie potrzeby przetwarzane
+ponownie. Uszkodzone zdjęcia są pobierane ponownie ze źródła. Błąd pobrania
+lub przetworzenia kończy przebieg kodem 1 i blokuje utworzenie nowego archiwum.
+
+Pełny zbiór pozostaje w ignorowanym scraper-results/images/, a wygenerowane archiwum
+scraper-results/product_images.zip też jest ignorowane. W repozytorium może
+pozostać do 20 zdjęć w scraper-results/samples/. Próbki podlegają tym samym
+ograniczeniom, a poprawne pliki nie są niepotrzebnie kompresowane ponownie.
+
+Testy przetwarzania obrazów, cache i próbek, bez połączenia ze sklepem:
+
+```powershell
+.\venv\Scripts\python.exe -m unittest discover -s scraper -p test_image_processing.py -v
+```

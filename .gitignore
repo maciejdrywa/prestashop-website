@@ -25,6 +25,7 @@ htmlcov/
 scraper/images/
 scraper-results/images/
 scraper-results/photos/
+scraper-results/product_images.zip
 
 # PrestaShop uploads and generated images
 shop/img/
