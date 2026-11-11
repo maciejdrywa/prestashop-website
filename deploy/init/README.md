@@ -5,8 +5,8 @@ Uruchamiaj z głównego katalogu projektu, w działającym kontenerze:
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/NAZWA.php
 
 To elementy budowanej inicjalizacji. Import produktów, kategorii, kombinacji i galerii
-z lokalnego katalogu jest dostępny. Brakuje jeszcze pobierania zdjęć z Release
-i adresów źródłowych, stanów magazynowych
+z lokalnego katalogu oraz stany magazynowe i aktywacja są dostępne.
+Brakuje jeszcze pobierania zdjęć z Release i adresów źródłowych
 oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
 
 ## Pliki i kolejność
@@ -91,6 +91,27 @@ oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
     Sprawdza kompletność galerii, kolejność, okładkę, podpisy, zgodność bajtową
     oryginałów ze źródłowymi plikami oraz wymiary i sumy kontrolne miniatur.
     Niczego nie zapisuje i nie pobiera zdjęć z sieci.
+12. **import-stock.php** ustawia stany oraz aktywuje wybrane produkty. Przyjmuje
+    ID źródłowe (domyślnie 5), --all i --dry-run. Plan zawsze powstaje dla całego
+    products.json: deterministycznie wybiera około 10% produktów ze stanem 0,
+    zachowując wymagane 5–20%. Pozostałe otrzymują 1–10 sztuk. Nie korzysta
+    z losowych pól stock zapisanych przez scraper i nie zmienia pliku JSON.
+    Dla kombinacji rozdziela łączny stan produktu, zatem suma ilości wariantów
+    jest w zakresie 0–10. Przy wielu wariantach część z nich może mieć 0 nawet
+    dla dostępnego produktu; limit procentowy dotyczy produktów, nie wariantów.
+    Jeśli stan jest dodatni, domyślna kombinacja musi mieć dodatnią ilość.
+    Zachowuje istniejącą dostępną domyślną albo wybiera dostępną z planu.
+    Aktywuje produkt, ustawia widoczność w katalogu i wyszukiwaniu oraz możliwość
+    zamówienia. Dla braku towaru ustawia zakaz zamawiania, nadpisując ewentualną
+    globalną zgodę na zamówienia bez stanu. Nie tworzy ruchów magazynowych.
+    Wymaga włączonego zarządzania stanami oraz wcześniej zapisanych produktów
+    i dokładnego kompletu kombinacji. Nie obsługuje zaawansowanych magazynów.
+    Ponowne wykonanie przywraca ten sam stan dla tego samego katalogu.
+13. **check-stock.php** domyślnie sprawdza wszystkie produkty, opcjonalnie jedno ID.
+    Odczytuje rzeczywiste wiersze stock_available: weryfikuje stan produktu,
+    każdą kombinację, sumy, domyślny wariant, aktywację oraz blokadę zamawiania
+    niedostępnego towaru. Dla pełnego katalogu sprawdza też zakres 5–20% stanów 0.
+    Stan 0 oznacza produkt aktywny, widoczny, ale niedostępny do zamówienia.
 
 Starszy eksport można uzupełnić samymi metadanymi okładek:
 
@@ -138,6 +159,9 @@ Po resecie sklepu kolejność przygotowania danych to:
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-images.php --all --dry-run
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-images.php --all
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/check-images.php --all
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-stock.php --all --dry-run
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-stock.php --all
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/check-stock.php --all
 
 Zamiast --all można wskazać ID źródłowe, np. 5. Bez ID importer produktów wybiera 5.
 Przykładowy check-products.php 5 --with-combinations sprawdza tylko ten produkt.
@@ -155,6 +179,8 @@ etapu. Żaden z tych skryptów nie usuwa demonstracyjnych produktów PrestaShop.
   dla Polski i bieżącego sklepu, zapis produktów oraz kontrola zapisanych pól.
 - **lib/images.php**: mapowanie źródłowych URL-i na ID zdjęć, walidacja plików,
   zapis galerii, generowanie i sprawdzanie miniatur.
+- **lib/stock.php**: powtarzalny plan ilości według źródłowego ID, podział na
+  kombinacje, zapis stanów, aktywacja i kontrola faktycznych stanów.
   Biblioteki nie uruchamiają samodzielnie importu.
 
 Obliczenia cen używają dziesiętnej arytmetyki bcmath. Cena bazowa netto to
@@ -197,6 +223,7 @@ To osobny etap przygotowania plików, do dodania przed docelową jedną komendą
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/source-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/prestashop-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/images-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/stock-test.php
 
 source-test.php sprawdza cały aktualny katalog, ceny, kolejność kategorii oraz
 przypadki błędnych danych i ujemnych modyfikatorów.
@@ -217,3 +244,9 @@ produktu 5. Sprawdza limity źródeł, brak duplikatów, zmianę kolejności i o
 naprawę uszkodzonej miniatury i brakującego oryginału, wznowienie niedokończonego
 zapisu oraz odrzucenie nieznanego zdjęcia w galerii. Usuwa własny produkt, obrazy,
 pliki i mapowania po zakończeniu.
+
+stock-test.php sprawdza stabilność planu po zmianie kolejności JSON, granice
+0/1/10, podział między 12 wariantów, niedostępną domyślną kombinację, aktywację,
+brak duplikacji ilości po ponowieniu oraz odrzucenie brakujących kombinacji.
+Używa prywatnych ID 900000012 i 900000119; wyłącza hooki modułów w procesie
+testowym i wycofuje zapisy. Nie uruchamiaj równolegle z innymi importerami.
