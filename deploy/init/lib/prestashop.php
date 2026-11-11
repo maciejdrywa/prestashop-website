@@ -70,7 +70,7 @@ function transaction(callable $callback)
     }
 }
 
-function importCategories(array $plan, \Context $context): array
+function importCategories(array $plan, \Context $context, bool $create = true): array
 {
     // Validate all names before the first write.
     foreach ($plan as $entry) {
@@ -102,6 +102,9 @@ function importCategories(array $plan, \Context $context): array
         $id = uniqueId($query);
         $status = 'EXISTS';
         if ($id === null) {
+            if (!$create) {
+                throw new RuntimeException('Missing category: ' . implode(' > ', $entry['path']) . '; run import-category.php or import-products.php first.');
+            }
             $category = new \Category();
             $category->id_parent = $parentId;
             $category->id_shop_default = $shopId;
@@ -263,7 +266,7 @@ function combinationPlan(array $products, \Context $context): array
         $result[] = ['product' => $product, 'source_id' => $sourceId, 'prices' => $plan];
     }
     if ($missing !== []) {
-        throw new RuntimeException('Product drafts are missing; run the future product importer first. Source IDs: ' . implode(', ', array_slice($missing, 0, 10)) . (count($missing) > 10 ? ' ...' : ''));
+        throw new RuntimeException('Product drafts are missing; run import-products.php first. Source IDs: ' . implode(', ', array_slice($missing, 0, 10)) . (count($missing) > 10 ? ' ...' : ''));
     }
     return $result;
 }

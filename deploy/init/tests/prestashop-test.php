@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/../lib/prestashop.php';
+require_once __DIR__ . '/../lib/products.php';
 function verify(bool $condition, string $message): void
 {
     if (!$condition) {
@@ -10,7 +10,7 @@ function verify(bool $condition, string $message): void
 function counts(): array
 {
     $result = [];
-    foreach (['product', 'product_shop', 'category', 'category_lang', 'category_shop',
+    foreach (['product', 'product_shop', 'product_lang', 'category', 'category_lang', 'category_shop',
         'category_product', 'category_group', 'attribute_group', 'attribute_group_lang',
         'attribute_group_shop', 'attribute', 'attribute_lang', 'attribute_shop',
         'product_attribute', 'product_attribute_shop', 'product_attribute_combination', 'stock_available'] as $table) {
@@ -34,6 +34,11 @@ try {
     }
     $catalog = ShopInit\readCatalog();
     $products = array_values(array_filter($catalog, fn (array $p): bool => in_array((int) $p['product_id'], [5, 119, 644, 463, 808, 826], true)));
+    // Private references allow the test to run after the real catalog import.
+    foreach ($products as &$source) {
+        $source['product_id'] = (string) (900000000 + (int) $source['product_id']);
+    }
+    unset($source);
     foreach ($products as $source) {
         verify(!$db->getValue('SELECT id_product FROM ' . _DB_PREFIX_ . "product WHERE reference = 'pandomu-" . (int) $source['product_id'] . "'"), 'Test source product already exists; use a fresh test shop.');
     }
@@ -45,29 +50,38 @@ try {
     $groups = ShopInit\attributePlan($catalog);
     $attributes = ShopInit\importAttributes($groups, $context);
     verify($attributes === ShopInit\importAttributes($groups, $context), 'Attribute IDs changed on repeat');
-    foreach ($products as $source) {
-        $price = ShopInit\pricePlan($source);
-        $taxGroup = (int) $db->getValue('SELECT r.id_tax_rules_group FROM ' . _DB_PREFIX_ . 'tax_rule r'
-            . ' JOIN ' . _DB_PREFIX_ . 'tax t ON t.id_tax = r.id_tax'
-            . ' JOIN ' . _DB_PREFIX_ . 'tax_rules_group g ON g.id_tax_rules_group = r.id_tax_rules_group'
-            . ' WHERE g.active = 1 AND g.deleted = 0 AND t.active = 1 AND t.deleted = 0 AND r.id_country = ' . (int) Country::getByIso('PL')
-            . ' AND r.id_state = 0 AND r.zipcode_from = 0 AND r.zipcode_to = 0 AND r.behavior = 0 AND t.rate = ' . (float) $price['vat']
-            . ' ORDER BY r.id_tax_rules_group');
-        verify($taxGroup > 0, 'Missing test VAT rule');
-        $product = new Product();
-        $product->reference = 'pandomu-' . $source['product_id'];
-        $product->price = $price['net'];
-        $product->id_tax_rules_group = $taxGroup;
-        $product->id_category_default = $categories[json_encode($source['category_paths'][0], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
-        $product->active = false;
-        foreach (Language::getLanguages(false) as $language) {
-            $id = (int) $language['id_lang'];
-            $product->name[$id] = $source['name'];
-            $product->link_rewrite[$id] = Tools::link_rewrite($source['name']);
-        }
-        verify($product->add(), 'Cannot create temporary draft');
+    $bad = $products;
+    $bad[1]['description'] = '<script>alert(1)</script>';
+    $rejected = false;
+    try {
+        ShopInit\productPlans($bad, $context);
+    } catch (RuntimeException $error) {
+        $rejected = true;
     }
+    verify($rejected, 'Unsafe description was accepted');
+    verify(counts()['product'] === $before['product'], 'Preflight created products');
+    $productPlans = ShopInit\productPlans($products, $context);
+    $productIds = ShopInit\importProducts($productPlans, $categories, $context);
+    verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Product IDs changed on repeat');
+    $firstSource = (string) $products[0]['product_id'];
+    $firstId = $productIds[$firstSource];
+    $saved = new Product($firstId);
+    $saved->active = true;
+    verify((bool) $saved->update(), 'Cannot prepare activation preservation fixture');
+    StockAvailable::setQuantity($firstId, 0, 7, (int) $context->shop->id);
+    $changed = $products[0];
+    $changed['name'] = 'Updated import fixture';
+    $changed['description'] = '<p>Updated description with Polish text: test.</p>';
+    $changed['weight'] = 2.5;
+    $changed['category_paths'] = [$catalog[1]['category_paths'][0], $catalog[2]['category_paths'][0]];
+    $changedPlans = ShopInit\productPlans([$changed], $context);
+    verify(ShopInit\importProducts($changedPlans, $categories, $context)[$firstSource] === $firstId, 'Updated product was duplicated');
+    $saved = new Product($firstId);
+    verify((bool) $saved->active, 'Product activation was reset');
+    verify((int) StockAvailable::getQuantityAvailableByProduct($firstId, 0, (int) $context->shop->id) === 7, 'Stock was overwritten');
+    ShopInit\importProducts($productPlans, $categories, $context);
     $first = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
+    verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Reimport after combinations duplicated products');
     $legacyId = reset($first)[0];
     verify($db->update('product_attribute', ['reference' => 'legacy-option-reference'], 'id_product_attribute = ' . $legacyId), 'Cannot prepare migration fixture');
     $second = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
