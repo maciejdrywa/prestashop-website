@@ -60,6 +60,15 @@ try {
     }
     verify($rejected, 'Unsafe description was accepted');
     verify(counts()['product'] === $before['product'], 'Preflight created products');
+    $bad = $products;
+    $bad[1]['description_short'] = '<script>alert(1)</script>';
+    $rejected = false;
+    try {
+        ShopInit\productPlans($bad, $context);
+    } catch (RuntimeException $error) {
+        $rejected = true;
+    }
+    verify($rejected, 'Unsafe short description was accepted');
     $productPlans = ShopInit\productPlans($products, $context);
     $productIds = ShopInit\importProducts($productPlans, $categories, $context);
     verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Product IDs changed on repeat');
@@ -72,6 +81,7 @@ try {
     $changed = $products[0];
     $changed['name'] = 'Updated import fixture';
     $changed['description'] = '<p>Updated description with Polish text: test.</p>';
+    $changed['description_short'] = '<p>Updated short summary.</p>';
     $changed['weight'] = 2.5;
     $changed['category_paths'] = [$catalog[1]['category_paths'][0], $catalog[2]['category_paths'][0]];
     $changedPlans = ShopInit\productPlans([$changed], $context);
@@ -79,6 +89,10 @@ try {
     $saved = new Product($firstId);
     verify((bool) $saved->active, 'Product activation was reset');
     verify((int) StockAvailable::getQuantityAvailableByProduct($firstId, 0, (int) $context->shop->id) === 7, 'Stock was overwritten');
+    $changed['description_short'] = '';
+    ShopInit\importProducts(ShopInit\productPlans([$changed], $context), $categories, $context);
+    $saved = new Product($firstId, false, (int) Configuration::get('PS_LANG_DEFAULT'), (int) $context->shop->id);
+    verify($saved->description_short === '', 'Old summary was not cleared for a full-only source');
     ShopInit\importProducts($productPlans, $categories, $context);
     $first = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
     verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Reimport after combinations duplicated products');

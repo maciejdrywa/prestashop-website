@@ -175,7 +175,7 @@ class VariantPriceTests(unittest.TestCase):
             def fetch_variants(self, html, parsed):
                 return [variant_from_data(data(net="110", gross="135.3"), "Product", 100)]
 
-        old = {"product_id": "5", "name": "Keep name", "description": "Keep description", "breadcrumbs": [], "source_breadcrumbs": [], "variants": [{"price_modifier": 0}], "images": ["image"], "price_netto": 90}
+        old = {"product_id": "5", "name": "Keep name", "description": "Keep description", "description_short": "", "breadcrumbs": [], "source_breadcrumbs": [], "variants": [{"price_modifier": 0}], "images": ["image"], "price_netto": 90}
         parsed = SimpleNamespace(product_id="5", price_netto=100, price_brutto=123, vat_rate=23, stock=None)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)

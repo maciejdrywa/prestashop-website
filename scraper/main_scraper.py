@@ -4,10 +4,14 @@ import argparse
 import logging
 import os
 from pathlib import Path
+from bs4 import BeautifulSoup
 
 from Scrapping_products.store_crawler import store_crawler
 from Scrapping_products.parse_product import parse_product
 from catalog_files import assign_categories, read_products, save_json
+from scraper_elements.scrap_images import scrap_cover_image
+from scraper_elements.scrap_id import scrap_id
+from scraper_elements.scrap_description import scrap_descriptions
 
 
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "scraper-results"
@@ -67,15 +71,41 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
             needs_variant_refresh(previous)
             or (refresh_variants and bool(previous.get("variants")))
         )
+        missing_descriptions = previous is not None and "description" in previous and "description_short" not in previous
         if previous is not None and not refresh and not refresh_prices:
+            missing_cover = len(previous.get("images", [])) > 1 and previous.get("cover_image") not in previous["images"]
+            if missing_cover or missing_descriptions:
+                try:
+                    html = crawler.fetch_page(entry["product_url"])
+                    soup = BeautifulSoup(html or "", "html.parser")
+                    if str(scrap_id(soup)) != str(product_id):
+                        raise ValueError("Niepoprawne ID produktu przy odswiezaniu okladki.")
+                    metadata = {}
+                    if missing_cover:
+                        metadata["cover_image"] = scrap_cover_image(soup, previous["images"])
+                    if missing_descriptions:
+                        metadata.update(scrap_descriptions(soup))
+                    saved[product_id] = {**previous, **metadata}
+                    fetched += 1
+                    save_json(results_file, list(saved.values()))
+                except Exception as error:
+                    failed.append(product_id)
+                    product_errors[product_id] = str(error)
+                continue
             reused += 1
             continue
         failure_reason = None
+        refreshed_cover = None
+        refreshed_descriptions = {}
         try:
             html = crawler.fetch_page(entry["product_url"])
             parsed = parse_product(html, entry["product_url"]) if html else None
             if parsed is not None:
                 parsed.variants = crawler.fetch_variants(html, parsed)
+                if previous is not None and not refresh and refresh_prices:
+                    refreshed_cover = scrap_cover_image(BeautifulSoup(html, "html.parser"), previous["images"])
+                    if missing_descriptions:
+                        refreshed_descriptions = scrap_descriptions(BeautifulSoup(html, "html.parser"))
             else:
                 failure_reason = "Nie udało się pobrać lub sparsować strony produktu; szczegóły w logu."
         except Exception as error:
@@ -96,6 +126,8 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
                 "vat_rate": parsed.vat_rate,
                 "variants": [variant.model_dump() for variant in parsed.variants],
                 "stock": parsed.stock,
+                "cover_image": refreshed_cover,
+                **refreshed_descriptions,
             }
         else:
             updated = parsed.model_dump()
@@ -112,9 +144,22 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
         product_id for product_id in discovered.keys() & saved.keys()
         if needs_variant_refresh(saved[product_id])
     )
+    unverified_covers = sorted(
+        product_id for product_id in discovered.keys() & saved.keys()
+        if len(saved[product_id].get("images", [])) > 1
+        and saved[product_id].get("cover_image") not in saved[product_id]["images"]
+    )
+    unverified_descriptions = sorted(
+        product_id for product_id in discovered.keys() & saved.keys()
+        if "description" in saved[product_id] and "description_short" not in saved[product_id]
+    )
     report = {
         "complete": not failed and not undiscovered,
         "source_images_complete": not without_images,
+        "source_covers_complete": not unverified_covers,
+        "source_descriptions_complete": not unverified_descriptions,
+        "products_with_unverified_descriptions": unverified_descriptions,
+        "products_with_unverified_covers": unverified_covers,
         "variant_prices_complete": not failed and not unverified_prices,
         "categories": len(catalog["categories"]),
         "discovered_products": len(discovered),

@@ -190,6 +190,36 @@ i poprzez komende:
 
 ### Wymagania zdjęć
 
+Opisy są odczytywane osobno: description_short z elementu
+product-description-short-ID, description z właściwego kontenera opisu.
+Oba istniejące opisy zachowujemy nawet wtedy, gdy mają identyczną treść.
+Jeśli źródło ma tylko jeden, trafia do description (na dół strony), a
+description_short pozostaje pusty. Nie łączymy obu pól w jeden blok HTML.
+Nowe scrapowanie zapisuje oba pola, a wznowienie uzupełnia starsze rekordy.
+Do jednorazowej migracji istniejącego eksportu można użyć:
+
+    .\venv\Scripts\python.exe scraper/refresh_descriptions.py
+
+Ten skrypt zapisuje tylko oba opisy i description-report.json; pozostałe pola
+produktu pozostają bez zmian. Nie uruchamiaj go jednocześnie z innymi zapisami
+products.json. Nie trzeba ponownie pobierać zdjęć ani tworzyć archiwum.
+
+Pole images zachowuje kolejność galerii. Osobne cover_image wskazuje zdjęcie
+okładki odczytane ze źródłowych danych produktu lub głównego obrazu strony.
+Okładka nie musi być pierwsza: np. produkt 661 ma najpierw rysunek techniczny,
+a fotografię okładkową na drugiej pozycji. Nie zmieniamy kolejności galerii,
+aby wymusić okładkę. Brak jednoznacznego wskazania przy wielu zdjęciach jest błędem.
+
+Główny scraper uzupełnia brakujące okładki przy wznowieniu bez odświeżania cen.
+Można też odświeżyć wyłącznie te metadane, bez ponownego pobierania zdjęć:
+
+    .\venv\Scripts\python.exe scraper/refresh_image_covers.py
+
+Opcjonalne --product-id ID wybiera jeden produkt, a --refresh odświeża również
+wcześniej zapisane wskazania. Błędy są raportowane w image-cover-report.json;
+ponowne uruchomienie domyślnie pomija poprawnie zapisane okładki.
+Nie uruchamiaj odświeżania jednocześnie z innymi zapisami products.json.
+
 Zdjęcia są zapisywane jako JPEG RGB. Dłuższy bok musi mieć od 800 do 1600 px,
 a plik maksymalnie 300 000 bajtów (300 KB). Mniejsze źródła są powiększane,
 większe pomniejszane z zachowaniem proporcji. Obrót EXIF jest stosowany przed

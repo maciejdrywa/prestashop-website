@@ -4,11 +4,11 @@ from bs4 import BeautifulSoup
 import logging
 from parser_classes.Product import Product
 from scraper_elements.scrap_catalog import scrap_catalog
-from scraper_elements.scrap_description import scrap_description
+from scraper_elements.scrap_description import scrap_descriptions
 
 ## Scraping devices
 from scraper_elements.scrap_id import scrap_id
-from scraper_elements.scrap_images import scrap_images
+from scraper_elements.scrap_images import scrap_images, scrap_cover_image
 from scraper_elements.scrap_name import scrap_name
 from scraper_elements.scrap_pretax_price import scrap_pretax_price
 from scraper_elements.scrap_price import scrap_price
@@ -44,7 +44,7 @@ def parse_product(html_content: str, source_url: str) -> Product | None:
             logging.warning("Produkt źródłowy nie ma zdjęć w galerii: %s", source_url)
 
         #description
-        description = scrap_description(soup)
+        descriptions = scrap_descriptions(soup)
 
         #Catalog
         breadcrumbs = scrap_catalog(soup)
@@ -64,13 +64,14 @@ def parse_product(html_content: str, source_url: str) -> Product | None:
             product_id=product_id,
             product_url=source_url,
             name=product_name,
-            description=description,
+            **descriptions,
             breadcrumbs=breadcrumbs,
             price_brutto=price_brutto,
             price_netto=price_netto,
             vat_rate=vat_rate,
             weight=weight,
             images=images,
+            cover_image=scrap_cover_image(soup, images),
             variants=variants,
             stock= stock
         )

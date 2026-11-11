@@ -4,8 +4,9 @@ Uruchamiaj z głównego katalogu projektu, w działającym kontenerze:
 
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/NAZWA.php
 
-To elementy budowanej inicjalizacji. Import produktów, kategorii i kombinacji jest
-dostępny. Brakuje jeszcze zdjęć z Release i adresów źródłowych, stanów magazynowych
+To elementy budowanej inicjalizacji. Import produktów, kategorii, kombinacji i galerii
+z lokalnego katalogu jest dostępny. Brakuje jeszcze pobierania zdjęć z Release
+i adresów źródłowych, stanów magazynowych
 oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
 
 ## Pliki i kolejność
@@ -47,7 +48,7 @@ oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
    stanów i nie usuwa kombinacji nieobecnych w aktualnym eksporcie.
 8. **import-products.php** sprawdza cały wybrany zestaw przed zapisem: nazwy, opisy
    HTML, ceny, VAT, wagę i istniejące referencje. Przygotowuje kategorie i zapisuje
-   produkty przez klasy PrestaShop. Importuje nazwę, opis, slug, wagę, netto,
+   produkty przez klasy PrestaShop. Importuje nazwę, pełny i krótki opis, slug, wagę, netto,
    regułę VAT oraz typ standard/combinations. Wszystkie dostępne języki otrzymują
    tekst źródłowy po polsku. HTML jest normalizowany przez purifier PrestaShop,
    jeżeli ta funkcja jest włączona; zmiany są raportowane, bez nadpisywania JSON.
@@ -61,6 +62,11 @@ oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
    tłumaczenia, przypisania i cenę brutto obliczoną przez PrestaShop.
    Brak źródłowej wagi jest raportowany; zachowywana jest wcześniejsza wartość
    albo domyślne 0 nowego produktu. Wymagana jednostka sklepu to kg.
+   Pole description trafia do opisu na dole strony, a description_short do opisu
+   obok ceny. Dwa źródłowe opisy zachowujemy nawet przy identycznej treści.
+   Przy jednym opisie scraper zapisuje go jako pełny i pozostawia krótki pusty;
+   importer czyści wtedy wcześniejszy krótki opis, aby nie został stary tekst.
+   Eksport bez pola description_short wymaga odświeżenia danych przed importem.
 9. **check-products.php** porównuje zapisany katalog ze źródłem bez zmian w bazie.
    Domyślnie sprawdza całość: pola, opisy po normalizacji HTML, tłumaczenia,
    kategorie, typy produktów, VAT, ceny i liczbę produktów. Sprawdza też minimum
@@ -68,6 +74,42 @@ oraz jednej komendy realizującej cały proces i pozostałej konfiguracji W3.
    Opcja --with-combinations dodatkowo sprawdza dokładną liczbę kombinacji,
    referencje, atrybuty, modyfikatory, domyślny wariant i rzeczywiste brutto.
    Nie jest to jeszcze kontrola gotowości zdjęć i stanów magazynowych.
+10. **import-images.php** importuje zdjęcia z scraper-results/images/ dostępnego
+    w kontenerze jako /opt/shop/scraper-results/images. Przyjmuje ID źródłowe
+    (domyślnie 5), --all oraz --dry-run. Przed zapisem całego wybranego zestawu
+    sprawdza produkty, galerie, nazwy plików i poprawność JPEG: 800–1600 px na
+    dłuższym boku i maksymalnie 300000 bajtów. Oryginał jest kopiowany bez ponownej
+    kompresji do katalogu zdjęć PrestaShop, a ImageManager generuje miniatury JPEG
+    wszystkich typów produktu skonfigurowanych w sklepie. Miniatury mają rozmiary
+    wymagane przez motyw; minimum 800 px dotyczy oryginałów, nie miniatur.
+    Kolejność pochodzi z images w JSON. Okładkę wskazuje osobne pole cover_image
+    odczytane ze źródła; nie musi to być pierwsze zdjęcie galerii.
+    Dla jednego zdjęcia wybór jest jednoznaczny. Dla wielu zdjęć brak poprawnego
+    cover_image zatrzymuje import zamiast ustawiać przypadkową okładkę.
+    Nazwa produktu trafia do podpisów zdjęć, do limitu 128 znaków.
+11. **check-images.php** domyślnie kontroluje cały katalog; można wskazać jedno ID.
+    Sprawdza kompletność galerii, kolejność, okładkę, podpisy, zgodność bajtową
+    oryginałów ze źródłowymi plikami oraz wymiary i sumy kontrolne miniatur.
+    Niczego nie zapisuje i nie pobiera zdjęć z sieci.
+
+Starszy eksport można uzupełnić samymi metadanymi okładek:
+
+    .\venv\Scripts\python.exe scraper/refresh_image_covers.py
+
+Opcja --product-id 661 ogranicza aktualizację do produktu źródłowego.
+Opcja --refresh wymusza ponowne sprawdzenie już zapisanych okładek.
+Skrypt zapisuje cover_image i image-cover-report.json. Nie pobiera ponownie zdjęć
+ani nie zmienia ich kolejności, cen lub wariantów. Nie uruchamiaj go jednocześnie
+z innym skryptem zapisującym products.json. Główny scraper również zapisuje
+cover_image i uzupełnia brakujące okładki przy wznowieniu.
+
+Starsze opisy można rozdzielić bez ponownego pobierania cen i wariantów:
+
+    .\venv\Scripts\python.exe scraper/refresh_descriptions.py
+
+Skrypt uzupełnia wyłącznie description oraz description_short i zapisuje
+description-report.json. Opcje --product-id ID i --refresh działają jak dla okładek.
+Przy zwykłym nowym scrapowaniu ani wznowieniu dodatkowy skrypt nie jest wymagany.
 
 Diagnostyka pomaga wykryć błędy wcześniej. W docelowej jednej komendzie nie trzeba
 osobno uruchamiać podglądu wariantów: jego walidacja jest też używana przez import.
@@ -93,6 +135,9 @@ Po resecie sklepu kolejność przygotowania danych to:
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-attributes.php --all
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-combinations.php --all
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/check-products.php --all --with-combinations
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-images.php --all --dry-run
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-images.php --all
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/check-images.php --all
 
 Zamiast --all można wskazać ID źródłowe, np. 5. Bez ID importer produktów wybiera 5.
 Przykładowy check-products.php 5 --with-combinations sprawdza tylko ten produkt.
@@ -108,6 +153,8 @@ etapu. Żaden z tych skryptów nie usuwa demonstracyjnych produktów PrestaShop.
   i zapis kategorii, atrybutów oraz kombinacji przez klasy PrestaShop.
 - **lib/products.php**: plan danych produktów, dobór aktywnej ogólnej reguły VAT
   dla Polski i bieżącego sklepu, zapis produktów oraz kontrola zapisanych pól.
+- **lib/images.php**: mapowanie źródłowych URL-i na ID zdjęć, walidacja plików,
+  zapis galerii, generowanie i sprawdzanie miniatur.
   Biblioteki nie uruchamiają samodzielnie importu.
 
 Obliczenia cen używają dziesiętnej arytmetyki bcmath. Cena bazowa netto to
@@ -123,10 +170,33 @@ zatwierdza transakcję w MySQL. Nie należy zakładać pełnej atomowości impor
 Po błędzie popraw przyczynę i uruchom ponownie; import tych samych danych
 rozpoznaje istniejące rekordy. Równoległe uruchamianie importerów nie jest obsługiwane.
 
+## Wznawianie importu zdjęć
+
+Tabela import_image_map (z prefiksem bazy PrestaShop) przechowuje parę:
+sklep + ID produktu źródłowego + hash URL-a -> ID zdjęcia.
+Mapowanie jest zapisywane przed generowaniem plików, więc przerwane generowanie
+nie wymaga tworzenia kolejnego zdjęcia. Sumy SHA-256 plików i sygnatura ustawień
+miniatur pozwalają pomijać poprawne pliki albo odtworzyć uszkodzone/brakujące.
+Każdy plik jest zapisywany atomowo. Równoległy import zdjęć blokuje lokalny lock.
+Zapisy plików nie są objęte transakcją SQL; po błędzie należy poprawić przyczynę
+i ponowić tę samą komendę. Mapowanie i wygenerowane pliki są częścią danych sklepu
+i powinny być zachowywane razem przy wykonywaniu kopii zapasowej.
+
+Nieznane zdjęcia dołączone ręcznie, usunięte źródłowe URL-e i konflikty mapowania
+zatrzymują import do przeglądu. Skrypt nie usuwa automatycznie istniejących zdjęć
+i nie zmienia powiązań zdjęć z kombinacjami ani aktywności produktów.
+Pusta galeria produktu 539 jest raportowana; nie przypisujemy przypadkowej grafiki.
+Kod 0 oznacza import dostępnych zdjęć, nie zatwierdzenie wyjątku dla braków źródła.
+
+Ten etap korzysta wyłącznie z lokalnych JPEG-ów przygotowanych przez scraper.
+Nie rozpakowuje ZIP-a i nie pobiera jeszcze Release ani zdjęć ze źródłowych URL-i.
+To osobny etap przygotowania plików, do dodania przed docelową jedną komendą.
+
 ## Testy
 
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/source-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/prestashop-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/images-test.php
 
 source-test.php sprawdza cały aktualny katalog, ceny, kolejność kategorii oraz
 przypadki błędnych danych i ujemnych modyfikatorów.
@@ -141,3 +211,9 @@ wiele grup oraz rzeczywiste ceny brutto silnika sklepu. Wyłącza hooki modułó
 wyłącznie w procesie testowym, żeby umożliwić rollback. Nie testuje w ten sposób
 efektów ubocznych modułów. Wycofuje zapisy i porównuje liczności tabel; wartości
 AUTO_INCREMENT mogą wzrosnąć mimo wycofania.
+
+images-test.php używa prywatnego produktu 900000005 i czterech lokalnych zdjęć
+produktu 5. Sprawdza limity źródeł, brak duplikatów, zmianę kolejności i okładki,
+naprawę uszkodzonej miniatury i brakującego oryginału, wznowienie niedokończonego
+zapisu oraz odrzucenie nieznanego zdjęcia w galerii. Usuwa własny produkt, obrazy,
+pliki i mapowania po zakończeniu.

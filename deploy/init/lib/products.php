@@ -62,6 +62,11 @@ function productPlans(array $products, \Context $context): array
             throw new RuntimeException("Invalid or overlong product name: {$sourceId}");
         }
         $description = $source['description'] ?? null;
+        $shortDescription = $source['description_short'] ?? null;
+        if (!is_string($shortDescription) || !\Validate::isCleanHtml($shortDescription)
+            || mb_strlen($shortDescription) > \Product::$definition['fields']['description_short']['size']) {
+            throw new RuntimeException("Missing or invalid description_short: {$sourceId}; refresh source descriptions first.");
+        }
         if (!is_string($description) || trim(strip_tags($description)) === ''
             || !\Validate::isCleanHtml($description)
             || mb_strlen($description) > \Product::$definition['fields']['description']['size']) {
@@ -69,6 +74,7 @@ function productPlans(array $products, \Context $context): array
         }
         if (\Configuration::get('PS_USE_HTMLPURIFIER')) {
             $description = \Tools::purifyHTML($description);
+            $shortDescription = \Tools::purifyHTML($shortDescription);
         }
         $weight = ($source['weight'] ?? null) === null ? null
             : rounded(decimal($source['weight'], "product {$sourceId} weight"), 6);
@@ -96,7 +102,8 @@ function productPlans(array $products, \Context $context): array
         $plans[] = [
             'source_id' => $sourceId, 'id' => $id, 'reference' => $reference,
             'name' => $source['name'], 'description' => $description,
-            'html_normalized' => $description !== $source['description'],
+            'description_short' => $shortDescription,
+            'html_normalized' => $description !== $source['description'] || $shortDescription !== $source['description_short'],
             'weight' => $weight, 'price' => $price, 'tax_group' => $taxes[$price['vat']],
             'paths' => $paths, 'primary' => $primary, 'slug' => $slug,
             'type' => $source['variants'] === [] ? 'standard' : 'combinations',
@@ -139,6 +146,7 @@ function verifyProduct(array $plan, int $id, array $categories, \Context $contex
         $languageId = (int) $language['id_lang'];
         if (($saved->name[$languageId] ?? null) !== $plan['name']
             || ($saved->description[$languageId] ?? null) !== $plan['description']
+            || ($saved->description_short[$languageId] ?? null) !== $plan['description_short']
             || ($saved->link_rewrite[$languageId] ?? null) !== $plan['slug']) {
             throw new RuntimeException('Saved product translation mismatch: ' . $plan['source_id']);
         }
@@ -186,6 +194,7 @@ function importProducts(array $plans, array $categories, \Context $context): arr
             $languageId = (int) $language['id_lang'];
             $product->name[$languageId] = $plan['name'];
             $product->description[$languageId] = $plan['description'];
+            $product->description_short[$languageId] = $plan['description_short'];
             $product->link_rewrite[$languageId] = $plan['slug'];
         }
         if (!($id === null ? $product->add() : $product->update())

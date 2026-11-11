@@ -7,6 +7,7 @@ class Product(BaseModel):
     product_url: str
     name: str
     description: str
+    description_short: str = ""
     breadcrumbs: List[str]
     category_paths: List[List[str]] = Field(default_factory=list)
     category_source_urls: List[str] = Field(default_factory=list)
@@ -15,5 +16,6 @@ class Product(BaseModel):
     vat_rate: float
     weight: Optional[float] = None
     images: List[str]
+    cover_image: Optional[str] = None
     variants: List[ProductVariant] = Field(default_factory=list)
     stock: Optional[int] = None
