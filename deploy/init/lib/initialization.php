@@ -6,6 +6,7 @@ use RuntimeException;
 
 require_once __DIR__ . '/images.php';
 require_once __DIR__ . '/stock.php';
+require_once __DIR__ . '/menu.php';
 
 function initializationInputs(string $directory): array
 {
@@ -48,6 +49,7 @@ function initializationPreflight(\Context $context): array
         throw new RuntimeException('PHP proc_open is required to run initialization stages.');
     }
     $paths = initializationInputs(dirname(SOURCE_FILE));
+    readMainMenuPlan($paths['categories']);
     $hashes = [$paths['products'] => hash_file('sha256', $paths['products']),
         $paths['categories'] => hash_file('sha256', $paths['categories'])];
     $products = readCatalog($paths['products']);
@@ -110,6 +112,7 @@ function initializationStages(): array
     return [
         ['name' => 'Installer demo storefront cleanup', 'script' => 'configure-storefront.php', 'args' => []],
         ['name' => 'Categories and products', 'script' => 'import-products.php', 'args' => ['--all']],
+        ['name' => 'Source category navigation', 'script' => 'configure-menu.php', 'args' => []],
         ['name' => 'Attribute dictionary', 'script' => 'import-attributes.php', 'args' => ['--all']],
         ['name' => 'Product combinations and prices', 'script' => 'import-combinations.php', 'args' => ['--all']],
         ['name' => 'Galleries, covers and thumbnails', 'script' => 'import-images.php', 'args' => ['--all']],

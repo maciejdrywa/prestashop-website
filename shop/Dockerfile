@@ -4,7 +4,8 @@ COPY config/php.ini /usr/local/etc/php/conf.d/zz-shop.ini
 
 COPY config/configure-mail.sh /tmp/init-scripts/10-configure-mail.sh
 COPY config/configure-storefront.sh /tmp/init-scripts/20-configure-storefront.sh
+COPY config/configure-menu.sh /tmp/init-scripts/30-configure-menu.sh
 
 RUN sed -i 's/\r$//' /tmp/init-scripts/10-configure-mail.sh \
-    /tmp/init-scripts/20-configure-storefront.sh \
-    && chmod +x /tmp/init-scripts/10-configure-mail.sh /tmp/init-scripts/20-configure-storefront.sh
+    /tmp/init-scripts/20-configure-storefront.sh /tmp/init-scripts/30-configure-menu.sh \
+    && chmod +x /tmp/init-scripts/10-configure-mail.sh /tmp/init-scripts/20-configure-storefront.sh /tmp/init-scripts/30-configure-menu.sh

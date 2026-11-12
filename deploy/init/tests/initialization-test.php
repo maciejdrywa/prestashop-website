@@ -62,6 +62,7 @@ try {
     initTest(count($calls) === count($stages), 'Successful run skipped stages');
     initTest(array_search('check-images.php', $calls, true) < array_search('import-stock.php', $calls, true), 'Activation precedes gallery validation');
     initTest(array_search('check-products.php', $calls, true) < array_search('import-stock.php', $calls, true), 'Activation precedes product validation');
+    initTest(array_search('import-products.php', $calls, true) < array_search('configure-menu.php', $calls, true), 'Menu runs before category import');
     $calls = [];
     $guardRuns = 0;
     $guard = function () use (&$guardRuns): void {

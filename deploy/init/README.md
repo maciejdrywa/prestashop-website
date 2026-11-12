@@ -25,17 +25,18 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 9 etapów:
+Komenda wykonuje 10 etapów:
 
 1. Usunięcie produktów demonstracyjnych oraz wyłączenie przykładowych slajdów i bloku tekstowego.
 2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
-3. Grupy i wartości atrybutów.
-4. Kombinacje i modyfikatory cen.
-5. Galerie, okładki i miniatury z lokalnych plików.
-6. Kontrola produktów i kombinacji.
-7. Kontrola galerii.
-8. Stany 0–10 i aktywacja.
-9. Końcowa kontrola stanów, dostępności i aktywacji.
+3. Menu górne z kategoriami i podkategoriami ze scrapera.
+4. Grupy i wartości atrybutów.
+5. Kombinacje i modyfikatory cen.
+6. Galerie, okładki i miniatury z lokalnych plików.
+7. Kontrola produktów i kombinacji.
+8. Kontrola galerii.
+9. Stany 0–10 i aktywacja.
+10. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -99,6 +100,41 @@ nie usuwa produktów ze scrapera ani innych produktów bez sygnatury instalatora
 Błąd usuwania lub wyłączenia modułu kończy proces kodem 1. Operacji usuwania
 produktów nie obejmuje transakcja: usunięte zdjęcia i wykonane hooki nie mogą
 być odtworzone przez SQL rollback.
+
+## Menu kategorii
+
+`configure-menu.php` zastępuje pozycje modułu `ps_mainmenu` sześcioma działami
+w kolejności menu źródłowego: Klamki do drzwi, Okucia drzwiowe, Bramy i ogrodzenia,
+Okucia budowlane, Dom i ogród, Akcesoria meblowe. Podkategoriami są wszystkie
+ścieżki tych działów z `scraper-results/categories.json`, również puste kategorie
+i dalsze poziomy. Obecnie jest to 79 węzłów. Gałąź „Produkty polecane” pozostaje
+poza menu. Kategorie demonstracyjne są usuwane z konfiguracji nawigacji,
+ale nie są kasowane z bazy.
+
+Skrypt rozpoznaje kategorie po pełnej ścieżce i lokalnych ID, tworzy brakujące,
+aktywuje je i odtwarza kolejność rodzeństwa z pliku źródłowego. Następnie zapisuje
+`MOD_BLOCKTOPMENU_ITEMS` dla bieżącego sklepu, włącza moduł oraz czyści cache
+menu i Smarty. Nie zmienia produktów ani ich przypisań do kategorii.
+Nie pobiera strony źródłowej podczas inicjalizacji.
+
+Menu jest konfigurowane po imporcie kategorii i produktów w `init-shop.php`.
+Hook startowy `30-configure-menu.sh` odtwarza je również po instalacji i przy
+starcie kontenera, jeśli istnieje czytelny `categories.json`. Może wówczas utworzyć
+kategorie jeszcze przed importem produktów. Gdy pliku brakuje, hook wypisuje
+komunikat o odroczeniu; po dostarczeniu źródeł zwykłe `init-shop.php` ustawi menu.
+Niepoprawny plik, brak wymaganej kategorii głównej lub błąd zapisu kończy skrypt
+kodem 1. Po zmianie Dockerfile potrzebne jest `up -d --build shop`, jak wyżej.
+
+Samodzielna konfiguracja istniejącej instalacji:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-menu.php
+
+Opcja `--dry-run` wyświetla pełną planowaną hierarchię bez zapisów w bazie.
+Test `tests/menu-test.php` sprawdza plan, zagnieżdżenia i błędne dane.
+`tests/menu-http-test.php` sprawdza wyrenderowane menu, kolejność oraz HTTP 200
+wszystkich odnośników. Ten drugi test jest przeznaczony dla lokalnego Compose
+pod adresem `https://localhost`, z usługą nginx i już skonfigurowanym menu;
+pomija weryfikację lokalnego certyfikatu TLS wyłącznie w swoim kliencie testowym.
 
 ## Pliki i kolejność
 
