@@ -85,8 +85,8 @@ function cleanDemoStorefront(\Context $context, bool $dryRun = false): void
         }
         echo 'DELETED: ' . $row['reference'] . ', product ID ' . $row['id_product'] . PHP_EOL;
     }
-    echo "[3/3] Disabling demonstration slides and text block...\n";
-    foreach (['ps_imageslider', 'ps_customtext'] as $name) {
+    echo "[3/3] Disabling demonstration slides, promotional banner and text block...\n";
+    foreach (['ps_imageslider', 'ps_banner', 'ps_customtext'] as $name) {
         if ($dryRun) {
             echo 'PLAN DISABLE: ' . $name . PHP_EOL;
             continue;
@@ -111,5 +111,5 @@ function cleanDemoStorefront(\Context $context, bool $dryRun = false): void
         }
         \Tools::clearSmartyCache();
     }
-    echo $dryRun ? "OK: dry run; no changes.\n" : "OK: installer demo products removed; demonstration slides and text block disabled.\n";
+    echo $dryRun ? "OK: dry run; no changes.\n" : "OK: installer demo products removed; demonstration slides, promotional banner and text block disabled.\n";
 }

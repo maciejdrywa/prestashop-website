@@ -29,6 +29,7 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-11, Maciej Drywa | Codex 6.1 sol | W3.4 - Jedna komenda inicjalizacji | Dodano init-shop.php z kontrolą lokalnych JSON-ów i zdjęć, ośmioma etapami importu, postępem i zatrzymaniem po błędzie. | Aktywacja następuje po walidacji danych i galerii; brak zdjęcia 539 jest raportowany. | Komenda działą poprawnie, produkty wraz z kategoriami zostały zaimplementowane do sklepu. Cały proces importu został przedstawiony w logach w konsoli. |
 | 2026-11-12, Maciej Drywa | Codex 6.1 sol | W3.5 - Usunięcie zawartości demonstracyjnej | Dodano czyszczenie produktów demo i wyłączenie slajdów oraz lorem ipsum w inicjalizacji i starcie kontenera. | Brak. | Usunięto 19 produktów; sprawdzono ponowienie i zachowanie danych 574 produktów ze scrapera oraz stronę główną. |
 | 2026-11-12, Maciej Drywa | Codex 6.1 sol | W3.5 - Polskie strony informacyjne i stopka | Przygotowano pięć stron dla sklepu demonstracyjnego, polską stopkę i odnośniki. Dodano odtwarzanie przy inicjalizacji oraz starcie kontenera. | Brak. | Manualne przetestowanie strony po wykonaniu skryptów. Wszystkie zmiany zostały zaimplementowane. |
+| 2026-11-12, Maciej Drywa | Codex 6.1 sol | Usunięcie banera promocyjnego | Wyłączono `ps_banner` i dodano tę konfigurację do inicjalizacji oraz startu sklepu. | Brak. | Baner zniknął ze strony głównej sklepu, sprawdzono ręcznie. |
 
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:

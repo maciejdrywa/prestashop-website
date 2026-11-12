@@ -116,6 +116,7 @@ function initializationStages(): array
         ['name' => 'Categories and products', 'script' => 'import-products.php', 'args' => ['--all']],
         ['name' => 'Source category navigation', 'script' => 'configure-menu.php', 'args' => []],
         ['name' => 'Polish information pages and footer', 'script' => 'configure-content.php', 'args' => []],
+        ['name' => 'Polish module wording', 'script' => 'configure-module-texts.php', 'args' => []],
         ['name' => 'Attribute dictionary', 'script' => 'import-attributes.php', 'args' => ['--all']],
         ['name' => 'Product combinations and prices', 'script' => 'import-combinations.php', 'args' => ['--all']],
         ['name' => 'Galleries, covers and thumbnails', 'script' => 'import-images.php', 'args' => ['--all']],

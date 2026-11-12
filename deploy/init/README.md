@@ -25,19 +25,20 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 11 etapów:
+Komenda wykonuje 12 etapów:
 
 1. Usunięcie produktów demonstracyjnych oraz wyłączenie przykładowych slajdów i bloku tekstowego.
 2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
 3. Menu górne z kategoriami i podkategoriami ze scrapera.
 4. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
-5. Grupy i wartości atrybutów.
-6. Kombinacje i modyfikatory cen.
-7. Galerie, okładki i miniatury z lokalnych plików.
-8. Kontrola produktów i kombinacji.
-9. Kontrola galerii.
-10. Stany 0–10 i aktywacja.
-11. Końcowa kontrola stanów, dostępności i aktywacji.
+5. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
+6. Grupy i wartości atrybutów.
+7. Kombinacje i modyfikatory cen.
+8. Galerie, okładki i miniatury z lokalnych plików.
+9. Kontrola produktów i kombinacji.
+10. Kontrola galerii.
+11. Stany 0–10 i aktywacja.
+12. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -76,7 +77,7 @@ Zmienione nazwy przy referencjach demo są zachowywane i zgłaszane ostrzeżenie
 Produkty są usuwane przez `Product::delete()`, wraz z obsługiwanymi przez
 PrestaShop powiązaniami, wariantami i zdjęciami. Kategorie demo nie są usuwane.
 
-Skrypt wyłącza moduły `ps_imageslider` i `ps_customtext` w bieżącym sklepie.
+Skrypt wyłącza moduły `ps_imageslider`, `ps_banner` i `ps_customtext` w bieżącym sklepie.
 Usuwa to ze strony głównej przykładowe slajdy oraz blok „Custom Text Block”
 z tekstem lorem ipsum. Moduły pozostają zainstalowane, ale konfiguracja
 celowo wyłącza je przy każdym uruchomieniu skryptu, również po ręcznym włączeniu.
@@ -190,6 +191,51 @@ Test HTTP wymaga skonfigurowanego lokalnego sklepu `https://localhost` i usługi
 nginx. Sprawdza treści, polskie nagłówki, widoczne odnośniki w stopce, pięć stron,
 lokalne odnośniki między stronami oraz powiązania regulaminu i prywatności.
 Pomija sprawdzanie lokalnego certyfikatu TLS wyłącznie w kliencie testowym.
+
+### Polskie treści modułów
+
+`configure-module-texts.php` konfiguruje istniejące, aktywne moduły
+`blockreassurance`, `productcomments` i `blockwishlist`. Działa po
+`configure-content.php`, ponieważ bloki wymagają stron Polityka prywatności,
+Dostawa i Regulamin. Wymaga polskiego języka domyślnego oraz włączonego HTTPS.
+
+Trzy bloki na kartach produktów, w koszyku i zamówieniu mają tytuły
+„Bezpieczeństwo”, „Dostawa”, „Zasady zakupów”. Zastępują teksty instalatora;
+odnośniki wynikają z lokalnych ID stron CMS, a nie z wpisanych na stałe numerów.
+Skrypt rozpoznaje rekordy po zapamiętanym mapowaniu `SHOP_INIT_REASSURANCE_*`
+albo po tytule bloku. Brakujące bloki tworzy, a istniejące aktualizuje.
+
+W opiniach zmienia domyślne polskie pole kryterium `Quality` na „Jakość”.
+Nie zmienia ocen ani treści opinii. W konfiguracji listy życzeń ustawia
+„Moje listy życzeń”, „Moja lista życzeń” i „Utwórz nową listę”. Zachowuje
+nazwy oraz zawartość list utworzonych przez klientów. Pozostałe komunikaty,
+w tym tworzenie, zmiana nazwy i usuwanie listy, korzystają z istniejącego
+polskiego pakietu tłumaczeń.
+
+Konfiguracja jest piątym etapem `init-shop.php` i jest uruchamiana przy starcie
+kontenera przez `50-configure-module-texts.sh`, po przygotowaniu stron CMS.
+Skrypt zapisuje wyłącznie treści i ustawienia w bazie, bez tworzenia szablonów
+motywu ani własnych stylów CSS. Sekcje wyświetla standardowy motyw Classic
+z samymi polskimi nazwami, bez dodatkowych opisów. Adresy stron CMS pozostają
+ustawione w module; sposób ich prezentacji wynika z oryginalnego szablonu.
+Stałe etykiety zapisane wewnątrz szablonów modułu listy życzeń pozostają bez zmian.
+
+Po zmianie Dockerfile użyj `up -d --build shop`. Samodzielne wykonanie:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-module-texts.php
+
+Opcja `--dry-run` pokazuje plan bez zapisów. Testy:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/module-texts-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/module-texts-http-test.php
+
+Test HTTP wymaga lokalnego Compose pod `https://localhost`, aktywnego źródłowego
+produktu 5 i skonfigurowanych modułów. Sprawdza produkt, koszyk, strony docelowe
+bloków, formularz opinii, okna listy życzeń i polskie odpowiedzi API. Tworzy
+tymczasowe konto z fikcyjnym adresem `@example.test` oraz listę; usuwa je i koszyki
+tego konta w sekcji `finally`. Nie publikuje opinii ani zamówienia. Pomija kontrolę
+lokalnego certyfikatu wyłącznie we własnym kliencie HTTP. Sprawdza HTML i odpowiedzi
+API, ale nie zastępuje testu interakcji JavaScript w przeglądarce.
 
 ### Pozostałe skrypty
 

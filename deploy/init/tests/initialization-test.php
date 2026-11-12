@@ -64,6 +64,7 @@ try {
     initTest(array_search('check-products.php', $calls, true) < array_search('import-stock.php', $calls, true), 'Activation precedes product validation');
     initTest(array_search('import-products.php', $calls, true) < array_search('configure-menu.php', $calls, true), 'Menu runs before category import');
     initTest(in_array('configure-content.php', $calls, true), 'Information pages/footer configuration is missing');
+    initTest(array_search('configure-content.php', $calls, true) < array_search('configure-module-texts.php', $calls, true), 'Module wording precedes required information pages');
     $calls = [];
     $guardRuns = 0;
     $guard = function () use (&$guardRuns): void {
