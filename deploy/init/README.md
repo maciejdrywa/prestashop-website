@@ -25,16 +25,17 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 8 etapów:
+Komenda wykonuje 9 etapów:
 
-1. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
-2. Grupy i wartości atrybutów.
-3. Kombinacje i modyfikatory cen.
-4. Galerie, okładki i miniatury z lokalnych plików.
-5. Kontrola produktów i kombinacji.
-6. Kontrola galerii.
-7. Stany 0–10 i aktywacja.
-8. Końcowa kontrola stanów, dostępności i aktywacji.
+1. Usunięcie produktów demonstracyjnych oraz wyłączenie przykładowych slajdów i bloku tekstowego.
+2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
+3. Grupy i wartości atrybutów.
+4. Kombinacje i modyfikatory cen.
+5. Galerie, okładki i miniatury z lokalnych plików.
+6. Kontrola produktów i kombinacji.
+7. Kontrola galerii.
+8. Stany 0–10 i aktywacja.
+9. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -50,7 +51,7 @@ mogą pozostawić zapisy: popraw przyczynę i powtórz tę samą komendę. Impor
 rozpoznają istniejące rekordy. Nowe produkty są aktywowane po walidacji danych
 i galerii; aktywność produktów istniejących wcześniej jest zachowywana podczas
 wcześniejszych etapów. Ponowienie inicjalizacji odtwarza początkowy plan stanów.
-Produkty demonstracyjne PrestaShop pozostają poza zakresem importu.
+Produkty demonstracyjne PrestaShop są usuwane przed importem.
 
 Pusta galeria źródłowa, np. produktu 539, jest jawnie raportowana. Taki przebieg
 kończy się COMPLETE WITH SOURCE WARNINGS; nie oznacza potwierdzenia wyjątku
@@ -63,6 +64,41 @@ Samą walidację i plan, bez importu lub aktywacji, uruchomisz poleceniem:
 Pomoc jest dostępna przez --help. Na tym etapie wymagany jest lokalny folder
 images/. Pobieranie archiwum z Release, ścieżka zastępcza z URL-i i pozostała
 konfiguracja W3 nadal wymagają osobnych prac.
+
+## Usuwanie zawartości demonstracyjnej
+
+`configure-storefront.php` rozpoznaje 19 produktów instalatora PrestaShop 8.2.8
+po dokładnej parze referencja `demo_*` i domyślna nazwa. Nie opiera się na ID
+produktu ani na założeniu, że każdy produkt spoza scrapera jest testowy.
+Zmienione nazwy przy referencjach demo są zachowywane i zgłaszane ostrzeżeniem.
+Produkty są usuwane przez `Product::delete()`, wraz z obsługiwanymi przez
+PrestaShop powiązaniami, wariantami i zdjęciami. Kategorie demo nie są usuwane.
+
+Skrypt wyłącza moduły `ps_imageslider` i `ps_customtext` w bieżącym sklepie.
+Usuwa to ze strony głównej przykładowe slajdy oraz blok „Custom Text Block”
+z tekstem lorem ipsum. Moduły pozostają zainstalowane, ale konfiguracja
+celowo wyłącza je przy każdym uruchomieniu skryptu, również po ręcznym włączeniu.
+Pozostałe bloki produktów i inne treści sklepu nie są wyłączane.
+
+Skrypt jest pierwszym etapem `init-shop.php`. Dodatkowo obraz sklepu zawiera
+hook `/tmp/init-scripts/20-configure-storefront.sh`, który uruchamia go jako
+`www-data` po instalacji PrestaShop i przy kolejnych startach kontenera.
+Nie wymaga plików scrapera, dzięki czemu działa również przed pierwszym importem.
+Samo uruchomienie kontenera nadal nie importuje katalogu produktów.
+
+Po aktualizacji Dockerfile przebuduj obraz i odtwórz kontener (bez kasowania wolumenów):
+
+    docker compose --env-file .env -f deploy/compose.yaml up -d --build shop
+
+Można też wykonać samo czyszczenie istniejącej instalacji:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-storefront.php
+
+Dodanie `--dry-run` wyświetla plan bez zmian. Ponowienie zwykłego wykonania
+nie usuwa produktów ze scrapera ani innych produktów bez sygnatury instalatora.
+Błąd usuwania lub wyłączenia modułu kończy proces kodem 1. Operacji usuwania
+produktów nie obejmuje transakcja: usunięte zdjęcia i wykonane hooki nie mogą
+być odtworzone przez SQL rollback.
 
 ## Pliki i kolejność
 
