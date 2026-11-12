@@ -1,26 +1,29 @@
 from bs4 import BeautifulSoup
 
+
+def scrap_descriptions(soup: BeautifulSoup) -> dict[str, str]:
+    """Keep source short/full fields separate; a sole description goes below."""
+    short_node = soup.select_one('[id^="product-description-short-"]')
+    full_node = soup.select_one("#description .product-description")
+    if full_node is None:
+        full_node = soup.select_one("#description")
+    if full_node is None:
+        full_node = soup.select_one(".product-description")
+
+    def contents(node):
+        if node is None or not node.get_text(" ", strip=True).replace("\xa0", " ").strip():
+            return ""
+        return node.decode_contents().strip()
+
+    short = contents(short_node)
+    full = contents(full_node)
+    if not full and not short:
+        raise ValueError("Could not find description")
+    if not full:
+        return {"description": short, "description_short": ""}
+    return {"description": full, "description_short": short}
+
+
 def scrap_description(soup: BeautifulSoup) -> str:
-    long_desc = ""
-    short_desc = ""
-
-    long_description_tag = soup.find('div', id='description')
-    if long_description_tag:
-        long_desc = long_description_tag.decode_contents().strip()
-
-    description_tag = soup.find('div', class_='product-description')
-    if description_tag:
-        short_desc = description_tag.decode_contents().strip()  # that extracts all contents of div
-
-
-
-    if short_desc and long_desc:
-        if short_desc != long_desc and short_desc not in long_desc:
-            return f"<div class=\"product-short-desc\">{short_desc}</div>\n<div class=\"product-full-desc\">{long_desc}</div>"
-        return long_desc
-    elif long_desc:
-        return long_desc
-    elif short_desc:
-        return short_desc
-
-    raise ValueError("Could not find description")
+    """Compatibility helper for callers that need only the full description."""
+    return scrap_descriptions(soup)["description"]

@@ -25,6 +25,7 @@ htmlcov/
 scraper/images/
 scraper-results/images/
 scraper-results/photos/
+scraper-results/product_images.zip
 
 # PrestaShop uploads and generated images
 shop/img/
@@ -67,3 +68,6 @@ Thumbs.db
 
 # Playwright
 .browser_profile/
+
+# Isolated live scraper verification output
+.tmp-catalog-qa/
