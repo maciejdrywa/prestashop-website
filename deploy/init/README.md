@@ -25,20 +25,21 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 12 etapów:
+Komenda wykonuje 13 etapów:
 
 1. Usunięcie produktów demonstracyjnych oraz wyłączenie przykładowych slajdów i bloku tekstowego.
 2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
 3. Menu górne z kategoriami i podkategoriami ze scrapera.
 4. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
-5. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
-6. Grupy i wartości atrybutów.
-7. Kombinacje i modyfikatory cen.
-8. Galerie, okładki i miniatury z lokalnych plików.
-9. Kontrola produktów i kombinacji.
-10. Kontrola galerii.
-11. Stany 0–10 i aktywacja.
-12. Końcowa kontrola stanów, dostępności i aktywacji.
+5. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
+6. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
+7. Grupy i wartości atrybutów.
+8. Kombinacje i modyfikatory cen.
+9. Galerie, okładki i miniatury z lokalnych plików.
+10. Kontrola produktów i kombinacji.
+11. Kontrola galerii.
+12. Stany 0–10 i aktywacja.
+13. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -212,7 +213,7 @@ nazwy oraz zawartość list utworzonych przez klientów. Pozostałe komunikaty,
 w tym tworzenie, zmiana nazwy i usuwanie listy, korzystają z istniejącego
 polskiego pakietu tłumaczeń.
 
-Konfiguracja jest piątym etapem `init-shop.php` i jest uruchamiana przy starcie
+Konfiguracja jest szóstym etapem `init-shop.php` i jest uruchamiana przy starcie
 kontenera przez `50-configure-module-texts.sh`, po przygotowaniu stron CMS.
 Skrypt zapisuje wyłącznie treści i ustawienia w bazie, bez tworzenia szablonów
 motywu ani własnych stylów CSS. Sekcje wyświetla standardowy motyw Classic
@@ -236,6 +237,52 @@ tymczasowe konto z fikcyjnym adresem `@example.test` oraz listę; usuwa je i kos
 tego konta w sekcji `finally`. Nie publikuje opinii ani zamówienia. Pomija kontrolę
 lokalnego certyfikatu wyłącznie we własnym kliencie HTTP. Sprawdza HTML i odpowiedzi
 API, ale nie zastępuje testu interakcji JavaScript w przeglądarce.
+
+### Informacja o cookies
+
+Moduł projektu `shopcookieinfo` wyświetla polski pasek u góry stron klienta.
+Zawiera krótki opis użycia cookies, odnośnik do istniejącej Polityki prywatności
+oraz przycisk „Rozumiem”. Zamknięcie zapisuje cookie `shop_cookie_info_v1_IDSKLEPU`
+o wartości `1` na 180 dni. Cookie ma ścieżkę danego sklepu, `SameSite=Lax`
+i flagę `Secure` przy połączeniu HTTPS. Nie zawiera identyfikatora klienta.
+
+Jest to komunikat informacyjny: przycisk zapamiętuje jego zamknięcie. Moduł
+nie włącza analityki, nie pobiera zgód marketingowych ani nie zarządza innymi
+skryptami. Bez JavaScript informacja i odnośnik pozostają widoczne, a przycisk
+zamknięcia jest ukryty. Przy zablokowanym zapisie cookies zamknięcie działa
+na bieżącej stronie, lecz komunikat może pojawić się ponownie po przeładowaniu.
+Cookie można usunąć w przeglądarce, aby ponownie zobaczyć komunikat.
+
+Kod znajduje się w `shop/modules/shopcookieinfo/`. Moduł korzysta z hooków
+`displayAfterBodyOpeningTag` i `actionFrontControllerSetMedia`; nie nadpisuje
+szablonów motywu ani pozostałych modułów. Style i JavaScript mają własne pliki,
+ładowane wyłącznie wtedy, gdy komunikat nie został wcześniej zamknięty.
+
+Dockerfile przechowuje źródła modułu poza wolumenem sklepu. Skrypt
+`configure-cookies.php` kopiuje jego trzy pliki, instaluje lub włącza moduł,
+rejestruje hooki i zapisuje aktualne ID Polityki prywatności. Ponowienie
+aktualizuje moduł bez tworzenia kolejnych instalacji. Błąd kończy proces kodem 1.
+To piąty etap `init-shop.php`. Przy instalacji i starcie kontenera tę samą
+konfigurację wykonuje `60-configure-cookies.sh`, po utworzeniu stron CMS.
+
+Po zmianie źródeł modułu przebuduj obraz i odtwórz kontener:
+
+    docker compose --env-file .env -f deploy/compose.yaml up -d --build shop
+
+Sama ponowna konfiguracja już zbudowanego obrazu:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-cookies.php
+
+Testy (Node.js na hoście oraz działający lokalny Compose):
+
+    node --test deploy/init/tests/cookie-notice.test.cjs
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/cookies-http-test.php
+
+Testy JavaScript uruchamiają rzeczywisty skrypt na kontrolowanych obiektach DOM,
+sprawdzając kliknięcie, czas zapisu, izolację sklepów i blokadę pamięci. Test HTTP
+sprawdza cztery strony, link do prywatności, ładowanie zasobów i respektowanie
+cookie zamknięcia. Korzysta z `https://localhost` i pomija sprawdzanie lokalnego
+certyfikatu wyłącznie we własnym kliencie. Nie zastępuje wizualnego testu przeglądarkowego.
 
 ### Pozostałe skrypty
 
