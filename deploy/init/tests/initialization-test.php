@@ -63,6 +63,7 @@ try {
     initTest(array_search('check-images.php', $calls, true) < array_search('import-stock.php', $calls, true), 'Activation precedes gallery validation');
     initTest(array_search('check-products.php', $calls, true) < array_search('import-stock.php', $calls, true), 'Activation precedes product validation');
     initTest(array_search('import-products.php', $calls, true) < array_search('configure-menu.php', $calls, true), 'Menu runs before category import');
+    initTest(in_array('configure-content.php', $calls, true), 'Information pages/footer configuration is missing');
     $calls = [];
     $guardRuns = 0;
     $guard = function () use (&$guardRuns): void {

@@ -25,18 +25,19 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 10 etapów:
+Komenda wykonuje 11 etapów:
 
 1. Usunięcie produktów demonstracyjnych oraz wyłączenie przykładowych slajdów i bloku tekstowego.
 2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
 3. Menu górne z kategoriami i podkategoriami ze scrapera.
-4. Grupy i wartości atrybutów.
-5. Kombinacje i modyfikatory cen.
-6. Galerie, okładki i miniatury z lokalnych plików.
-7. Kontrola produktów i kombinacji.
-8. Kontrola galerii.
-9. Stany 0–10 i aktywacja.
-10. Końcowa kontrola stanów, dostępności i aktywacji.
+4. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
+5. Grupy i wartości atrybutów.
+6. Kombinacje i modyfikatory cen.
+7. Galerie, okładki i miniatury z lokalnych plików.
+8. Kontrola produktów i kombinacji.
+9. Kontrola galerii.
+10. Stany 0–10 i aktywacja.
+11. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -137,6 +138,60 @@ pod adresem `https://localhost`, z usługą nginx i już skonfigurowanym menu;
 pomija weryfikację lokalnego certyfikatu TLS wyłącznie w swoim kliencie testowym.
 
 ## Pliki i kolejność
+
+### Strony informacyjne i stopka
+
+`configure-content.php` tworzy lub aktualizuje pięć aktywnych stron: O sklepie,
+Regulamin, Polityka prywatności, Dostawa i Formy płatności. Polskie treści HTML
+znajdują się w `deploy/init/content/`. Dotyczą demonstracyjnego projektu
+Twoje Drzwi do Sukcesu opisanego w głównym README, bez rzeczywistej sprzedaży.
+Nie przypisują projektowi danych prawdziwej firmy PAN DOMU ani fikcyjnego
+rachunku bankowego, adresu przedsiębiorstwa czy terminów rzeczywistych przesyłek.
+Informacje o prawach osób oparto na materiałach
+[UODO](https://uodo.gov.pl/pl/p/dla-obywatela); tekst jest opisem środowiska projektu.
+
+Skrypt rozpoznaje istniejące strony po zapisanych mapowaniach `SHOP_INIT_CMS_*`,
+polskich slugach albo dokładnej parze domyślny slug i angielski tytuł instalatora.
+Nie zakłada stałych ID. Zastępuje pięć stron instalatora, a przy ich braku tworzy
+nowe. Pozostałe strony CMS zachowuje. Polskie tytuły, adresy, treści i aktywność
+są odtwarzane przy każdym wykonaniu, więc trwałe zmiany treści należy wprowadzać
+w plikach HTML w repozytorium, a nie wyłącznie w panelu administratora.
+
+Moduł `ps_linklist` otrzymuje sekcje „Produkty” oraz „Informacje o sklepie”.
+Druga sekcja zawiera pięć stron we wskazanej wyżej kolejności oraz Kontakt
+i Mapę strony. Domyślny odnośnik do listy demonstracyjnych sklepów jest usuwany
+z tego bloku. Sekcje konta klienta i danych kontaktowych pozostają w swoich
+dotychczasowych modułach. Przywracane są też wskazanie regulaminu w zamówieniu
+oraz polska informacja z odnośnikiem do prywatności w formularzu klienta.
+
+Lista metod na stronach Dostawa i Formy płatności jest generowana z aktywnych
+przewoźników i modułów płatności podczas inicjalizacji. Nie jest odświeżana przy
+każdym wejściu na stronę. Po zmianie tych ustawień powtórz konfigurację; metody
+dostępne dla konkretnego koszyka nadal wynikają z ograniczeń procesu zakupowego.
+Skrypt nie zmienia samych przewoźników, cenników ani modułów płatności.
+
+Konfiguracja jest czwartym etapem `init-shop.php` i jest uruchamiana również
+przez hook obrazu `40-configure-content.sh` po instalacji oraz przy kolejnych
+startach kontenera. Nie wymaga plików scrapera. Przed zapisami sprawdzane są
+szablony, mapowania, moduł i kategoria CMS; zapisy stron, bloków i ustawień
+wykonywane są w transakcji. Błąd kończy proces kodem 1. Po zmianie Dockerfile
+przebuduj kontener poleceniem `up -d --build shop`, z zachowaniem wolumenów.
+
+Samo przygotowanie stron i stopki istniejącego sklepu:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-content.php
+
+Opcja `--dry-run` pokazuje rozpoznane strony i plan bez zapisów. Testy:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/content-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/content-http-test.php
+
+Test HTTP wymaga skonfigurowanego lokalnego sklepu `https://localhost` i usługi
+nginx. Sprawdza treści, polskie nagłówki, widoczne odnośniki w stopce, pięć stron,
+lokalne odnośniki między stronami oraz powiązania regulaminu i prywatności.
+Pomija sprawdzanie lokalnego certyfikatu TLS wyłącznie w kliencie testowym.
+
+### Pozostałe skrypty
 
 1. **check-environment.php** ładuje PrestaShop, ustala sklep, sprawdza połączenie
    z bazą przez SELECT 1 i dostępność bcmath. Nie zmienia danych.
