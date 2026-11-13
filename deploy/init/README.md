@@ -25,21 +25,22 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 13 etapów:
+Komenda wykonuje 14 etapów:
 
 1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
-2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
-3. Menu górne z kategoriami i podkategoriami ze scrapera.
-4. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
-5. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
-6. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
-7. Grupy i wartości atrybutów.
-8. Kombinacje i modyfikatory cen.
-9. Galerie, okładki i miniatury z lokalnych plików.
-10. Kontrola produktów i kombinacji.
-11. Kontrola galerii.
-12. Stany 0–10 i aktywacja.
-13. Końcowa kontrola stanów, dostępności i aktywacji.
+2. SMTP Mailpit i polskie maile rejestracji, przelewu oraz potwierdzenia zamówienia.
+3. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
+4. Menu górne z kategoriami i podkategoriami ze scrapera.
+5. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
+6. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
+7. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
+8. Grupy i wartości atrybutów.
+9. Kombinacje i modyfikatory cen.
+10. Galerie, okładki i miniatury z lokalnych plików.
+11. Kontrola produktów i kombinacji.
+12. Kontrola galerii.
+13. Stany 0–10 i aktywacja.
+14. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -187,7 +188,7 @@ każdym wejściu na stronę. Po zmianie tych ustawień powtórz konfigurację; m
 dostępne dla konkretnego koszyka nadal wynikają z ograniczeń procesu zakupowego.
 Skrypt nie zmienia samych przewoźników, cenników ani modułów płatności.
 
-Konfiguracja jest czwartym etapem `init-shop.php` i jest uruchamiana również
+Konfiguracja jest piątym etapem `init-shop.php` i jest uruchamiana również
 przez hook obrazu `40-configure-content.sh` po instalacji oraz przy kolejnych
 startach kontenera. Nie wymaga plików scrapera. Przed zapisami sprawdzane są
 szablony, mapowania, moduł i kategoria CMS; zapisy stron, bloków i ustawień
@@ -228,7 +229,7 @@ nazwy oraz zawartość list utworzonych przez klientów. Pozostałe komunikaty,
 w tym tworzenie, zmiana nazwy i usuwanie listy, korzystają z istniejącego
 polskiego pakietu tłumaczeń.
 
-Konfiguracja jest szóstym etapem `init-shop.php` i jest uruchamiana przy starcie
+Konfiguracja jest siódmym etapem `init-shop.php` i jest uruchamiana przy starcie
 kontenera przez `50-configure-module-texts.sh`, po przygotowaniu stron CMS.
 Skrypt zapisuje wyłącznie treści i ustawienia w bazie, bez tworzenia szablonów
 motywu ani własnych stylów CSS. Sekcje wyświetla standardowy motyw Classic
@@ -277,7 +278,7 @@ Dockerfile przechowuje źródła modułu poza wolumenem sklepu. Skrypt
 `configure-cookies.php` kopiuje jego trzy pliki, instaluje lub włącza moduł,
 rejestruje hooki i zapisuje aktualne ID Polityki prywatności. Ponowienie
 aktualizuje moduł bez tworzenia kolejnych instalacji. Błąd kończy proces kodem 1.
-To piąty etap `init-shop.php`. Przy instalacji i starcie kontenera tę samą
+To szósty etap `init-shop.php`. Przy instalacji i starcie kontenera tę samą
 konfigurację wykonuje `60-configure-cookies.sh`, po utworzeniu stron CMS.
 
 Po zmianie źródeł modułu przebuduj obraz i odtwórz kontener:
@@ -299,6 +300,48 @@ sprawdza cztery strony, link do prywatności, ładowanie zasobów i respektowani
 cookie zamknięcia. Korzysta z `https://localhost` i pomija sprawdzanie lokalnego
 certyfikatu wyłącznie we własnym kliencie. Nie zastępuje wizualnego testu przeglądarkowego.
 
+### Polskie wiadomości e-mail
+
+`configure-mail.php` konfiguruje SMTP `mailpit:1025` i odtwarza polskie treści
+`account`, `bankwire` oraz `order_conf` w formatach HTML i TXT. Wcześniej folder
+`mails/pl` zawierał angielskie treści, mimo prawidłowych tematów i polskiego języka.
+
+Biblioteka `lib/mail-templates.php` uruchamia natywny generator
+`prestashop:mail:generate` dla domyślnego polskiego locale i wybranego motywu
+maili (`PS_MAIL_THEME`, domyślnie `modern`). Eksportuje do
+`var/import/generated-mail-pl`, a po walidacji instaluje tylko sześć wskazanych
+plików. Sprawdza UTF-8, polską treść i zachowanie identycznego zestawu zmiennych.
+Pozostałe wygenerowane maile pozostają wyłącznie w katalogu roboczym.
+Stopkę „Powered by” spolszcza na „Oprogramowanie sklepu:”, a etykietę łącznej
+kwoty w potwierdzeniu na „Razem (brutto)”. Zachowuje układ natywnego motywu.
+
+Aktualizuje `mails/pl` oraz istniejące nadpisania tych maili w aktywnym motywie
+lub jego motywie nadrzędnym, jeśli występują. Nie tworzy nowych nadpisań motywu
+strony. Nie zmienia danych klientów, zamówień, statusów ani danych bankowych.
+Tematy korzystają z polskiego pakietu tłumaczeń oraz nazwy statusu przelewu.
+Zmiana dotyczy nowo wysyłanych wiadomości; istniejące wiadomości w Mailpit
+zachowują treść otrzymaną wcześniej.
+
+Konfiguracja jest drugim etapem `init-shop.php`. Przy instalacji i starcie
+kontenera wykonuje ją również istniejący hook `10-configure-mail.sh`.
+Ponowienie aktualizuje pliki bez kopiowania ich do repozytorium. Generator wymaga
+`proc_open` i dostępnych tłumaczeń; błąd kończy konfigurację kodem 1.
+
+Samodzielne wykonanie:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-mail.php
+
+Test kontrolowanej wysyłki:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/mail-templates-test.php
+
+Test wymaga SMTP skierowanego na lokalny Mailpit i odmawia działania przy innym
+serwerze. Wysyła trzy wiadomości do losowego adresu `@example.test`, a następnie
+odczytuje tylko te wiadomości przez API Mailpit. Sprawdza polskie tematy, HTML,
+TXT, polskie znaki, podstawienie danych i brak nierozwiązanych zmiennych.
+Wiadomości pozostają do ręcznej inspekcji w `http://localhost:8025`.
+Nie tworzy klienta ani zamówienia i nie usuwa wcześniejszej korespondencji.
+
 ### Pozostałe skrypty
 
 1. **check-environment.php** ładuje PrestaShop, ustala sklep, sprawdza połączenie
@@ -306,7 +349,8 @@ certyfikatu wyłącznie we własnym kliencie. Nie zastępuje wizualnego testu pr
    To test przed importem, a nie samodzielny etap ładowania danych.
 2. **configure-mail.php** zapisuje i sprawdza SMTP mailpit:1025.
    Opróżnia login i hasło, wyłącza szyfrowanie dla lokalnego Mailpit i ustawia
-   wysyłkę HTML oraz tekstową. Nie wysyła wiadomości. Jest też wywoływany przez
+   wysyłkę HTML oraz tekstową i odtwarza trzy polskie szablony maili w obu formatach.
+   Sam nie wysyła wiadomości. Jest też wywoływany przez
    skrypt startowy obrazu sklepu; zachowano tę ścieżkę.
 3. **check-price-settings.php** wymaga PLN, Polski jako kraju domyślnego i włączonego
    VAT. Wypisuje ogólne aktywne reguły podatkowe dla Polski i sprawdza dostępność
