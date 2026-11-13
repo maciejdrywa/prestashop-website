@@ -27,7 +27,7 @@ powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
 Komenda wykonuje 13 etapów:
 
-1. Usunięcie produktów demonstracyjnych oraz wyłączenie przykładowych slajdów i bloku tekstowego.
+1. Nazwa sklepu oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
 2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
 3. Menu górne z kategoriami i podkategoriami ze scrapera.
 4. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
@@ -70,6 +70,13 @@ images/. Pobieranie archiwum z Release, ścieżka zastępcza z URL-i i pozostał
 konfiguracja W3 nadal wymagają osobnych prac.
 
 ## Usuwanie zawartości demonstracyjnej
+
+`configure-storefront.php` ustawia również nazwę projektu „Twoje Drzwi do Sukcesu”
+w `PS_SHOP_NAME` dla bieżącego sklepu oraz w jego rekordzie `shop`. Pozwala to
+wyświetlać tę samą nazwę w tytule strony głównej, danych sklepu i tekstach
+korzystających z konfiguracji nazwy. Ponowienie odtwarza tę wartość. Działa
+w pierwszym etapie `init-shop.php` i przez istniejący hook startowy
+`20-configure-storefront.sh`. Opcja `--dry-run` pokazuje plan bez zapisów.
 
 `configure-storefront.php` rozpoznaje 19 produktów instalatora PrestaShop 8.2.8
 po dokładnej parze referencja `demo_*` i domyślna nazwa. Nie opiera się na ID

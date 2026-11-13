@@ -7,7 +7,9 @@ try {
     if ($options !== [] && $options !== ['--dry-run']) {
         throw new RuntimeException('Usage: php configure-storefront.php [--dry-run]');
     }
-    ShopInit\cleanDemoStorefront(ShopInit\boot(), $options === ['--dry-run']);
+    $context = ShopInit\boot();
+    ShopInit\configureShopName($context, $options === ['--dry-run']);
+    ShopInit\cleanDemoStorefront($context, $options === ['--dry-run']);
 } catch (Throwable $error) {
     fwrite(STDERR, 'ERROR: storefront cleanup failed: ' . $error->getMessage() . PHP_EOL);
     exit(1);

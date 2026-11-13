@@ -6,6 +6,32 @@ use RuntimeException;
 
 require_once __DIR__ . '/prestashop.php';
 
+const PROJECT_SHOP_NAME = 'Twoje Drzwi do Sukcesu';
+
+function configureShopName(\Context $context, bool $dryRun = false): void
+{
+    if ($dryRun) {
+        echo 'PLAN SHOP NAME: ' . PROJECT_SHOP_NAME . PHP_EOL;
+        return;
+    }
+    transaction(function () use ($context): void {
+        if (!\Configuration::updateValue('PS_SHOP_NAME', PROJECT_SHOP_NAME, false,
+            (int) $context->shop->id_shop_group, (int) $context->shop->id)) {
+            throw new RuntimeException('Cannot save shop name configuration.');
+        }
+        if ($context->shop->name !== PROJECT_SHOP_NAME) {
+            $context->shop->name = PROJECT_SHOP_NAME;
+            if (!$context->shop->update()) throw new RuntimeException('Cannot save the shop record name.');
+        }
+    });
+    $savedName = \Db::getInstance()->getValue('SELECT name FROM ' . _DB_PREFIX_ . 'shop WHERE id_shop=' . (int) $context->shop->id);
+    if ($savedName !== PROJECT_SHOP_NAME || \Configuration::get('PS_SHOP_NAME') !== PROJECT_SHOP_NAME) {
+        throw new RuntimeException('Shop name verification failed.');
+    }
+    \Tools::clearSmartyCache();
+    echo 'SHOP NAME: ' . PROJECT_SHOP_NAME . PHP_EOL;
+}
+
 /** Default product signatures shipped with the pinned PrestaShop 8.2.8 image. */
 function demoProductSignatures(): array
 {

@@ -112,7 +112,7 @@ function initializationPreflight(\Context $context): array
 function initializationStages(): array
 {
     return [
-        ['name' => 'Installer demo storefront cleanup', 'script' => 'configure-storefront.php', 'args' => []],
+        ['name' => 'Shop name and installer demo cleanup', 'script' => 'configure-storefront.php', 'args' => []],
         ['name' => 'Categories and products', 'script' => 'import-products.php', 'args' => ['--all']],
         ['name' => 'Source category navigation', 'script' => 'configure-menu.php', 'args' => []],
         ['name' => 'Polish information pages and footer', 'script' => 'configure-content.php', 'args' => []],
