@@ -9,8 +9,9 @@ try {
     }
     $context = ShopInit\boot();
     ShopInit\configureShopName($context, $options === ['--dry-run']);
+    ShopInit\configureDeliveryLanguage($context, $options === ['--dry-run']);
     ShopInit\cleanDemoStorefront($context, $options === ['--dry-run']);
 } catch (Throwable $error) {
-    fwrite(STDERR, 'ERROR: storefront cleanup failed: ' . $error->getMessage() . PHP_EOL);
+    fwrite(STDERR, 'ERROR: storefront configuration failed: ' . $error->getMessage() . PHP_EOL);
     exit(1);
 }

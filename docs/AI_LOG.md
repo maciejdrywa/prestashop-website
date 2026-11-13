@@ -31,6 +31,7 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-12, Maciej Drywa | Codex 6.1 sol | W3.5 - Polskie strony informacyjne i stopka | Przygotowano pięć stron dla sklepu demonstracyjnego, polską stopkę i odnośniki. Dodano odtwarzanie przy inicjalizacji oraz starcie kontenera. | Brak. | Manualne przetestowanie strony po wykonaniu skryptów. Wszystkie zmiany zostały zaimplementowane. |
 | 2026-11-12, Maciej Drywa | Codex 6.1 sol | Usunięcie banera promocyjnego | Wyłączono `ps_banner` i dodano tę konfigurację do inicjalizacji oraz startu sklepu. | Brak. | Baner zniknął ze strony głównej sklepu, sprawdzono ręcznie. |
 | 2026-11-12, Maciej Drywa | Codex 6.1 sol | W3.5 - Informacja o cookies | Dodano moduł z polskim komunikatem, odnośnikiem do prywatności i zapamiętywaniem zamknięcia na 180 dni; konfiguracja wraca przy inicjalizacji i starcie. | Brak. | Pięć testów JavaScript i test HTTP czterech stron, zasobów oraz ukrywania po zamknięciu. Baner pojawia się na stronie na nowo po sunięciu zapisanych cookiesów (sprawdzono ręcznie) |
+| 2026-11-13, Maciej Drywa | Codex 6.1 sol | W3.5 - Polskie sposoby dostawy | Spolszczono cztery domyślne nazwy przewoźników i angielskie opisy; dodano do istniejącej konfiguracji startowej i inicjalizacji. | Brak. | Odczyt nazw i opisów oraz porównanie ustawień, cenników i powiązań przed i po zmianie. Spraedzono ręcznie. |
 
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:

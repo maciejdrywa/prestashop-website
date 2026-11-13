@@ -27,7 +27,7 @@ powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
 Komenda wykonuje 13 etapów:
 
-1. Nazwa sklepu oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
+1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
 2. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
 3. Menu górne z kategoriami i podkategoriami ze scrapera.
 4. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
@@ -77,6 +77,14 @@ wyświetlać tę samą nazwę w tytule strony głównej, danych sklepu i tekstac
 korzystających z konfiguracji nazwy. Ponowienie odtwarza tę wartość. Działa
 w pierwszym etapie `init-shop.php` i przez istniejący hook startowy
 `20-configure-storefront.sh`. Opcja `--dry-run` pokazuje plan bez zapisów.
+
+Ten sam skrypt spolszcza domyślne sposoby dostawy: „Click and collect” na
+„Odbiór osobisty”, „My carrier” na „Dostawa kurierska”, „My cheap carrier” na
+„Dostawa ekonomiczna” i „My light carrier” na „Dostawa lekkich przesyłek”.
+Tłumaczy również rozpoznane angielskie opisy w polskiej wersji językowej.
+Obejmuje istniejące, nieusunięte metody, także obecnie nieaktywne; zachowuje
+ich aktywność, ID, referencje, ceny i ograniczenia. Własnych nazw przewoźników
+nie nadpisuje. Przy ponowieniu rozpoznaje również swoje polskie nazwy.
 
 `configure-storefront.php` rozpoznaje 19 produktów instalatora PrestaShop 8.2.8
 po dokładnej parze referencja `demo_*` i domyślna nazwa. Nie opiera się na ID

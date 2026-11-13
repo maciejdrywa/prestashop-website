@@ -8,6 +8,64 @@ require_once __DIR__ . '/prestashop.php';
 
 const PROJECT_SHOP_NAME = 'Twoje Drzwi do Sukcesu';
 
+function configureDeliveryLanguage(\Context $context, bool $dryRun = false): void
+{
+    $names = [
+        'Click and collect'=>['name'=>'Odbiór osobisty', 'delay'=>'Odbiór w sklepie'],
+        'My carrier'=>['name'=>'Dostawa kurierska', 'delay'=>'Dostawa następnego dnia!'],
+        'My cheap carrier'=>['name'=>'Dostawa ekonomiczna', 'delay'=>'Kup więcej, aby zapłacić mniej!'],
+        'My light carrier'=>['name'=>'Dostawa lekkich przesyłek', 'delay'=>'Im lżej, tym taniej!'],
+    ];
+    $delays = ['Buy more to pay less!'=>'Kup więcej, aby zapłacić mniej!',
+        'The lighter the cheaper!'=>'Im lżej, tym taniej!',
+        'Delivery next day!'=>'Dostawa następnego dnia!', 'Pick up in-store'=>'Odbiór w sklepie'];
+    $languageId = (int) \Configuration::get('PS_LANG_DEFAULT');
+    if ((new \Language($languageId))->iso_code !== 'pl') throw new RuntimeException('Delivery localization requires Polish as the default language.');
+    $shopId = (int) $context->shop->id;
+    $db = \Db::getInstance();
+    $rows = $db->executeS('SELECT c.id_carrier,c.name,l.id_carrier AS language_row_id,l.delay FROM '
+        . _DB_PREFIX_ . 'carrier c INNER JOIN ' . _DB_PREFIX_ . 'carrier_shop s ON s.id_carrier=c.id_carrier LEFT JOIN '
+        . _DB_PREFIX_ . 'carrier_lang l ON l.id_carrier=c.id_carrier AND l.id_shop=s.id_shop AND l.id_lang='
+        . $languageId . ' WHERE c.deleted=0 AND s.id_shop=' . $shopId . ' ORDER BY c.id_carrier');
+    if ($rows === false) throw new RuntimeException('Cannot read delivery names.');
+    $plans = [];
+    foreach ($rows as $row) {
+        $definition = $names[$row['name']] ?? null;
+        if ($definition === null) {
+            foreach ($names as $candidate) {
+                if ($candidate['name'] === $row['name']) { $definition = $candidate; break; }
+            }
+        }
+        if ($definition === null) continue;
+        $delay = $row['delay'] ?? '';
+        $plans[] = ['row'=>$row, 'name'=>$definition['name'], 'delay'=>$delay === '' ? $definition['delay'] : ($delays[$delay] ?? $delay)];
+    }
+    if ($dryRun) {
+        foreach ($plans as $plan) echo 'PLAN DELIVERY: ' . $plan['row']['name'] . ' -> ' . $plan['name'] . '; ' . $plan['delay'] . PHP_EOL;
+        return;
+    }
+    transaction(function () use ($db,$plans,$shopId,$languageId): void {
+        foreach ($plans as $plan) {
+            $row = $plan['row'];
+            $id = (int) $row['id_carrier'];
+            // Update only wording; keep IDs, references, prices and delivery restrictions intact.
+            if ($row['name'] !== $plan['name'] && !$db->update('carrier',['name'=>pSQL($plan['name'])],'id_carrier=' . $id)) {
+                throw new RuntimeException('Cannot translate delivery name: ' . $id);
+            }
+            if ($row['language_row_id'] === null) {
+                if (!$db->insert('carrier_lang',['id_carrier'=>$id,'id_shop'=>$shopId,'id_lang'=>$languageId,'delay'=>pSQL($plan['delay'])])) {
+                    throw new RuntimeException('Cannot create Polish delivery description: ' . $id);
+                }
+            } elseif ($row['delay'] !== $plan['delay'] && !$db->update('carrier_lang',['delay'=>pSQL($plan['delay'])],
+                'id_carrier=' . $id . ' AND id_shop=' . $shopId . ' AND id_lang=' . $languageId)) {
+                throw new RuntimeException('Cannot translate delivery description: ' . $id);
+            }
+            echo 'DELIVERY: ' . $plan['name'] . ' — ' . $plan['delay'] . PHP_EOL;
+        }
+    });
+    \Tools::clearSmartyCache();
+}
+
 function configureShopName(\Context $context, bool $dryRun = false): void
 {
     if ($dryRun) {
