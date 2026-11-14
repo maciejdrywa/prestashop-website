@@ -25,16 +25,22 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 8 etapów:
+Komenda wykonuje 14 etapów:
 
-1. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
-2. Grupy i wartości atrybutów.
-3. Kombinacje i modyfikatory cen.
-4. Galerie, okładki i miniatury z lokalnych plików.
-5. Kontrola produktów i kombinacji.
-6. Kontrola galerii.
-7. Stany 0–10 i aktywacja.
-8. Końcowa kontrola stanów, dostępności i aktywacji.
+1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
+2. SMTP Mailpit i polskie maile rejestracji, przelewu oraz potwierdzenia zamówienia.
+3. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
+4. Menu górne z kategoriami i podkategoriami ze scrapera.
+5. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
+6. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
+7. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
+8. Grupy i wartości atrybutów.
+9. Kombinacje i modyfikatory cen.
+10. Galerie, okładki i miniatury z lokalnych plików.
+11. Kontrola produktów i kombinacji.
+12. Kontrola galerii.
+13. Stany 0–10 i aktywacja.
+14. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -50,7 +56,7 @@ mogą pozostawić zapisy: popraw przyczynę i powtórz tę samą komendę. Impor
 rozpoznają istniejące rekordy. Nowe produkty są aktywowane po walidacji danych
 i galerii; aktywność produktów istniejących wcześniej jest zachowywana podczas
 wcześniejszych etapów. Ponowienie inicjalizacji odtwarza początkowy plan stanów.
-Produkty demonstracyjne PrestaShop pozostają poza zakresem importu.
+Produkty demonstracyjne PrestaShop są usuwane przed importem.
 
 Pusta galeria źródłowa, np. produktu 539, jest jawnie raportowana. Taki przebieg
 kończy się COMPLETE WITH SOURCE WARNINGS; nie oznacza potwierdzenia wyjątku
@@ -64,14 +70,287 @@ Pomoc jest dostępna przez --help. Na tym etapie wymagany jest lokalny folder
 images/. Pobieranie archiwum z Release, ścieżka zastępcza z URL-i i pozostała
 konfiguracja W3 nadal wymagają osobnych prac.
 
+## Usuwanie zawartości demonstracyjnej
+
+`configure-storefront.php` ustawia również nazwę projektu „Twoje Drzwi do Sukcesu”
+w `PS_SHOP_NAME` dla bieżącego sklepu oraz w jego rekordzie `shop`. Pozwala to
+wyświetlać tę samą nazwę w tytule strony głównej, danych sklepu i tekstach
+korzystających z konfiguracji nazwy. Ponowienie odtwarza tę wartość. Działa
+w pierwszym etapie `init-shop.php` i przez istniejący hook startowy
+`20-configure-storefront.sh`. Opcja `--dry-run` pokazuje plan bez zapisów.
+
+Ten sam skrypt spolszcza domyślne sposoby dostawy: „Click and collect” na
+„Odbiór osobisty”, „My carrier” na „Dostawa kurierska”, „My cheap carrier” na
+„Dostawa ekonomiczna” i „My light carrier” na „Dostawa lekkich przesyłek”.
+Tłumaczy również rozpoznane angielskie opisy w polskiej wersji językowej.
+Obejmuje istniejące, nieusunięte metody, także obecnie nieaktywne; zachowuje
+ich aktywność, ID, referencje, ceny i ograniczenia. Własnych nazw przewoźników
+nie nadpisuje. Przy ponowieniu rozpoznaje również swoje polskie nazwy.
+
+`configure-storefront.php` rozpoznaje 19 produktów instalatora PrestaShop 8.2.8
+po dokładnej parze referencja `demo_*` i domyślna nazwa. Nie opiera się na ID
+produktu ani na założeniu, że każdy produkt spoza scrapera jest testowy.
+Zmienione nazwy przy referencjach demo są zachowywane i zgłaszane ostrzeżeniem.
+Produkty są usuwane przez `Product::delete()`, wraz z obsługiwanymi przez
+PrestaShop powiązaniami, wariantami i zdjęciami. Kategorie demo nie są usuwane.
+
+Skrypt wyłącza moduły `ps_imageslider`, `ps_banner` i `ps_customtext` w bieżącym sklepie.
+Usuwa to ze strony głównej przykładowe slajdy oraz blok „Custom Text Block”
+z tekstem lorem ipsum. Moduły pozostają zainstalowane, ale konfiguracja
+celowo wyłącza je przy każdym uruchomieniu skryptu, również po ręcznym włączeniu.
+Pozostałe bloki produktów i inne treści sklepu nie są wyłączane.
+
+Skrypt jest pierwszym etapem `init-shop.php`. Dodatkowo obraz sklepu zawiera
+hook `/tmp/init-scripts/20-configure-storefront.sh`, który uruchamia go jako
+`www-data` po instalacji PrestaShop i przy kolejnych startach kontenera.
+Nie wymaga plików scrapera, dzięki czemu działa również przed pierwszym importem.
+Samo uruchomienie kontenera nadal nie importuje katalogu produktów.
+
+Po aktualizacji Dockerfile przebuduj obraz i odtwórz kontener (bez kasowania wolumenów):
+
+    docker compose --env-file .env -f deploy/compose.yaml up -d --build shop
+
+Można też wykonać samo czyszczenie istniejącej instalacji:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-storefront.php
+
+Dodanie `--dry-run` wyświetla plan bez zmian. Ponowienie zwykłego wykonania
+nie usuwa produktów ze scrapera ani innych produktów bez sygnatury instalatora.
+Błąd usuwania lub wyłączenia modułu kończy proces kodem 1. Operacji usuwania
+produktów nie obejmuje transakcja: usunięte zdjęcia i wykonane hooki nie mogą
+być odtworzone przez SQL rollback.
+
+## Menu kategorii
+
+`configure-menu.php` zastępuje pozycje modułu `ps_mainmenu` sześcioma działami
+w kolejności menu źródłowego: Klamki do drzwi, Okucia drzwiowe, Bramy i ogrodzenia,
+Okucia budowlane, Dom i ogród, Akcesoria meblowe. Podkategoriami są wszystkie
+ścieżki tych działów z `scraper-results/categories.json`, również puste kategorie
+i dalsze poziomy. Obecnie jest to 79 węzłów. Gałąź „Produkty polecane” pozostaje
+poza menu. Kategorie demonstracyjne są usuwane z konfiguracji nawigacji,
+ale nie są kasowane z bazy.
+
+Skrypt rozpoznaje kategorie po pełnej ścieżce i lokalnych ID, tworzy brakujące,
+aktywuje je i odtwarza kolejność rodzeństwa z pliku źródłowego. Następnie zapisuje
+`MOD_BLOCKTOPMENU_ITEMS` dla bieżącego sklepu, włącza moduł oraz czyści cache
+menu i Smarty. Nie zmienia produktów ani ich przypisań do kategorii.
+Nie pobiera strony źródłowej podczas inicjalizacji.
+
+Menu jest konfigurowane po imporcie kategorii i produktów w `init-shop.php`.
+Hook startowy `30-configure-menu.sh` odtwarza je również po instalacji i przy
+starcie kontenera, jeśli istnieje czytelny `categories.json`. Może wówczas utworzyć
+kategorie jeszcze przed importem produktów. Gdy pliku brakuje, hook wypisuje
+komunikat o odroczeniu; po dostarczeniu źródeł zwykłe `init-shop.php` ustawi menu.
+Niepoprawny plik, brak wymaganej kategorii głównej lub błąd zapisu kończy skrypt
+kodem 1. Po zmianie Dockerfile potrzebne jest `up -d --build shop`, jak wyżej.
+
+Samodzielna konfiguracja istniejącej instalacji:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-menu.php
+
+Opcja `--dry-run` wyświetla pełną planowaną hierarchię bez zapisów w bazie.
+Test `tests/menu-test.php` sprawdza plan, zagnieżdżenia i błędne dane.
+`tests/menu-http-test.php` sprawdza wyrenderowane menu, kolejność oraz HTTP 200
+wszystkich odnośników. Ten drugi test jest przeznaczony dla lokalnego Compose
+pod adresem `https://localhost`, z usługą nginx i już skonfigurowanym menu;
+pomija weryfikację lokalnego certyfikatu TLS wyłącznie w swoim kliencie testowym.
+
 ## Pliki i kolejność
+
+### Strony informacyjne i stopka
+
+`configure-content.php` tworzy lub aktualizuje pięć aktywnych stron: O sklepie,
+Regulamin, Polityka prywatności, Dostawa i Formy płatności. Polskie treści HTML
+znajdują się w `deploy/init/content/`. Dotyczą demonstracyjnego projektu
+Twoje Drzwi do Sukcesu opisanego w głównym README, bez rzeczywistej sprzedaży.
+Nie przypisują projektowi danych prawdziwej firmy PAN DOMU ani fikcyjnego
+rachunku bankowego, adresu przedsiębiorstwa czy terminów rzeczywistych przesyłek.
+Informacje o prawach osób oparto na materiałach
+[UODO](https://uodo.gov.pl/pl/p/dla-obywatela); tekst jest opisem środowiska projektu.
+
+Skrypt rozpoznaje istniejące strony po zapisanych mapowaniach `SHOP_INIT_CMS_*`,
+polskich slugach albo dokładnej parze domyślny slug i angielski tytuł instalatora.
+Nie zakłada stałych ID. Zastępuje pięć stron instalatora, a przy ich braku tworzy
+nowe. Pozostałe strony CMS zachowuje. Polskie tytuły, adresy, treści i aktywność
+są odtwarzane przy każdym wykonaniu, więc trwałe zmiany treści należy wprowadzać
+w plikach HTML w repozytorium, a nie wyłącznie w panelu administratora.
+
+Moduł `ps_linklist` otrzymuje sekcje „Produkty” oraz „Informacje o sklepie”.
+Druga sekcja zawiera pięć stron we wskazanej wyżej kolejności oraz Kontakt
+i Mapę strony. Domyślny odnośnik do listy demonstracyjnych sklepów jest usuwany
+z tego bloku. Sekcje konta klienta i danych kontaktowych pozostają w swoich
+dotychczasowych modułach. Przywracane są też wskazanie regulaminu w zamówieniu
+oraz polska informacja z odnośnikiem do prywatności w formularzu klienta.
+
+Lista metod na stronach Dostawa i Formy płatności jest generowana z aktywnych
+przewoźników i modułów płatności podczas inicjalizacji. Nie jest odświeżana przy
+każdym wejściu na stronę. Po zmianie tych ustawień powtórz konfigurację; metody
+dostępne dla konkretnego koszyka nadal wynikają z ograniczeń procesu zakupowego.
+Skrypt nie zmienia samych przewoźników, cenników ani modułów płatności.
+
+Konfiguracja jest piątym etapem `init-shop.php` i jest uruchamiana również
+przez hook obrazu `40-configure-content.sh` po instalacji oraz przy kolejnych
+startach kontenera. Nie wymaga plików scrapera. Przed zapisami sprawdzane są
+szablony, mapowania, moduł i kategoria CMS; zapisy stron, bloków i ustawień
+wykonywane są w transakcji. Błąd kończy proces kodem 1. Po zmianie Dockerfile
+przebuduj kontener poleceniem `up -d --build shop`, z zachowaniem wolumenów.
+
+Samo przygotowanie stron i stopki istniejącego sklepu:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-content.php
+
+Opcja `--dry-run` pokazuje rozpoznane strony i plan bez zapisów. Testy:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/content-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/content-http-test.php
+
+Test HTTP wymaga skonfigurowanego lokalnego sklepu `https://localhost` i usługi
+nginx. Sprawdza treści, polskie nagłówki, widoczne odnośniki w stopce, pięć stron,
+lokalne odnośniki między stronami oraz powiązania regulaminu i prywatności.
+Pomija sprawdzanie lokalnego certyfikatu TLS wyłącznie w kliencie testowym.
+
+### Polskie treści modułów
+
+`configure-module-texts.php` konfiguruje istniejące, aktywne moduły
+`blockreassurance`, `productcomments` i `blockwishlist`. Działa po
+`configure-content.php`, ponieważ bloki wymagają stron Polityka prywatności,
+Dostawa i Regulamin. Wymaga polskiego języka domyślnego oraz włączonego HTTPS.
+
+Trzy bloki na kartach produktów, w koszyku i zamówieniu mają tytuły
+„Bezpieczeństwo”, „Dostawa”, „Zasady zakupów”. Zastępują teksty instalatora;
+odnośniki wynikają z lokalnych ID stron CMS, a nie z wpisanych na stałe numerów.
+Skrypt rozpoznaje rekordy po zapamiętanym mapowaniu `SHOP_INIT_REASSURANCE_*`
+albo po tytule bloku. Brakujące bloki tworzy, a istniejące aktualizuje.
+
+W opiniach zmienia domyślne polskie pole kryterium `Quality` na „Jakość”.
+Nie zmienia ocen ani treści opinii. W konfiguracji listy życzeń ustawia
+„Moje listy życzeń”, „Moja lista życzeń” i „Utwórz nową listę”. Zachowuje
+nazwy oraz zawartość list utworzonych przez klientów. Pozostałe komunikaty,
+w tym tworzenie, zmiana nazwy i usuwanie listy, korzystają z istniejącego
+polskiego pakietu tłumaczeń.
+
+Konfiguracja jest siódmym etapem `init-shop.php` i jest uruchamiana przy starcie
+kontenera przez `50-configure-module-texts.sh`, po przygotowaniu stron CMS.
+Skrypt zapisuje wyłącznie treści i ustawienia w bazie, bez tworzenia szablonów
+motywu ani własnych stylów CSS. Sekcje wyświetla standardowy motyw Classic
+z samymi polskimi nazwami, bez dodatkowych opisów. Adresy stron CMS pozostają
+ustawione w module; sposób ich prezentacji wynika z oryginalnego szablonu.
+Stałe etykiety zapisane wewnątrz szablonów modułu listy życzeń pozostają bez zmian.
+
+Po zmianie Dockerfile użyj `up -d --build shop`. Samodzielne wykonanie:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-module-texts.php
+
+Opcja `--dry-run` pokazuje plan bez zapisów. Testy:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/module-texts-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/module-texts-http-test.php
+
+Test HTTP wymaga lokalnego Compose pod `https://localhost`, aktywnego źródłowego
+produktu 5 i skonfigurowanych modułów. Sprawdza produkt, koszyk, strony docelowe
+bloków, formularz opinii, okna listy życzeń i polskie odpowiedzi API. Tworzy
+tymczasowe konto z fikcyjnym adresem `@example.test` oraz listę; usuwa je i koszyki
+tego konta w sekcji `finally`. Nie publikuje opinii ani zamówienia. Pomija kontrolę
+lokalnego certyfikatu wyłącznie we własnym kliencie HTTP. Sprawdza HTML i odpowiedzi
+API, ale nie zastępuje testu interakcji JavaScript w przeglądarce.
+
+### Informacja o cookies
+
+Moduł projektu `shopcookieinfo` wyświetla polski pasek u góry stron klienta.
+Zawiera krótki opis użycia cookies, odnośnik do istniejącej Polityki prywatności
+oraz przycisk „Rozumiem”. Zamknięcie zapisuje cookie `shop_cookie_info_v1_IDSKLEPU`
+o wartości `1` na 180 dni. Cookie ma ścieżkę danego sklepu, `SameSite=Lax`
+i flagę `Secure` przy połączeniu HTTPS. Nie zawiera identyfikatora klienta.
+
+Jest to komunikat informacyjny: przycisk zapamiętuje jego zamknięcie. Moduł
+nie włącza analityki, nie pobiera zgód marketingowych ani nie zarządza innymi
+skryptami. Bez JavaScript informacja i odnośnik pozostają widoczne, a przycisk
+zamknięcia jest ukryty. Przy zablokowanym zapisie cookies zamknięcie działa
+na bieżącej stronie, lecz komunikat może pojawić się ponownie po przeładowaniu.
+Cookie można usunąć w przeglądarce, aby ponownie zobaczyć komunikat.
+
+Kod znajduje się w `shop/modules/shopcookieinfo/`. Moduł korzysta z hooków
+`displayAfterBodyOpeningTag` i `actionFrontControllerSetMedia`; nie nadpisuje
+szablonów motywu ani pozostałych modułów. Style i JavaScript mają własne pliki,
+ładowane wyłącznie wtedy, gdy komunikat nie został wcześniej zamknięty.
+
+Dockerfile przechowuje źródła modułu poza wolumenem sklepu. Skrypt
+`configure-cookies.php` kopiuje jego trzy pliki, instaluje lub włącza moduł,
+rejestruje hooki i zapisuje aktualne ID Polityki prywatności. Ponowienie
+aktualizuje moduł bez tworzenia kolejnych instalacji. Błąd kończy proces kodem 1.
+To szósty etap `init-shop.php`. Przy instalacji i starcie kontenera tę samą
+konfigurację wykonuje `60-configure-cookies.sh`, po utworzeniu stron CMS.
+
+Po zmianie źródeł modułu przebuduj obraz i odtwórz kontener:
+
+    docker compose --env-file .env -f deploy/compose.yaml up -d --build shop
+
+Sama ponowna konfiguracja już zbudowanego obrazu:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-cookies.php
+
+Testy (Node.js na hoście oraz działający lokalny Compose):
+
+    node --test deploy/init/tests/cookie-notice.test.cjs
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/cookies-http-test.php
+
+Testy JavaScript uruchamiają rzeczywisty skrypt na kontrolowanych obiektach DOM,
+sprawdzając kliknięcie, czas zapisu, izolację sklepów i blokadę pamięci. Test HTTP
+sprawdza cztery strony, link do prywatności, ładowanie zasobów i respektowanie
+cookie zamknięcia. Korzysta z `https://localhost` i pomija sprawdzanie lokalnego
+certyfikatu wyłącznie we własnym kliencie. Nie zastępuje wizualnego testu przeglądarkowego.
+
+### Polskie wiadomości e-mail
+
+`configure-mail.php` konfiguruje SMTP `mailpit:1025` i odtwarza polskie treści
+`account`, `bankwire` oraz `order_conf` w formatach HTML i TXT. Wcześniej folder
+`mails/pl` zawierał angielskie treści, mimo prawidłowych tematów i polskiego języka.
+
+Biblioteka `lib/mail-templates.php` uruchamia natywny generator
+`prestashop:mail:generate` dla domyślnego polskiego locale i wybranego motywu
+maili (`PS_MAIL_THEME`, domyślnie `modern`). Eksportuje do
+`var/import/generated-mail-pl`, a po walidacji instaluje tylko sześć wskazanych
+plików. Sprawdza UTF-8, polską treść i zachowanie identycznego zestawu zmiennych.
+Pozostałe wygenerowane maile pozostają wyłącznie w katalogu roboczym.
+Stopkę „Powered by” spolszcza na „Oprogramowanie sklepu:”, a etykietę łącznej
+kwoty w potwierdzeniu na „Razem (brutto)”. Zachowuje układ natywnego motywu.
+
+Aktualizuje `mails/pl` oraz istniejące nadpisania tych maili w aktywnym motywie
+lub jego motywie nadrzędnym, jeśli występują. Nie tworzy nowych nadpisań motywu
+strony. Nie zmienia danych klientów, zamówień, statusów ani danych bankowych.
+Tematy korzystają z polskiego pakietu tłumaczeń oraz nazwy statusu przelewu.
+Zmiana dotyczy nowo wysyłanych wiadomości; istniejące wiadomości w Mailpit
+zachowują treść otrzymaną wcześniej.
+
+Konfiguracja jest drugim etapem `init-shop.php`. Przy instalacji i starcie
+kontenera wykonuje ją również istniejący hook `10-configure-mail.sh`.
+Ponowienie aktualizuje pliki bez kopiowania ich do repozytorium. Generator wymaga
+`proc_open` i dostępnych tłumaczeń; błąd kończy konfigurację kodem 1.
+
+Samodzielne wykonanie:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-mail.php
+
+Test kontrolowanej wysyłki:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/mail-templates-test.php
+
+Test wymaga SMTP skierowanego na lokalny Mailpit i odmawia działania przy innym
+serwerze. Wysyła trzy wiadomości do losowego adresu `@example.test`, a następnie
+odczytuje tylko te wiadomości przez API Mailpit. Sprawdza polskie tematy, HTML,
+TXT, polskie znaki, podstawienie danych i brak nierozwiązanych zmiennych.
+Wiadomości pozostają do ręcznej inspekcji w `http://localhost:8025`.
+Nie tworzy klienta ani zamówienia i nie usuwa wcześniejszej korespondencji.
+
+### Pozostałe skrypty
 
 1. **check-environment.php** ładuje PrestaShop, ustala sklep, sprawdza połączenie
    z bazą przez SELECT 1 i dostępność bcmath. Nie zmienia danych.
    To test przed importem, a nie samodzielny etap ładowania danych.
 2. **configure-mail.php** zapisuje i sprawdza SMTP mailpit:1025.
    Opróżnia login i hasło, wyłącza szyfrowanie dla lokalnego Mailpit i ustawia
-   wysyłkę HTML oraz tekstową. Nie wysyła wiadomości. Jest też wywoływany przez
+   wysyłkę HTML oraz tekstową i odtwarza trzy polskie szablony maili w obu formatach.
+   Sam nie wysyła wiadomości. Jest też wywoływany przez
    skrypt startowy obrazu sklepu; zachowano tę ścieżkę.
 3. **check-price-settings.php** wymaga PLN, Polski jako kraju domyślnego i włączonego
    VAT. Wypisuje ogólne aktywne reguły podatkowe dla Polski i sprawdza dostępność

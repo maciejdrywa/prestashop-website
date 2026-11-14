@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/lib/prestashop.php';
+require_once __DIR__ . '/lib/mail-templates.php';
 try {
-    ShopInit\boot();
+    $context = ShopInit\boot();
     $settings = [
         'PS_MAIL_METHOD' => 2,
         'PS_MAIL_SERVER' => 'mailpit',
@@ -20,6 +20,7 @@ try {
         }
     });
     echo "OK: SMTP configured: mailpit:1025.\n";
+    ShopInit\configurePolishMailTemplates($context);
 } catch (Throwable $error) {
     fwrite(STDERR, 'ERROR: ' . $error->getMessage() . PHP_EOL);
     exit(1);

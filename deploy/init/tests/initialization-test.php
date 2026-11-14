@@ -46,6 +46,7 @@ try {
     array_pop($fixture);
     initRejects(fn () => ShopInit\initializationCategoryCoverage($fixture));
     $stages = ShopInit\initializationStages();
+    initTest(in_array('configure-mail.php', array_column($stages,'script'), true), 'Polish email configuration is missing');
     $calls = [];
     $runner = function (array $stage) use (&$calls): int {
         $calls[] = $stage['script'];
@@ -62,6 +63,10 @@ try {
     initTest(count($calls) === count($stages), 'Successful run skipped stages');
     initTest(array_search('check-images.php', $calls, true) < array_search('import-stock.php', $calls, true), 'Activation precedes gallery validation');
     initTest(array_search('check-products.php', $calls, true) < array_search('import-stock.php', $calls, true), 'Activation precedes product validation');
+    initTest(array_search('import-products.php', $calls, true) < array_search('configure-menu.php', $calls, true), 'Menu runs before category import');
+    initTest(in_array('configure-content.php', $calls, true), 'Information pages/footer configuration is missing');
+    initTest(array_search('configure-content.php', $calls, true) < array_search('configure-cookies.php', $calls, true), 'Cookie notice precedes its privacy page');
+    initTest(array_search('configure-content.php', $calls, true) < array_search('configure-module-texts.php', $calls, true), 'Module wording precedes required information pages');
     $calls = [];
     $guardRuns = 0;
     $guard = function () use (&$guardRuns): void {
