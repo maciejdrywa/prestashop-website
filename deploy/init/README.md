@@ -25,22 +25,23 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 14 etapów:
+Komenda wykonuje 15 etapów:
 
 1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
 2. SMTP Mailpit i polskie maile rejestracji, przelewu oraz potwierdzenia zamówienia.
-3. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
-4. Menu górne z kategoriami i podkategoriami ze scrapera.
-5. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
-6. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
-7. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
-8. Grupy i wartości atrybutów.
-9. Kombinacje i modyfikatory cen.
-10. Galerie, okładki i miniatury z lokalnych plików.
-11. Kontrola produktów i kombinacji.
-12. Kontrola galerii.
-13. Stany 0–10 i aktywacja.
-14. Końcowa kontrola stanów, dostępności i aktywacji.
+3. Przelew tradycyjny i pobranie, uprawnienia płatności oraz testowe dane przelewu.
+4. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
+5. Menu górne z kategoriami i podkategoriami ze scrapera.
+6. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
+7. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
+8. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
+9. Grupy i wartości atrybutów.
+10. Kombinacje i modyfikatory cen.
+11. Galerie, okładki i miniatury z lokalnych plików.
+12. Kontrola produktów i kombinacji.
+13. Kontrola galerii.
+14. Stany 0–10 i aktywacja.
+15. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -188,7 +189,7 @@ każdym wejściu na stronę. Po zmianie tych ustawień powtórz konfigurację; m
 dostępne dla konkretnego koszyka nadal wynikają z ograniczeń procesu zakupowego.
 Skrypt nie zmienia samych przewoźników, cenników ani modułów płatności.
 
-Konfiguracja jest piątym etapem `init-shop.php` i jest uruchamiana również
+Konfiguracja jest szóstym etapem `init-shop.php` i jest uruchamiana również
 przez hook obrazu `40-configure-content.sh` po instalacji oraz przy kolejnych
 startach kontenera. Nie wymaga plików scrapera. Przed zapisami sprawdzane są
 szablony, mapowania, moduł i kategoria CMS; zapisy stron, bloków i ustawień
@@ -229,7 +230,7 @@ nazwy oraz zawartość list utworzonych przez klientów. Pozostałe komunikaty,
 w tym tworzenie, zmiana nazwy i usuwanie listy, korzystają z istniejącego
 polskiego pakietu tłumaczeń.
 
-Konfiguracja jest siódmym etapem `init-shop.php` i jest uruchamiana przy starcie
+Konfiguracja jest ósmym etapem `init-shop.php` i jest uruchamiana przy starcie
 kontenera przez `50-configure-module-texts.sh`, po przygotowaniu stron CMS.
 Skrypt zapisuje wyłącznie treści i ustawienia w bazie, bez tworzenia szablonów
 motywu ani własnych stylów CSS. Sekcje wyświetla standardowy motyw Classic
@@ -278,7 +279,7 @@ Dockerfile przechowuje źródła modułu poza wolumenem sklepu. Skrypt
 `configure-cookies.php` kopiuje jego trzy pliki, instaluje lub włącza moduł,
 rejestruje hooki i zapisuje aktualne ID Polityki prywatności. Ponowienie
 aktualizuje moduł bez tworzenia kolejnych instalacji. Błąd kończy proces kodem 1.
-To szósty etap `init-shop.php`. Przy instalacji i starcie kontenera tę samą
+To siódmy etap `init-shop.php`. Przy instalacji i starcie kontenera tę samą
 konfigurację wykonuje `60-configure-cookies.sh`, po utworzeniu stron CMS.
 
 Po zmianie źródeł modułu przebuduj obraz i odtwórz kontener:
@@ -341,6 +342,51 @@ odczytuje tylko te wiadomości przez API Mailpit. Sprawdza polskie tematy, HTML,
 TXT, polskie znaki, podstawienie danych i brak nierozwiązanych zmiennych.
 Wiadomości pozostają do ręcznej inspekcji w `http://localhost:8025`.
 Nie tworzy klienta ani zamówienia i nie usuwa wcześniejszej korespondencji.
+
+### Płatności offline i audyt sprzedaży
+
+`configure-payments.php` instaluje lub włącza natywne moduły `ps_wirepayment`
+i `ps_cashondelivery`. Wyłącza inne aktywne moduły podpięte do hooków płatności,
+w tym domyślny `ps_checkpayment`. Nie usuwa ich historycznych statusów ani zamówień.
+Nie pobiera i nie podłącza zewnętrznych operatorów płatności.
+
+W przelewie ustawia jawne dane demonstracyjne bez numeru rzeczywistego rachunku
+oraz komunikat o niewykonywaniu przelewu. Odtwarza uprawnienia dla Polski, PLN,
+standardowych grup odwiedzającego, gościa i klienta oraz wszystkich istniejących,
+nieusuniętych referencji przewoźników w bieżącym sklepie. Własne ograniczenia
+tych dwóch modułów są zastępowane konfiguracją projektu; pozostałe moduły
+nie otrzymują nowych uprawnień. Ceny, zakresy dostawy i ustawienia faktur pozostają
+w tym etapie poza konfiguracją płatności.
+
+To trzeci etap `init-shop.php`. Przy instalacji i starcie kontenera wykonuje go
+`25-configure-payments.sh`. Na istniejącej instalacji aktualizuje także treść
+strony Formy płatności. Na czystej bazie stronę przygotuje późniejszy etap CMS.
+Ponowienie nie tworzy duplikatów uprawnień. Po dodaniu nowych przewoźników trzeba
+ponownie wykonać tę konfigurację, aby dopisać ich referencje do metod płatności.
+
+Samodzielne wykonanie i plan:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-payments.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-payments.php --dry-run
+
+Po dodaniu hooka przebuduj obraz poleceniem `up -d --build shop`.
+Audyt odczytujący bieżące ustawienia bez zmian:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/audit-sales.php
+
+Wyniki pierwszego audytu i pozostałe wymagania są opisane w
+[raporcie sprzedaży](../../docs/sales-configuration-audit.md).
+
+Test rzeczywistego kroku płatności przez HTTP:
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/payments-http-test.php
+
+Test wymaga dostępnego produktu fizycznego ze scrapera oraz lokalnego Compose
+pod `https://localhost`. Tworzy fikcyjne konto, polski adres i koszyk, loguje się,
+przechodzi adresy i wybór dostawy oraz sprawdza dokładnie dwie opcje płatności.
+Nie zatwierdza zamówienia i nie wysyła przelewu. Konto, adres i koszyki usuwa
+w sekcji `finally`. Weryfikuje też uprawnienia i brak czeku na stronie informacyjnej.
+Pomija lokalny certyfikat TLS wyłącznie w kliencie testowym.
 
 ### Pozostałe skrypty
 

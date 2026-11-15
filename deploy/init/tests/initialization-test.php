@@ -47,6 +47,7 @@ try {
     initRejects(fn () => ShopInit\initializationCategoryCoverage($fixture));
     $stages = ShopInit\initializationStages();
     initTest(in_array('configure-mail.php', array_column($stages,'script'), true), 'Polish email configuration is missing');
+    initTest(in_array('configure-payments.php', array_column($stages,'script'), true), 'Offline payment configuration is missing');
     $calls = [];
     $runner = function (array $stage) use (&$calls): int {
         $calls[] = $stage['script'];
