@@ -74,15 +74,22 @@ a kolejny etap `configure-payments.php` odtwarza komplet uprawnień płatności.
 Dodano osobne rekordy „InPost” (15,00 zł brutto) i „DPD”
 (20,00 zł brutto), z VAT 23%, bez opłaty manipulacyjnej i bez integracji z operatorem.
 Konfigurację odtwarza `configure-carriers.php`, `init-shop.php` i hook startowy 24.
-Pozostawiono aktywne tylko InPost i DPD; wyłączono przewoźników instalatora,
-a InPost ustawiono jako domyślnego. Rekordy starych przewoźników nie są usuwane.
+Z metod instalatora włączone są Dostawa kurierska i Odbiór osobisty;
+Dostawa ekonomiczna i Dostawa lekkich przesyłek są wyłączone. InPost pozostaje
+domyślny. Aktywne są cztery metody, w tym bezpłatny odbiór osobisty.
 Ustawiono darmową dostawę powyżej 2000 zł brutto po rabatach, bez dostawy,
 korzystając z natywnego progu włącznie `PS_SHIPPING_FREE_PRICE=2000.01` dla PLN.
 Wyłączono darmową dostawę według wagi (`PS_SHIPPING_FREE_WEIGHT=0`).
 Test koszyka potwierdza obie ceny, dostępność przewoźników, uprawnienia płatności
 oraz brak duplikatów po ponownym uruchomieniu. Test granic potwierdza płatne
 1999,99/2000,00 zł i bezpłatne 2000,01 zł dla obu przewoźników, także po rabatach.
-Blokada dostawy powyżej 50 kg nadal jest do wdrożenia.
+Obaj przewoźnicy mają limit 50 kg i są wyłączani poza zakresem `[0; 50.000001)` kg,
+co zachowuje dostępność przy dokładnie 50 kg. Testy potwierdzają granice
+49,999 / 50 / 50,001 / 50,000001 kg, sumowanie wielu produktów i sztuk oraz
+brak wysyłki niezależnie od wartości koszyka. Dostawa kurierska instalatora
+również ma limit 50 kg. Odbiór osobisty nie ma limitu i powyżej 50 kg jest
+jedyną opcją. Test HTTP potwierdza wyłączny odbiór oraz dostępność obu płatności
+po jego wybraniu, także po próbie przesłania wcześniejszego wyboru kuriera.
 
 ## Powtórzenie audytu bieżącej konfiguracji
 

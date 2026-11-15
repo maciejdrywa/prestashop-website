@@ -18,7 +18,7 @@ try {
         ShopInit\verifyProduct($plan, $plan['id'], $categories, $context);
         $saved = new Product($plan['id'], false, null, (int) $context->shop->id);
         $inactive += !$saved->active ? 1 : 0;
-        $missingWeight += $plan['weight'] === null ? 1 : 0;
+        $missingWeight += $plan['weight_origin'] === 'demo' ? 1 : 0;
     }
     if ($all) {
         $query = new DbQuery();
@@ -87,7 +87,7 @@ try {
             }
         }
     }
-    echo 'OK: ' . count($plans) . " products, {$inactive} inactive, {$missingWeight} without source weight; "
+    echo 'OK: ' . count($plans) . " products, {$inactive} inactive, {$missingWeight} with demonstration weights; all variant weight impacts zero; "
         . ($withCombinations ? "{$count} combinations verified" : 'combinations not checked')
         . ". No database changes. Images and stock are not checked at this stage.\n";
 } catch (Throwable $error) {

@@ -69,7 +69,10 @@ try {
         $rejected = true;
     }
     verify($rejected, 'Unsafe short description was accepted');
+    $products[0]['weight'] = null;
+    $products[1]['weight'] = 0;
     $productPlans = ShopInit\productPlans($products, $context);
+    verify($productPlans[0]['weight_origin'] === 'demo' && $productPlans[1]['weight_origin'] === 'demo', 'Missing and zero weights were not planned as demonstration weights');
     $productIds = ShopInit\importProducts($productPlans, $categories, $context);
     verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Product IDs changed on repeat');
     $firstSource = (string) $products[0]['product_id'];
@@ -95,10 +98,32 @@ try {
     verify($saved->description_short === '', 'Old summary was not cleared for a full-only source');
     ShopInit\importProducts($productPlans, $categories, $context);
     $first = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
+    $weightFixtureId = reset($first)[0];
+    $weightFixture = new Combination($weightFixtureId, null, (int) $context->shop->id);
+    $weightFixture->weight = 3.5;
+    verify((bool) $weightFixture->update(), 'Cannot prepare old variant weight fixture');
     verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Reimport after combinations duplicated products');
+    ShopInit\verifyUniformCombinationWeights($firstId, $context);
+    $weightFixture->weight = -0.05;
+    verify((bool) $weightFixture->update(), 'Cannot prepare negative variant weight fixture');
     $legacyId = reset($first)[0];
     verify($db->update('product_attribute', ['reference' => 'legacy-option-reference'], 'id_product_attribute = ' . $legacyId), 'Cannot prepare migration fixture');
     $second = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
+    foreach ($productIds as $id) ShopInit\verifyUniformCombinationWeights($id, $context);
+    // Every variant must contribute exactly the same product weight to a cart.
+    foreach ($first[$firstSource] as $variantId) {
+        $cart = new Cart();
+        $cart->id_shop = (int) $context->shop->id;
+        $cart->id_shop_group = (int) $context->shop->id_shop_group;
+        $cart->id_currency = (int) Configuration::get('PS_CURRENCY_DEFAULT');
+        $cart->id_lang = (int) Configuration::get('PS_LANG_DEFAULT');
+        verify((bool) $cart->add(), 'Cannot create weight test cart');
+        $context->cart = $cart;
+        StockAvailable::setQuantity($firstId, $variantId, 3, (int) $context->shop->id);
+        verify($cart->updateQty(2, $firstId, $variantId) === true, 'Cannot add weight test variant');
+        verify(abs($cart->getTotalWeight() - 2 * (float) $productPlans[0]['weight']) < 0.000001, 'Cart weight differs between variants');
+        verify((bool) $cart->delete(), 'Cannot delete weight test cart');
+    }
     verify($first === $second, 'Combination IDs changed on repeat/migration');
     $expected = array_sum(array_map(fn (array $p): int => count($p['variants']), $products));
     verify(array_sum(array_map('count', $first)) === $expected, 'Combination count mismatch');

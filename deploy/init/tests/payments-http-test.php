@@ -1,9 +1,10 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__.'/../lib/payments.php';
+require_once __DIR__.'/../lib/carriers.php';
 
 $customer=null;
 $address=null;
+$heavyProduct=null;
 $exitCode=0;
 try {
     $context=ShopInit\boot();
@@ -53,7 +54,7 @@ try {
         if($data!==null) curl_setopt($curl,CURLOPT_POSTFIELDS,http_build_query($data));
         else curl_setopt($curl,CURLOPT_HTTPGET,true);
         $body=curl_exec($curl);
-        if($body===false || curl_getinfo($curl,CURLINFO_HTTP_CODE)!==200) throw new RuntimeException('Payment checkout HTTP failed.');
+        if($body===false || curl_getinfo($curl,CURLINFO_HTTP_CODE)!==200) throw new RuntimeException('Payment checkout HTTP failed: '.parse_url($url,PHP_URL_PATH).', status '.curl_getinfo($curl,CURLINFO_HTTP_CODE));
         return $body;
     };
     $parse=function(string $html):DOMXPath {
@@ -72,7 +73,10 @@ try {
     $request($orderUrl);
     $shipping=$parse($request($orderUrl,['confirm-addresses'=>1,'id_address_delivery'=>$address->id,
         'id_address_invoice'=>$address->id,'use_same_address'=>1]));
-    $radio=$shipping->query('//input[starts-with(@name,"delivery_option[")]')->item(0);
+    $radio=null;
+    foreach($shipping->query('//input[starts-with(@name,"delivery_option[")]') as $option) {
+        if($option->getAttribute('value')===ShopInit\projectCarrierId('STANDARD',$context).',') $radio=$option;
+    }
     if(!$radio) throw new RuntimeException('No delivery option for the test address.');
     $paymentHtml=$request($orderUrl,[$radio->getAttribute('name')=>$radio->getAttribute('value'),'confirmDeliveryOption'=>1]);
     $payment=$parse($paymentHtml);
@@ -91,6 +95,44 @@ try {
     $cms=new CMS($pageId,(int)Configuration::get('PS_LANG_DEFAULT'),(int)$context->shop->id);
     if(str_contains(strip_tags($cms->content),'Czek (testowy)')) throw new RuntimeException('Removed cheque option remains on the information page.');
     echo "OK: PL/PLN and customer-group/carrier permissions verified; checkout renders only bank transfer and cash on delivery with test instructions. No order submitted.\n";
+    // Add an isolated overweight item to the same cart after a valid delivery
+    // was selected. Above 50 kg only store pickup may remain selectable.
+    $heavyProduct=new Product();
+    $heavyProduct->id_shop_list=[(int)$context->shop->id];
+    foreach(Language::getLanguages(false) as $language) {
+        $heavyProduct->name[(int)$language['id_lang']]='Test limitu dostawy';
+        $heavyProduct->link_rewrite[(int)$language['id_lang']]='test-limitu-dostawy';
+    }
+    $heavyProduct->reference='weight-http-'.bin2hex(random_bytes(6));
+    $heavyProduct->id_category_default=(int)Configuration::get('PS_HOME_CATEGORY');
+    $heavyProduct->price=2001;
+    $heavyProduct->weight=50.001;
+    $heavyProduct->active=true; $heavyProduct->available_for_order=true;
+    $heavyProduct->visibility='none';
+    if(!$heavyProduct->add() || !$heavyProduct->addToCategories([$heavyProduct->id_category_default])) throw new RuntimeException('Cannot create disposable overweight product.');
+    StockAvailable::setQuantity((int)$heavyProduct->id,0,1,(int)$context->shop->id);
+    $heavyPage=$parse($request($context->link->getProductLink((int)$heavyProduct->id)));
+    $token=$heavyPage->evaluate('string(//form[@id="add-to-cart-or-refresh"]//input[@name="token"]/@value)');
+    $response=json_decode($request($context->link->getPageLink('cart',true),['token'=>$token,
+        'id_product'=>$heavyProduct->id,'qty'=>1,'add'=>1,'ajax'=>1,'action'=>'update']),true,512,JSON_THROW_ON_ERROR);
+    if(!empty($response['hasError']) || !empty($response['errors'])) throw new RuntimeException('Cannot add overweight fixture to checkout.');
+    // A cart change invalidates the saved checkout steps; confirm the address again.
+    $request($orderUrl,['confirm-addresses'=>1,'id_address_delivery'=>$address->id,
+        'id_address_invoice'=>$address->id,'use_same_address'=>1]);
+    $blocked=$parse($request($orderUrl,[$radio->getAttribute('name')=>$radio->getAttribute('value'),'confirmDeliveryOption'=>1]));
+    $pickupId=ShopInit\installerCarrierPlans($context)['PICKUP']['id'];
+    $options=$blocked->query('//input[starts-with(@name,"delivery_option[")]');
+    if($options->length!==1 || $options->item(0)->getAttribute('value')!==$pickupId.',') {
+        $values=[]; foreach($options as $option) $values[]=$option->getAttribute('value');
+        throw new RuntimeException('Overweight HTTP checkout must offer only store pickup. Options: '.json_encode($values).'; expected '.$pickupId.',');
+    }
+    $pickup=$options->item(0);
+    $pickupPayment=$parse($request($orderUrl,[$pickup->getAttribute('name')=>$pickup->getAttribute('value'),'confirmDeliveryOption'=>1]));
+    $pickupNames=[];
+    foreach($pickupPayment->query('//input[@name="payment-option"]') as $input) $pickupNames[]=$input->getAttribute('data-module-name');
+    sort($pickupNames);
+    if($pickupNames!==$expected) throw new RuntimeException('Offline payments unavailable after selecting overweight store pickup.');
+    echo "OK: HTTP checkout offers only store pickup above 50 kg, rejects the previous courier and permits both offline payments after pickup selection.\n";
 } catch(Throwable $error) {
     fwrite(STDERR,'TEST FAILED: '.$error->getMessage().PHP_EOL);
     $exitCode=1;
@@ -103,5 +145,6 @@ try {
         if(!$customer->delete()) $exitCode=1;
         echo "CLEANUP: disposable test account, address and carts removed.\n";
     }
+    if($heavyProduct instanceof Product && $heavyProduct->id && !$heavyProduct->delete()) $exitCode=1;
 }
 exit($exitCode);

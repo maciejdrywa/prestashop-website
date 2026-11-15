@@ -15,13 +15,17 @@ try {
         if ($id === null) throw new RuntimeException('Run configure-carriers.php before this test.');
         $expectedIds[] = $id;
     }
+    $projectIds = $expectedIds;
+    $installerPlans = ShopInit\installerCarrierPlans($context);
+    $pickupId = $installerPlans['PICKUP']['id'];
+    $expectedIds = array_merge($expectedIds, array_column(array_filter($installerPlans, fn ($plan): bool => $plan['enabled']), 'id'));
     $active = $db->executeS('SELECT c.id_carrier FROM ' . _DB_PREFIX_ . 'carrier c INNER JOIN '
         . _DB_PREFIX_ . 'carrier_shop s ON s.id_carrier=c.id_carrier WHERE c.active=1 AND c.deleted=0 AND s.id_shop=' . $shopId);
     if ($active === false) throw new RuntimeException('Cannot read active carriers.');
     $activeIds = array_map(fn ($row): int => (int) $row['id_carrier'], $active);
     sort($activeIds); sort($expectedIds);
     if ($activeIds !== $expectedIds || (int) Configuration::get('PS_CARRIER_DEFAULT') !== ShopInit\projectCarrierId('STANDARD', $context)) {
-        throw new RuntimeException('Only InPost and DPD must be active, with InPost as default.');
+        throw new RuntimeException('InPost/DPD, standard delivery and pickup must be active; economy/light disabled; default InPost.');
     }
     $customer = new Customer();
     $customer->firstname = 'Test'; $customer->lastname = 'Progu';
@@ -48,21 +52,42 @@ try {
         ['gross' => '2100.00', 'discount' => '100.00', 'total' => '2000.00', 'free' => false],
         ['gross' => '2100.00', 'discount' => '99.99', 'total' => '2000.01', 'free' => true],
     ];
-    foreach ($cases as $index => $case) {
-        $product = new Product(); $products[] = $product;
-        $product->id_shop_list = [$shopId];
-        $product->reference = 'shipping-test-' . bin2hex(random_bytes(6));
-        foreach (Language::getLanguages(false) as $language) {
-            $product->name[(int) $language['id_lang']] = 'Test progu dostawy';
-            $product->link_rewrite[(int) $language['id_lang']] = 'test-progu-dostawy';
+    foreach (['49.999', '50.000', '50.001', '50.000001'] as $weight) {
+        foreach (['100.00', '2000.01'] as $gross) {
+            $cases[] = ['gross' => $gross, 'discount' => '0.00', 'total' => $gross,
+                'free' => $gross === '2000.01', 'items' => [['weight' => $weight, 'quantity' => 1]],
+                'weight' => $weight, 'blocked' => (float) $weight > 50];
         }
-        $product->id_category_default = (int) Configuration::get('PS_HOME_CATEGORY');
-        $product->price = (float) ShopInit\rounded(bcdiv($case['gross'], '1.23', 12), 6);
-        $product->id_tax_rules_group = ShopInit\taxGroup('23', $context);
-        $product->active = true; $product->visibility = 'none';
-        $product->available_for_order = true; $product->weight = 1;
-        if (!$product->add() || !$product->addToCategories([$product->id_category_default])) throw new RuntimeException('Cannot create isolated test product.');
-        StockAvailable::setQuantity((int) $product->id, 0, 1, $shopId);
+    }
+    $cases[] = ['gross' => '10.00', 'discount' => '0.00', 'total' => '20.00', 'free' => false,
+        'items' => [['weight' => '25', 'quantity' => 2]], 'weight' => '50', 'blocked' => false];
+    $cases[] = ['gross' => '10.00', 'discount' => '0.00', 'total' => '30.00', 'free' => false,
+        'items' => [['weight' => '16.667', 'quantity' => 3]], 'weight' => '50.001', 'blocked' => true];
+    $cases[] = ['gross' => '10.00', 'discount' => '0.00', 'total' => '20.00', 'free' => false,
+        'items' => [['weight' => '25', 'quantity' => 1], ['weight' => '25.001', 'quantity' => 1]],
+        'weight' => '50.001', 'blocked' => true];
+    $cases[] = ['gross' => '2000.01', 'discount' => '0.00', 'total' => '4000.02', 'free' => true,
+        'items' => [['weight' => '25', 'quantity' => 1], ['weight' => '25.001', 'quantity' => 1]],
+        'weight' => '50.001', 'blocked' => true];
+    foreach ($cases as $index => $case) {
+        $cartItems = [];
+        foreach ($case['items'] ?? [['weight' => '1', 'quantity' => 1]] as $item) {
+            $product = new Product(); $products[] = $product;
+            $product->id_shop_list = [$shopId];
+            $product->reference = 'shipping-test-' . bin2hex(random_bytes(6));
+            foreach (Language::getLanguages(false) as $language) {
+                $product->name[(int) $language['id_lang']] = 'Test progu dostawy';
+                $product->link_rewrite[(int) $language['id_lang']] = 'test-progu-dostawy';
+            }
+            $product->id_category_default = (int) Configuration::get('PS_HOME_CATEGORY');
+            $product->price = (float) ShopInit\rounded(bcdiv($case['gross'], '1.23', 12), 6);
+            $product->id_tax_rules_group = ShopInit\taxGroup('23', $context);
+            $product->active = true; $product->visibility = 'none';
+            $product->available_for_order = true; $product->weight = (float) $item['weight'];
+            if (!$product->add() || !$product->addToCategories([$product->id_category_default])) throw new RuntimeException('Cannot create isolated test product.');
+            StockAvailable::setQuantity((int) $product->id, 0, $item['quantity'], $shopId);
+            $cartItems[] = ['id' => (int) $product->id, 'quantity' => $item['quantity']];
+        }
         $cart = new Cart(); $carts[] = $cart;
         $cart->id_shop = $shopId; $cart->id_shop_group = (int) $context->shop->id_shop_group;
         $cart->id_customer = (int) $customer->id;
@@ -72,7 +97,9 @@ try {
         $cart->secure_key = $customer->secure_key;
         if (!$cart->add()) throw new RuntimeException('Cannot create isolated test cart.');
         $context->cart = $cart;
-        if ($cart->updateQty(1, (int) $product->id) !== true) throw new RuntimeException('Cannot add test product to cart.');
+        foreach ($cartItems as $item) {
+            if ($cart->updateQty($item['quantity'], $item['id']) !== true) throw new RuntimeException('Cannot add test product to cart.');
+        }
         if ($case['discount'] !== '0.00') {
             $rule = new CartRule(); $rules[] = $rule;
             $rule->id_shop_list = [$shopId]; $rule->id_customer = (int) $customer->id;
@@ -88,12 +115,28 @@ try {
         }
         $total = $cart->getOrderTotal(true, Cart::BOTH_WITHOUT_SHIPPING, null, null, false);
         if (abs($total - (float) $case['total']) > 0.001) throw new RuntimeException('Unexpected test cart gross total: ' . $total);
+        $weight = $cart->getTotalWeight();
+        if (abs($weight - (float) ($case['weight'] ?? 1)) > 0.0000001) throw new RuntimeException('Unexpected test cart weight: ' . $weight);
+        $deliveryOptions = $cart->getDeliveryOptionList(null, true);
+        if ($case['blocked'] ?? false) {
+            $offeredIds = [];
+            foreach ($deliveryOptions as $options) foreach ($options as $option) {
+                foreach ($option['carrier_list'] as $id => $offered) {
+                    $offeredIds[(int) $id] = true;
+                    if ((float) $offered['price_with_tax'] !== 0.0) throw new RuntimeException('Store pickup must be free.');
+                }
+            }
+            if (array_keys($offeredIds) !== [$pickupId]) throw new RuntimeException('Overweight cart must offer only store pickup: ' . $weight . ' kg, ' . $total . ' PLN.');
+            echo 'PICKUP ONLY OK: ' . $weight . ' kg, ' . $total . " PLN; no courier offered.\n";
+            continue;
+        }
         $offeredIds = [];
-        foreach ($cart->getDeliveryOptionList(null, true) as $options) foreach ($options as $option) {
+        foreach ($deliveryOptions as $options) foreach ($options as $option) {
             foreach ($option['carrier_list'] as $id => $offered) {
                 $offeredIds[(int) $id] = true;
                 $expected = $case['free'] ? 0.0 : ((int) $id === ShopInit\projectCarrierId('STANDARD', $context) ? 15.0 : 20.0);
-                if (abs((float) $offered['price_with_tax'] - $expected) > 0.001) throw new RuntimeException('Wrong fee displayed in delivery option.');
+                if (in_array((int) $id, $projectIds, true) && abs((float) $offered['price_with_tax'] - $expected) > 0.001) throw new RuntimeException('Wrong fee displayed in delivery option.');
+                if ((int) $id === $pickupId && (float) $offered['price_with_tax'] !== 0.0) throw new RuntimeException('Store pickup must be free.');
             }
         }
         $offeredIds = array_keys($offeredIds); sort($offeredIds);
@@ -106,10 +149,10 @@ try {
             $fullTotal = $cart->getOrderTotal(true, Cart::BOTH, null, $id, false);
             if (abs($fullTotal - ($total + $expected)) > 0.001) throw new RuntimeException('Wrong full cart total.');
         }
-        echo 'OK: gross ' . $case['gross'] . ' - discount ' . $case['discount'] . ' = ' . $case['total']
+        echo 'OK: weight ' . $weight . ' kg, gross ' . $case['gross'] . ' - discount ' . $case['discount'] . ' = ' . $case['total']
             . ' PLN; InPost/DPD ' . ($case['free'] ? '0/0' : '15/20') . " PLN.\n";
     }
-    echo "OK: only InPost/DPD offered; exact threshold and discounts verified through native cart totals and delivery options. No order submitted.\n";
+    echo "OK: installer methods restored; courier price/weight boundaries, discounts, quantities and mixed carts verified; above 50 kg only free pickup. No order submitted.\n";
 } catch (Throwable $error) {
     fwrite(STDERR, 'TEST FAILED: ' . $error->getMessage() . PHP_EOL);
     $exitCode = 1;

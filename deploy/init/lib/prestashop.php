@@ -271,6 +271,29 @@ function combinationPlan(array $products, \Context $context): array
     return $result;
 }
 
+function nonzeroCombinationWeights(int $productId, \Context $context): array
+{
+    $rows = \Db::getInstance()->executeS('SELECT pa.id_product_attribute FROM ' . _DB_PREFIX_ . 'product_attribute pa INNER JOIN '
+        . _DB_PREFIX_ . 'product_attribute_shop s ON s.id_product_attribute=pa.id_product_attribute WHERE pa.id_product=' . $productId
+        . ' AND s.id_shop=' . (int) $context->shop->id . ' AND (pa.weight<>0 OR s.weight<>0)', true, false);
+    if ($rows === false) throw new RuntimeException('Cannot read combination weight impacts.');
+    return $rows;
+}
+
+function verifyUniformCombinationWeights(int $productId, \Context $context): void
+{
+    if (nonzeroCombinationWeights($productId, $context) !== []) throw new RuntimeException('Combination weight must have zero impact for product ' . $productId);
+}
+
+function resetCombinationWeights(int $productId, \Context $context): void
+{
+    foreach (nonzeroCombinationWeights($productId, $context) as $row) {
+        $combination = new \Combination((int) $row['id_product_attribute'], null, (int) $context->shop->id);
+        $combination->weight = 0;
+        if (!$combination->update()) throw new RuntimeException('Cannot reset combination weight: ' . $combination->id);
+    }
+}
+
 function importCombinations(array $plans, \Context $context): array
 {
     $result = [];
@@ -317,6 +340,7 @@ function importCombinations(array $plans, \Context $context): array
             $combination->id_product = (int) $product->id;
             $combination->reference = $variant['reference'];
             $combination->price = $variant['modifier'];
+            $combination->weight = 0;
             $combination->minimal_quantity = 1;
             if (!($id === null ? $combination->add() : $combination->update())
                 || !$combination->setAttributes($variant['attribute_ids'])) {
@@ -339,6 +363,7 @@ function importCombinations(array $plans, \Context $context): array
             echo 'PRICE OK: ' . $variant['source_id'] . ", {$gross} PLN gross" . PHP_EOL;
         }
         $result[$entry['source_id']] = $ids;
+        verifyUniformCombinationWeights((int) $product->id, $context);
     }
     return $result;
 }

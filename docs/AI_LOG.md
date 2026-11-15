@@ -36,6 +36,8 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-15, Maciej Drywa | Codex 6.1 sol | W3.6 - formy płatności| Sprawdzono dostawy, progi, statusy i faktury. Dodano przelew tradycyjny i metodę płątności przy odbieorze oraz wyłączono płatność czekiem. Dodano instrukcję testowe przy płatności przelewem. | Przelew miał puste dane, a czek był aktywny; progi dostawy i docelowy scenariusz faktury pozostają do kolejnych etapów. | Test kroku płatności po zalogowaniu, adresie, dostawie i wyborze płatności  |
 | 2026-11-15, Maciej Drywa | Codex 6.1 sol | W3.6 - nowi przewoźnicy | Dodano kuriera standardowego za 15 zł i ekspresowego za 20 zł brutto oraz odtwarzanie przy inicjalizacji i starcie. | brak błędów | Test koszyka: obie opłaty, dostępność, płatności i brak duplikatów po ponowieniu. |
 | 2026-11-15, Maciej Drywa | Codex 6.1 sol | W3.6 - Reguły ceny dostawy | Wyłączono podstawowych przewoźników, ustawiono domyślnie InPost i darmową dostawę od 2000 zł brutto. | Cena zostałą ustawiona na 2000zł, było ją trzeba zmienić na 2000,01 zł | Sprawdzono zmianę darmowej dotawy w koszyku podczas zmiany cen produktów. |
+| 2026-11-15, Maciej Drywa | Codex | W3.6 - Wagi produktów | Import zachowuje dodatnie wagi źródłowe, uzupełnia braki wagami demonstracyjnymi kategorii i zeruje wpływ wariantów. | Brak błędów | Weryfikacaj dodanych wag w panelu administracyjnym |
+| 2026-11-15, Maciej Drywa | Codex | W3.6 - Limit masy dostawy | Ustawiono limit 50 kg na dostawy | Brak błędów | Koszyk powyżej wagi 50 kg dostaje jedynie możliwość odebrania towaru ze sklepu. Sprawdzono zachowanie koszyka ręcznie |
 
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:

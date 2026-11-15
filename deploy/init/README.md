@@ -29,7 +29,7 @@ Komenda wykonuje 16 etapów:
 
 1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
 2. SMTP Mailpit i polskie maile rejestracji, przelewu oraz potwierdzenia zamówienia.
-3. InPost i DPD ze stawkami 15 zł i 20 zł brutto, wyłączenie pozostałych przewoźników i darmowa dostawa powyżej 2000 zł brutto.
+3. InPost i DPD ze stawkami 15 zł i 20 zł brutto, przywrócenie podstawowych metod, darmowa dostawa powyżej 2000 zł brutto i wyłączny odbiór osobisty powyżej 50 kg.
 4. Przelew tradycyjny i pobranie, uprawnienia płatności oraz testowe dane przelewu.
 5. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
 6. Menu górne z kategoriami i podkategoriami ze scrapera.
@@ -434,15 +434,18 @@ Pomija lokalny certyfikat TLS wyłącznie w kliencie testowym.
    tekst źródłowy po polsku. HTML jest normalizowany przez purifier PrestaShop,
    jeżeli ta funkcja jest włączona; zmiany są raportowane, bez nadpisywania JSON.
    Nowe produkty są nieaktywne, ale mają stan STATE_SAVED i są widoczne w panelu.
-   Przy aktualizacji zachowywana jest aktywność, zdjęcia, stany i kombinacje.
+   Przy aktualizacji zachowywana jest aktywność, zdjęcia, stany i kombinacje;
+   wpływ kombinacji na wagę jest zerowany, aby wszystkie warianty ważyły tyle samo.
    Referencja pandomu-ID identyfikuje produkt przy ponownym uruchomieniu.
    Przypisania obejmują wszystkie źródłowe ścieżki i ich przodków; stare przypisania
    są zastępowane. Kategoria domyślna pochodzi z breadcrumbs, jeśli pasuje do
    category_paths; w przeciwnym razie wybierana jest najgłębsza ścieżka
    (przy remisie alfabetycznie). Na końcu każdego zapisu importer sprawdza pola,
    tłumaczenia, przypisania i cenę brutto obliczoną przez PrestaShop.
-   Brak źródłowej wagi jest raportowany; zachowywana jest wcześniejsza wartość
-   albo domyślne 0 nowego produktu. Wymagana jednostka sklepu to kg.
+   Dodatnia waga źródłowa jest zachowywana. Brak lub zero zastępowane są
+   powtarzalną wagą demonstracyjną według kategorii (reguły poniżej).
+   Import zeruje także dotychczasowy wpływ kombinacji na wagę. Wymagana
+   jednostka sklepu to kg. Aktywność, zdjęcia i stany pozostają bez zmian.
    Pole description trafia do opisu na dole strony, a description_short do opisu
    obok ceny. Dwa źródłowe opisy zachowujemy nawet przy identycznej treści.
    Przy jednym opisie scraper zapisuje go jako pełny i pozostawia krótki pusty;
@@ -605,6 +608,41 @@ Ten etap korzysta wyłącznie z lokalnych JPEG-ów przygotowanych przez scraper.
 Nie rozpakowuje ZIP-a i nie pobiera jeszcze Release ani zdjęć ze źródłowych URL-i.
 To osobny etap przygotowania plików, do dodania przed docelową jedną komendą.
 
+## Wagi produktów
+
+`lib/weights.php` jest częścią zwykłego `import-products.php` oraz `init-shop.php`;
+nie wymaga dodatkowej komendy. Dodatnie źródłowe wagi zachowujemy po
+zaokrągleniu do sześciu miejsc. Przy braku lub zerze stosujemy poniższe
+**umowne dane demonstracyjne**, a nie pomiary rzeczywistych produktów.
+Nie zmieniamy źródłowego JSON-a. Plan i log importu wskazują `source` lub `demo`.
+Niepoprawne i ujemne dane kończą import błędem.
+
+| Kategoria | Waga demonstracyjna w kg |
+|---|---:|
+| UCHWYTY MEBLOWE | 0,1 |
+| wizjery | 0,05 |
+| wkładki do drzwi | 0,3 |
+| zamki drzwiowe | 1 |
+| SAMOZAMYKACZE | 2 |
+| Klamki do drzwi | 0,5 |
+| Akcesoria meblowe | 0,2 |
+| Bramy i ogrodzenia | 1,5 |
+| Okucia budowlane | 1 |
+| Okucia drzwiowe | 0,5 |
+| Dom i ogród / Produkty polecane / brak pasującej reguły | 1 |
+
+Wygrywa najgłębsza pasująca kategoria we wszystkich przypisaniach; przy remisie
+decyduje kolejność alfabetyczna nazw. Kolejność rekordów i ścieżek w JSON-ie
+nie zmienia wyniku. Ponowny import odtwarza te same wartości, a pojawienie się
+dodatniej wagi źródłowej zastępuje wcześniejszą wagę demonstracyjną.
+
+W PrestaShop waga kombinacji jest **różnicą względem wagi produktu**, dlatego
+`import-products.php` zeruje stare różnice, a `import-combinations.php` zapisuje
+zawsze wpływ `0`. Wszystkie warianty ważą tyle samo co produkt, również po
+ponownym imporcie. Modyfikatory cen nadal działają niezależnie od wag.
+`check-products.php` sprawdza dodatnią wagę produktu oraz zerowe różnice
+w tabelach kombinacji. Limit dostawy 50 kg odtwarza `configure-carriers.php`.
+
 ## Testy
 
 ### Dwaj nowi przewoźnicy
@@ -629,10 +667,12 @@ przewoźników i rozpoznawać wersje zapisane przez panel administracyjny.
 Skrypt zarządza cennikiem obu własnych przewoźników; ponowienie przywraca go
 do wartości zapisanych w kodzie. Współdzielenie ich między sklepami blokuje zmianę.
 
-Skrypt wyłącza pozostałych aktywnych przewoźników bieżącego sklepu, w tym
-odbiór osobisty instalatora; nie usuwa ich rekordów ani historycznych zamówień.
-Domyślnym przewoźnikiem jest InPost. Współdzielenie przewoźnika przeznaczonego
-do wyłączenia między sklepami blokuje zmianę, ponieważ flaga aktywności jest wspólna.
+Skrypt włącza Odbiór osobisty i Dostawę kurierską instalatora, a wyłącza
+Dostawę ekonomiczną i Dostawę lekkich przesyłek. Zachowuje ich istniejące
+cenniki i zakresy; nie usuwa rekordów ani zamówień. Referencje metod są
+zapamiętywane, aby rozpoznawać późniejsze wersje zapisane w panelu.
+Współdzielenie zarządzanych przewoźników między sklepami blokuje zmianę.
+Domyślnym przewoźnikiem nadal jest InPost.
 
 Darmowa dostawa obowiązuje dla obu przewoźników powyżej 2000,00 zł brutto
 po rabatach, bez kosztu dostawy. Wykorzystujemy natywne obliczenie
@@ -641,18 +681,32 @@ zostanie włączone). PrestaShop porównuje wartość koszyka z progiem włączn
 dlatego `PS_SHIPPING_FREE_PRICE=2000.01` realizuje warunek „powyżej 2000 zł”
 dla PLN z precyzją dwóch miejsc dziesiętnych. `PS_SHIPPING_FREE_WEIGHT=0`
 wyłącza niezależne przyznawanie darmowej dostawy według wagi.
-Blokada dostawy powyżej 50 kg pozostaje do osobnego etapu.
+Obaj przewoźnicy mają `max_weight=50` i `range_behavior=1` (wyłączenie poza
+zakresem). Przedział wagowy to `[0; 50.000001)` kg: PrestaShop wyklucza górną
+granicę, a masa jest przechowywana z dokładnością do sześciu miejsc. Dzięki temu
+dokładnie 50 kg jest dozwolone. Kontrola zakresu dotyczy sumy wag całego koszyka,
+więc powyżej 50 kg nie są oferowani InPost ani DPD. Podstawowa Dostawa kurierska
+również ma `max_weight=50`, przy zachowaniu cennika. Ekonomiczna i lekka są wyłączone.
+Jedynym sposobem powyżej 50 kg jest **bezpłatny odbiór osobisty**, bez limitu masy;
+pozostaje dostępny także przy lżejszych koszykach i przy wartości ponad 2000 zł.
+`PS_SHIPPING_FREE_WEIGHT` pozostaje zerem — nie jest ograniczeniem maksymalnej masy.
 
 Test sprawdza powtarzalność oraz dostępność i rzeczywiste kwoty w koszyku
 silnika PrestaShop. Usuwa tymczasowy koszyk, adres i konto bez składania zamówienia.
-`shipping-threshold-test.php` sprawdza 1999,99 / 2000,00 / 2000,01 zł i dwa
-koszyki po rabacie, zarówno przez koszt dostawy, jak i listę opcji oraz sumę
-zamówienia. Tworzy i usuwa własne produkty, koszyki, rabaty, adres i konto;
+`shipping-threshold-test.php` sprawdza 1999,99 / 2000,00 / 2000,01 zł, rabaty,
+49,999 / 50 / 50,001 / 50,000001 kg, wiele sztuk i różne produkty w jednym koszyku.
+Kontroluje koszt, listę opcji i sumę zamówienia; ciężkie koszyki mają wyłącznie
+odbiór osobisty, także powyżej progu darmowej dostawy. `payments-http-test.php`
+sprawdza przez HTTP zmianę wcześniejszego kuriera na odbiór po dodaniu ciężkiego
+produktu, ponownym potwierdzeniu adresu i próbie przesłania starego wyboru.
+Po wybraniu odbioru dostępne są obie płatności offline. Testy tworzą i usuwają
+własne produkty, koszyki, rabaty, adres i konto;
 nie zmienia cen ani stanów produktów ze scrapera. Nie uruchamiaj równolegle
 z importerami lub innymi testami konfiguracji.
 
 ### Pozostałe testy
 
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/weights-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/source-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/prestashop-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/images-test.php

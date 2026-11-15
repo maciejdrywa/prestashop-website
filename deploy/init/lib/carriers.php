@@ -28,9 +28,38 @@ function projectCarrierId(string $key, \Context $context): ?int
     return uniqueId($query);
 }
 
+function installerCarrierPlans(\Context $context): array
+{
+    $definitions = [
+        'PICKUP' => ['name' => 'Odbiór osobisty', 'legacy' => 'Click and collect', 'enabled' => true],
+        'DEFAULT' => ['name' => 'Dostawa kurierska', 'legacy' => 'My carrier', 'enabled' => true],
+        'ECONOMY' => ['name' => 'Dostawa ekonomiczna', 'legacy' => 'My cheap carrier', 'enabled' => false],
+        'LIGHT' => ['name' => 'Dostawa lekkich przesyłek', 'legacy' => 'My light carrier', 'enabled' => false],
+    ];
+    foreach ($definitions as $key => &$definition) {
+        $id = projectCarrierId('INSTALLER_' . $key, $context);
+        if ($id === null) {
+            $query = new \DbQuery();
+            $query->select('c.id_carrier AS id')->from('carrier', 'c');
+            $query->innerJoin('carrier_shop', 's', 's.id_carrier=c.id_carrier');
+            $query->where('c.deleted=0')->where('s.id_shop=' . (int) $context->shop->id);
+            $query->where("c.name IN ('" . pSQL($definition['name']) . "','" . pSQL($definition['legacy']) . "')");
+            $id = uniqueId($query);
+        }
+        if ($id === null) throw new RuntimeException('Missing installer carrier to restore: ' . $definition['name']);
+        $shops = \Db::getInstance()->executeS('SELECT id_shop FROM ' . _DB_PREFIX_ . 'carrier_shop WHERE id_carrier=' . $id);
+        if ($shops === false || count($shops) !== 1) throw new RuntimeException('Installer carrier is shared between shops: ' . $definition['name']);
+        $definition['id'] = $id;
+        $definition['pickup'] = $key === 'PICKUP';
+    }
+    unset($definition);
+    return $definitions;
+}
+
 function configureProjectCarriers(\Context $context, bool $dryRun = false): void
 {
     priceContext($context);
+    if (strtolower(trim((string) \Configuration::get('PS_WEIGHT_UNIT'))) !== 'kg') throw new RuntimeException('Carrier weight limit requires PS_WEIGHT_UNIT=kg.');
     $inputs = paymentInputs($context);
     $country = new \Country($inputs['country']);
     $zone = new \Zone((int) $country->id_zone);
@@ -50,23 +79,17 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
         echo ($dryRun ? 'PLAN: ' : 'CARRIER: ') . $definition['name'] . ', ' . $definition['gross'] . ' PLN gross, '
             . ($id === null ? 'new carrier' : 'ID ' . $id) . PHP_EOL;
     }
-    $projectIds = array_values(array_filter(array_column($plans, 'id'), fn ($id): bool => $id !== null));
-    $otherCarriers = $db->executeS('SELECT c.id_carrier,c.name FROM ' . _DB_PREFIX_ . 'carrier c INNER JOIN '
-        . _DB_PREFIX_ . 'carrier_shop s ON s.id_carrier=c.id_carrier WHERE c.deleted=0 AND c.active=1 AND s.id_shop=' . $shopId
-        . ($projectIds === [] ? '' : ' AND c.id_carrier NOT IN (' . implode(',', $projectIds) . ')'));
-    if ($otherCarriers === false) throw new RuntimeException('Cannot list carriers to disable.');
-    foreach ($otherCarriers as $row) {
-        $shops = $db->executeS('SELECT id_shop FROM ' . _DB_PREFIX_ . 'carrier_shop WHERE id_carrier=' . (int) $row['id_carrier']);
-        if ($shops === false || count($shops) !== 1) throw new RuntimeException('Cannot disable a carrier shared between shops: ' . $row['name']);
-        echo 'PLAN DISABLE: ' . $row['name'] . ', ID ' . $row['id_carrier'] . PHP_EOL;
+    $installerPlans = installerCarrierPlans($context);
+    foreach ($installerPlans as $plan) {
+        echo ($plan['enabled'] ? 'PLAN ENABLE: ' : 'PLAN DISABLE: ') . $plan['name'] . PHP_EOL;
     }
-    echo "PLAN: only InPost/DPD active, default InPost; free shipping from 2000.01 PLN gross after discounts, excluding shipping.\n";
+    echo "PLAN: InPost, DPD, standard delivery and pickup active; economy/light disabled; above 50 kg only free store pickup.\n";
     if ($dryRun) {
         echo "OK: dry run; no changes.\n";
         return;
     }
     echo "[1/3] Creating or updating two project carriers...\n";
-    transaction(function () use ($context, $inputs, $zone, $taxGroup, $shopId, $db, $plans, $otherCarriers): void {
+    transaction(function () use ($context, $inputs, $zone, $taxGroup, $shopId, $db, $plans, $installerPlans): void {
         foreach ($plans as $key => $plan) {
             $carrier = new \Carrier($plan['id']);
             $carrier->id_shop_list = [$shopId];
@@ -79,9 +102,8 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             $carrier->shipping_external = false;
             $carrier->shipping_handling = false;
             $carrier->shipping_method = \Carrier::SHIPPING_METHOD_WEIGHT;
-            // Only the base tariff is implemented here. The 50 kg rule is a later stage.
-            $carrier->range_behavior = false;
-            $carrier->max_weight = 0;
+            $carrier->range_behavior = true;
+            $carrier->max_weight = 50;
             $carrier->max_width = $carrier->max_height = $carrier->max_depth = 0;
             $carrier->grade = $plan['grade'];
             foreach (\Language::getLanguages(false) as $language) $carrier->delay[(int) $language['id_lang']] = $plan['delay'];
@@ -102,7 +124,9 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             $range = new \RangeWeight(uniqueId($query));
             $range->id_carrier = $id;
             $range->delimiter1 = 0;
-            $range->delimiter2 = 1000000;
+            // Ranges use an exclusive upper bound; weights are stored to 6 decimals.
+            // Together with max_weight=50 this permits exactly 50 kg, never more.
+            $range->delimiter2 = '50.000001';
             if (!$range->save()) throw new RuntimeException('Cannot save carrier tariff range.');
             if (!$carrier->deleteDeliveryPrice('range_weight') || !$carrier->addDeliveryPrice([[
                 'id_carrier' => $id, 'id_range_price' => null, 'id_range_weight' => (int) $range->id,
@@ -110,12 +134,27 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             ]])) throw new RuntimeException('Cannot save carrier delivery fee.');
             echo ($plan['id'] === null ? 'CREATED: ' : 'UPDATED: ') . $plan['name'] . ', ID ' . $id . ', net ' . $plan['net'] . " PLN, VAT 23%\n";
         }
-        foreach ($otherCarriers as $row) {
-            $carrier = new \Carrier((int) $row['id_carrier']);
+        foreach ($installerPlans as $key => $plan) {
+            $carrier = new \Carrier($plan['id']);
             $carrier->id_shop_list = [$shopId];
-            $carrier->active = false;
-            if (!$carrier->update()) throw new RuntimeException('Cannot disable carrier: ' . $row['name']);
-            echo 'DISABLED: ' . $carrier->name . ', ID ' . $carrier->id . PHP_EOL;
+            $carrier->name = $plan['name'];
+            $carrier->active = $plan['enabled'];
+            $carrier->max_weight = $plan['pickup'] ? 0 : 50;
+            // Keep installer tariffs/ranges, including their original fallback behavior.
+            // Native max_weight checks the sum of all products, before offering delivery.
+            if ($plan['pickup']) {
+                $carrier->is_free = true;
+                $carrier->range_behavior = false;
+                $carrier->shipping_handling = false;
+                $carrier->max_width = $carrier->max_height = $carrier->max_depth = 0;
+            }
+            foreach (\Language::getLanguages(false) as $language) {
+                if ($plan['pickup']) $carrier->delay[(int) $language['id_lang']] = 'Odbiór w sklepie';
+            }
+            if (!$carrier->update() || !$carrier->setGroups($inputs['groups'])) throw new RuntimeException('Cannot restore installer carrier: ' . $plan['name']);
+            if (!$carrier->getZone((int) $zone->id) && !$carrier->addZone((int) $zone->id)) throw new RuntimeException('Cannot restore carrier zone.');
+            contentSetting('SHOP_INIT_CARRIER_INSTALLER_' . $key . '_REF', (int) $carrier->id_reference, $context);
+            echo ($plan['enabled'] ? 'ENABLED: ' : 'DISABLED: ') . $carrier->name . ', ID ' . $carrier->id . ', max weight: ' . $carrier->max_weight . PHP_EOL;
         }
         contentSetting('PS_CARRIER_DEFAULT', projectCarrierId('STANDARD', $context), $context);
         // The core compares >=. PLN has two decimals, so >2000 means >=2000.01.
@@ -142,6 +181,11 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
     $address->id_country = (int) $country->id;
     foreach ($plans as $key => $plan) {
         $carrier = new \Carrier(projectCarrierId($key, $context));
+        if ((float) $carrier->max_weight !== 50.0 || !$carrier->range_behavior
+            || !\Carrier::checkDeliveryPriceByWeight((int) $carrier->id, 50, (int) $zone->id)
+            || \Carrier::checkDeliveryPriceByWeight((int) $carrier->id, 50.000001, (int) $zone->id)) {
+            throw new RuntimeException('Carrier weight limit/range mismatch: ' . $plan['name']);
+        }
         $net = $carrier->getDeliveryPriceByWeight(1, (int) $zone->id);
         $gross = \Tools::ps_round((float) $net * (1 + $carrier->getTaxesRate($address) / 100), 2);
         if ($net === false || abs($gross - (float) $plan['gross']) > 0.001) throw new RuntimeException('Gross delivery tariff mismatch: ' . $plan['name']);
@@ -153,7 +197,8 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
     if ($active === false) throw new RuntimeException('Cannot verify active delivery carriers.');
     $actualIds = array_map(fn ($row): int => (int) $row['id_carrier'], $active);
     $expectedIds = array_map(fn ($key): int => (int) projectCarrierId($key, $context), array_keys($plans));
+    $expectedIds = array_merge($expectedIds, array_column(array_filter($installerPlans, fn ($plan): bool => $plan['enabled']), 'id'));
     sort($actualIds); sort($expectedIds);
-    if ($actualIds !== $expectedIds) throw new RuntimeException('Active carriers differ from InPost/DPD.');
-    echo "OK: only InPost and DPD active; free shipping above 2000.00 PLN gross (native threshold 2000.01).\n";
+    if ($actualIds !== $expectedIds) throw new RuntimeException('Active carriers differ from project and restored installer carriers; review unknown active carriers.');
+    echo "OK: InPost, DPD, standard delivery and pickup active; economy/light disabled; above 50 kg only free store pickup.\n";
 }
