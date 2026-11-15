@@ -24,7 +24,8 @@ try {
             unset($row);
         }
         $data['other_carriers'] = $db->executeS('SELECT * FROM ' . _DB_PREFIX_ . 'carrier WHERE id_carrier NOT IN (' . implode(',', $ids) . ') ORDER BY id_carrier');
-        foreach (['PS_SHIPPING_HANDLING', 'PS_SHIPPING_FREE_PRICE', 'PS_SHIPPING_FREE_WEIGHT', 'PS_CARRIER_DEFAULT'] as $key) $data[$key] = Configuration::get($key);
+        // Configuration caches freshly written integers as int; database reads are strings.
+        foreach (['PS_SHIPPING_HANDLING', 'PS_SHIPPING_FREE_PRICE', 'PS_SHIPPING_FREE_WEIGHT', 'PS_CARRIER_DEFAULT'] as $key) $data[$key] = (string) Configuration::get($key);
         return $data;
     };
     $before = $snapshot();

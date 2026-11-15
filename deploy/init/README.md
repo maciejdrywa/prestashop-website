@@ -29,7 +29,7 @@ Komenda wykonuje 16 etapów:
 
 1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
 2. SMTP Mailpit i polskie maile rejestracji, przelewu oraz potwierdzenia zamówienia.
-3. Dwaj nowi przewoźnicy ze stawkami 15 zł i 20 zł brutto.
+3. InPost i DPD ze stawkami 15 zł i 20 zł brutto, wyłączenie pozostałych przewoźników i darmowa dostawa powyżej 2000 zł brutto.
 4. Przelew tradycyjny i pobranie, uprawnienia płatności oraz testowe dane przelewu.
 5. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
 6. Menu górne z kategoriami i podkategoriami ze scrapera.
@@ -619,6 +619,7 @@ Nie są zintegrowani z rzeczywistymi firmami kurierskimi.
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-carriers.php --dry-run
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-carriers.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/carriers-test.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/shipping-threshold-test.php
 
 Konfiguracja jest częścią `init-shop.php` i hooka startowego
 `24-configure-carriers.sh`, przed konfiguracją płatności. Po zmianie Dockerfile
@@ -628,11 +629,27 @@ przewoźników i rozpoznawać wersje zapisane przez panel administracyjny.
 Skrypt zarządza cennikiem obu własnych przewoźników; ponowienie przywraca go
 do wartości zapisanych w kodzie. Współdzielenie ich między sklepami blokuje zmianę.
 
-Na tym etapie dotychczasowi przewoźnicy i domyślny przewoźnik pozostają bez zmian.
-Wyłączenie starych dostaw, darmowa dostawa powyżej 2000 zł i blokada powyżej
-50 kg są osobnymi, jeszcze niewdrożonymi regułami. Ten skrypt nie ustawia tych progów.
+Skrypt wyłącza pozostałych aktywnych przewoźników bieżącego sklepu, w tym
+odbiór osobisty instalatora; nie usuwa ich rekordów ani historycznych zamówień.
+Domyślnym przewoźnikiem jest InPost. Współdzielenie przewoźnika przeznaczonego
+do wyłączenia między sklepami blokuje zmianę, ponieważ flaga aktywności jest wspólna.
+
+Darmowa dostawa obowiązuje dla obu przewoźników powyżej 2000,00 zł brutto
+po rabatach, bez kosztu dostawy. Wykorzystujemy natywne obliczenie
+`Cart::BOTH_WITHOUT_SHIPPING` (obejmuje także płatne pakowanie prezentowe, jeśli
+zostanie włączone). PrestaShop porównuje wartość koszyka z progiem włącznie,
+dlatego `PS_SHIPPING_FREE_PRICE=2000.01` realizuje warunek „powyżej 2000 zł”
+dla PLN z precyzją dwóch miejsc dziesiętnych. `PS_SHIPPING_FREE_WEIGHT=0`
+wyłącza niezależne przyznawanie darmowej dostawy według wagi.
+Blokada dostawy powyżej 50 kg pozostaje do osobnego etapu.
+
 Test sprawdza powtarzalność oraz dostępność i rzeczywiste kwoty w koszyku
 silnika PrestaShop. Usuwa tymczasowy koszyk, adres i konto bez składania zamówienia.
+`shipping-threshold-test.php` sprawdza 1999,99 / 2000,00 / 2000,01 zł i dwa
+koszyki po rabacie, zarówno przez koszt dostawy, jak i listę opcji oraz sumę
+zamówienia. Tworzy i usuwa własne produkty, koszyki, rabaty, adres i konto;
+nie zmienia cen ani stanów produktów ze scrapera. Nie uruchamiaj równolegle
+z importerami lub innymi testami konfiguracji.
 
 ### Pozostałe testy
 

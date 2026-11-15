@@ -66,18 +66,23 @@ po przejściu logowania, adresu i dostawy, bez zatwierdzania zamówienia.
 Dane testowe są sprzątane przez test. Nie testowano w tym punkcie zapisu
 zamówienia, zmiany jego statusu ani faktury — to dalsza część zadania.
 
-Po utworzeniu nowych przewoźników ich referencje należy ponownie uwzględnić
-w uprawnieniach płatności przez `configure-payments.php`; przyszły etap dostawy
-powinien wykonać tę synchronizację po utworzeniu przewoźników.
+Referencje nowych przewoźników synchronizuje `configure-carriers.php`,
+a kolejny etap `configure-payments.php` odtwarza komplet uprawnień płatności.
 
 ## Dodanie dwóch nowych przewoźników
 
 Dodano osobne rekordy „InPost” (15,00 zł brutto) i „DPD”
 (20,00 zł brutto), z VAT 23%, bez opłaty manipulacyjnej i bez integracji z operatorem.
 Konfigurację odtwarza `configure-carriers.php`, `init-shop.php` i hook startowy 24.
-Dotychczasowi przewoźnicy, domyślny przewoźnik i globalne progi pozostają bez zmian.
+Pozostawiono aktywne tylko InPost i DPD; wyłączono przewoźników instalatora,
+a InPost ustawiono jako domyślnego. Rekordy starych przewoźników nie są usuwane.
+Ustawiono darmową dostawę powyżej 2000 zł brutto po rabatach, bez dostawy,
+korzystając z natywnego progu włącznie `PS_SHIPPING_FREE_PRICE=2000.01` dla PLN.
+Wyłączono darmową dostawę według wagi (`PS_SHIPPING_FREE_WEIGHT=0`).
 Test koszyka potwierdza obie ceny, dostępność przewoźników, uprawnienia płatności
-oraz brak duplikatów po ponownym uruchomieniu. Reguły 2000 zł i 50 kg nadal są do wdrożenia.
+oraz brak duplikatów po ponownym uruchomieniu. Test granic potwierdza płatne
+1999,99/2000,00 zł i bezpłatne 2000,01 zł dla obu przewoźników, także po rabatach.
+Blokada dostawy powyżej 50 kg nadal jest do wdrożenia.
 
 ## Powtórzenie audytu bieżącej konfiguracji
 

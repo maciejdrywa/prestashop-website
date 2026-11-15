@@ -36,6 +36,7 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
     $zone = new \Zone((int) $country->id_zone);
     if (!\Validate::isLoadedObject($zone) || !$zone->active) throw new RuntimeException('The Polish delivery zone must be active.');
     $taxGroup = taxGroup('23', $context);
+    if ((int) $context->currency->precision !== 2) throw new RuntimeException('Shipping threshold requires PLN precision of two decimal places.');
     $shopId = (int) $context->shop->id;
     $db = \Db::getInstance();
     $plans = [];
@@ -49,12 +50,23 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
         echo ($dryRun ? 'PLAN: ' : 'CARRIER: ') . $definition['name'] . ', ' . $definition['gross'] . ' PLN gross, '
             . ($id === null ? 'new carrier' : 'ID ' . $id) . PHP_EOL;
     }
+    $projectIds = array_values(array_filter(array_column($plans, 'id'), fn ($id): bool => $id !== null));
+    $otherCarriers = $db->executeS('SELECT c.id_carrier,c.name FROM ' . _DB_PREFIX_ . 'carrier c INNER JOIN '
+        . _DB_PREFIX_ . 'carrier_shop s ON s.id_carrier=c.id_carrier WHERE c.deleted=0 AND c.active=1 AND s.id_shop=' . $shopId
+        . ($projectIds === [] ? '' : ' AND c.id_carrier NOT IN (' . implode(',', $projectIds) . ')'));
+    if ($otherCarriers === false) throw new RuntimeException('Cannot list carriers to disable.');
+    foreach ($otherCarriers as $row) {
+        $shops = $db->executeS('SELECT id_shop FROM ' . _DB_PREFIX_ . 'carrier_shop WHERE id_carrier=' . (int) $row['id_carrier']);
+        if ($shops === false || count($shops) !== 1) throw new RuntimeException('Cannot disable a carrier shared between shops: ' . $row['name']);
+        echo 'PLAN DISABLE: ' . $row['name'] . ', ID ' . $row['id_carrier'] . PHP_EOL;
+    }
+    echo "PLAN: only InPost/DPD active, default InPost; free shipping from 2000.01 PLN gross after discounts, excluding shipping.\n";
     if ($dryRun) {
         echo "OK: dry run; no changes.\n";
         return;
     }
     echo "[1/3] Creating or updating two project carriers...\n";
-    transaction(function () use ($context, $inputs, $zone, $taxGroup, $shopId, $db, $plans): void {
+    transaction(function () use ($context, $inputs, $zone, $taxGroup, $shopId, $db, $plans, $otherCarriers): void {
         foreach ($plans as $key => $plan) {
             $carrier = new \Carrier($plan['id']);
             $carrier->id_shop_list = [$shopId];
@@ -98,6 +110,19 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             ]])) throw new RuntimeException('Cannot save carrier delivery fee.');
             echo ($plan['id'] === null ? 'CREATED: ' : 'UPDATED: ') . $plan['name'] . ', ID ' . $id . ', net ' . $plan['net'] . " PLN, VAT 23%\n";
         }
+        foreach ($otherCarriers as $row) {
+            $carrier = new \Carrier((int) $row['id_carrier']);
+            $carrier->id_shop_list = [$shopId];
+            $carrier->active = false;
+            if (!$carrier->update()) throw new RuntimeException('Cannot disable carrier: ' . $row['name']);
+            echo 'DISABLED: ' . $carrier->name . ', ID ' . $carrier->id . PHP_EOL;
+        }
+        contentSetting('PS_CARRIER_DEFAULT', projectCarrierId('STANDARD', $context), $context);
+        // The core compares >=. PLN has two decimals, so >2000 means >=2000.01.
+        // Keep the native cart calculation (gross after discounts, without shipping).
+        contentSetting('PS_SHIPPING_FREE_PRICE', '2000.01', $context);
+        // Weight must not grant free shipping independently of the price threshold.
+        contentSetting('PS_SHIPPING_FREE_WEIGHT', 0, $context);
     });
     echo "[2/3] Synchronizing offline payment permissions for carrier references...\n";
     transaction(function () use ($context, $db, $shopId): void {
@@ -123,5 +148,12 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
         echo 'PRICE OK: ' . $carrier->name . ', ' . number_format($gross, 2, '.', '') . " PLN gross\n";
     }
     \Tools::clearSmartyCache();
-    echo "OK: two project carriers configured. Existing carriers and global shipping thresholds were preserved.\n";
+    $active = $db->executeS('SELECT c.id_carrier FROM ' . _DB_PREFIX_ . 'carrier c INNER JOIN '
+        . _DB_PREFIX_ . 'carrier_shop s ON s.id_carrier=c.id_carrier WHERE c.deleted=0 AND c.active=1 AND s.id_shop=' . $shopId);
+    if ($active === false) throw new RuntimeException('Cannot verify active delivery carriers.');
+    $actualIds = array_map(fn ($row): int => (int) $row['id_carrier'], $active);
+    $expectedIds = array_map(fn ($key): int => (int) projectCarrierId($key, $context), array_keys($plans));
+    sort($actualIds); sort($expectedIds);
+    if ($actualIds !== $expectedIds) throw new RuntimeException('Active carriers differ from InPost/DPD.');
+    echo "OK: only InPost and DPD active; free shipping above 2000.00 PLN gross (native threshold 2000.01).\n";
 }
