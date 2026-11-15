@@ -70,7 +70,16 @@ Po utworzeniu nowych przewoźników ich referencje należy ponownie uwzględnić
 w uprawnieniach płatności przez `configure-payments.php`; przyszły etap dostawy
 powinien wykonać tę synchronizację po utworzeniu przewoźników.
 
-## Powtórzenie audytu
+## Dodanie dwóch nowych przewoźników
+
+Dodano osobne rekordy „InPost” (15,00 zł brutto) i „DPD”
+(20,00 zł brutto), z VAT 23%, bez opłaty manipulacyjnej i bez integracji z operatorem.
+Konfigurację odtwarza `configure-carriers.php`, `init-shop.php` i hook startowy 24.
+Dotychczasowi przewoźnicy, domyślny przewoźnik i globalne progi pozostają bez zmian.
+Test koszyka potwierdza obie ceny, dostępność przewoźników, uprawnienia płatności
+oraz brak duplikatów po ponownym uruchomieniu. Reguły 2000 zł i 50 kg nadal są do wdrożenia.
+
+## Powtórzenie audytu bieżącej konfiguracji
 
 Z katalogu projektu:
 

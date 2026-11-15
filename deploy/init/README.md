@@ -25,23 +25,24 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 15 etapów:
+Komenda wykonuje 16 etapów:
 
 1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
 2. SMTP Mailpit i polskie maile rejestracji, przelewu oraz potwierdzenia zamówienia.
-3. Przelew tradycyjny i pobranie, uprawnienia płatności oraz testowe dane przelewu.
-4. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
-5. Menu górne z kategoriami i podkategoriami ze scrapera.
-6. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
-7. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
-8. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
-9. Grupy i wartości atrybutów.
-10. Kombinacje i modyfikatory cen.
-11. Galerie, okładki i miniatury z lokalnych plików.
-12. Kontrola produktów i kombinacji.
-13. Kontrola galerii.
-14. Stany 0–10 i aktywacja.
-15. Końcowa kontrola stanów, dostępności i aktywacji.
+3. Dwaj nowi przewoźnicy ze stawkami 15 zł i 20 zł brutto.
+4. Przelew tradycyjny i pobranie, uprawnienia płatności oraz testowe dane przelewu.
+5. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
+6. Menu górne z kategoriami i podkategoriami ze scrapera.
+7. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
+8. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
+9. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
+10. Grupy i wartości atrybutów.
+11. Kombinacje i modyfikatory cen.
+12. Galerie, okładki i miniatury z lokalnych plików.
+13. Kontrola produktów i kombinacji.
+14. Kontrola galerii.
+15. Stany 0–10 i aktywacja.
+16. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -605,6 +606,35 @@ Nie rozpakowuje ZIP-a i nie pobiera jeszcze Release ani zdjęć ze źródłowych
 To osobny etap przygotowania plików, do dodania przed docelową jedną komendą.
 
 ## Testy
+
+### Dwaj nowi przewoźnicy
+
+`configure-carriers.php` tworzy przewoźników InPost (15,00 zł brutto) i DPD
+(20,00 zł brutto). VAT wynosi 23%, cennik przechowuje kwoty netto.
+Nie dolicza globalnej opłaty manipulacyjnej. Przewoźnicy obsługują strefę,
+do której należy Polska (strefy PrestaShop mogą obejmować też inne kraje),
+oraz standardowe grupy klientów; mają uprawnienia do przelewu i pobrania.
+Nie są zintegrowani z rzeczywistymi firmami kurierskimi.
+
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-carriers.php --dry-run
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-carriers.php
+    docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/carriers-test.php
+
+Konfiguracja jest częścią `init-shop.php` i hooka startowego
+`24-configure-carriers.sh`, przed konfiguracją płatności. Po zmianie Dockerfile
+należy przebudować obraz: `docker compose --env-file .env -f deploy/compose.yaml up -d --build shop`.
+Mapowanie po `id_reference` pozwala ponawiać konfigurację bez duplikowania
+przewoźników i rozpoznawać wersje zapisane przez panel administracyjny.
+Skrypt zarządza cennikiem obu własnych przewoźników; ponowienie przywraca go
+do wartości zapisanych w kodzie. Współdzielenie ich między sklepami blokuje zmianę.
+
+Na tym etapie dotychczasowi przewoźnicy i domyślny przewoźnik pozostają bez zmian.
+Wyłączenie starych dostaw, darmowa dostawa powyżej 2000 zł i blokada powyżej
+50 kg są osobnymi, jeszcze niewdrożonymi regułami. Ten skrypt nie ustawia tych progów.
+Test sprawdza powtarzalność oraz dostępność i rzeczywiste kwoty w koszyku
+silnika PrestaShop. Usuwa tymczasowy koszyk, adres i konto bez składania zamówienia.
+
+### Pozostałe testy
 
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/source-test.php
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/prestashop-test.php

@@ -46,6 +46,8 @@ try {
     array_pop($fixture);
     initRejects(fn () => ShopInit\initializationCategoryCoverage($fixture));
     $stages = ShopInit\initializationStages();
+    initTest(array_search('configure-carriers.php', array_column($stages, 'script'), true) < array_search('configure-payments.php', array_column($stages, 'script'), true), 'Project carriers must precede payment permission synchronization');
+    initTest(in_array('configure-carriers.php', array_column($stages, 'script'), true), 'Project carrier configuration is missing');
     initTest(in_array('configure-mail.php', array_column($stages,'script'), true), 'Polish email configuration is missing');
     initTest(in_array('configure-payments.php', array_column($stages,'script'), true), 'Offline payment configuration is missing');
     $calls = [];

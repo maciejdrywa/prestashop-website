@@ -114,6 +114,7 @@ function initializationStages(): array
     return [
         ['name' => 'Shop name, Polish delivery and demo cleanup', 'script' => 'configure-storefront.php', 'args' => []],
         ['name' => 'Polish transactional emails and local SMTP', 'script' => 'configure-mail.php', 'args' => []],
+        ['name' => 'Two project carriers and delivery tariffs', 'script' => 'configure-carriers.php', 'args' => []],
         ['name' => 'Offline bank transfer and cash on delivery', 'script' => 'configure-payments.php', 'args' => []],
         ['name' => 'Categories and products', 'script' => 'import-products.php', 'args' => ['--all']],
         ['name' => 'Source category navigation', 'script' => 'configure-menu.php', 'args' => []],
