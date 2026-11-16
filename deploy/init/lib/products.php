@@ -5,6 +5,7 @@ namespace ShopInit;
 use RuntimeException;
 
 require_once __DIR__ . '/prestashop.php';
+require_once __DIR__ . '/weights.php';
 
 function productId(string $reference, \Context $context): ?int
 {
@@ -76,8 +77,7 @@ function productPlans(array $products, \Context $context): array
             $description = \Tools::purifyHTML($description);
             $shortDescription = \Tools::purifyHTML($shortDescription);
         }
-        $weight = ($source['weight'] ?? null) === null ? null
-            : rounded(decimal($source['weight'], "product {$sourceId} weight"), 6);
+        $weightPlan = productWeightPlan($source);
         $price = pricePlan($source);
         $taxes[$price['vat']] ??= taxGroup($price['vat'], $context);
         $paths = $source['category_paths'];
@@ -104,7 +104,7 @@ function productPlans(array $products, \Context $context): array
             'name' => $source['name'], 'description' => $description,
             'description_short' => $shortDescription,
             'html_normalized' => $description !== $source['description'] || $shortDescription !== $source['description_short'],
-            'weight' => $weight, 'price' => $price, 'tax_group' => $taxes[$price['vat']],
+            ...$weightPlan, 'price' => $price, 'tax_group' => $taxes[$price['vat']],
             'paths' => $paths, 'primary' => $primary, 'slug' => $slug,
             'type' => $source['variants'] === [] ? 'standard' : 'combinations',
         ];
@@ -136,12 +136,13 @@ function verifyProduct(array $plan, int $id, array $categories, \Context $contex
     $saved = new \Product($id, false, null, (int) $context->shop->id);
     if (!\Validate::isLoadedObject($saved) || $saved->reference !== $plan['reference']
         || rounded(decimal($saved->price, 'saved net'), 6) !== $plan['price']['net']
-        || ($plan['weight'] !== null && rounded(decimal($saved->weight, 'saved weight'), 6) !== $plan['weight'])
+        || rounded(decimal($saved->weight, 'saved weight'), 6) !== $plan['weight']
         || (int) $saved->id_tax_rules_group !== $plan['tax_group']
         || $saved->product_type !== $plan['type']
         || (int) $saved->state !== \Product::STATE_SAVED) {
         throw new RuntimeException('Saved product data mismatch: ' . $plan['source_id']);
     }
+    verifyUniformCombinationWeights($id, $context);
     foreach (\Language::getLanguages(false) as $language) {
         $languageId = (int) $language['id_lang'];
         if (($saved->name[$languageId] ?? null) !== $plan['name']
@@ -185,9 +186,7 @@ function importProducts(array $plans, array $categories, \Context $context): arr
         $product->state = \Product::STATE_SAVED;
         $product->product_type = $plan['type'];
         $product->price = $plan['price']['net'];
-        if ($plan['weight'] !== null) {
-            $product->weight = $plan['weight'];
-        }
+        $product->weight = $plan['weight'];
         $product->id_tax_rules_group = $plan['tax_group'];
         $product->id_category_default = $categories[json_encode($plan['primary'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
         foreach (\Language::getLanguages(false) as $language) {
@@ -203,16 +202,18 @@ function importProducts(array $plans, array $categories, \Context $context): arr
         }
         $id === null ? $created++ : $updated++;
         $ids[$plan['source_id']] = (int) $product->id;
+        resetCombinationWeights((int) $product->id, $context);
         verifyProduct($plan, (int) $product->id, $categories, $context);
         echo '[' . ($index + 1) . '/' . count($plans) . '] ' . ($id === null ? 'CREATED' : 'UPDATED')
             . ': ' . $plan['reference'] . ', ID: ' . $product->id
             . ', gross: ' . $plan['price']['gross'] . ' PLN, categories: '
-            . count(productCategoryIds($plan, $categories)) . PHP_EOL;
+            . count(productCategoryIds($plan, $categories))
+            . ', weight: ' . $plan['weight'] . ' kg (' . $plan['weight_origin'] . ')' . PHP_EOL;
         if ($plan['html_normalized']) {
             echo 'HTML NORMALIZED: ' . $plan['reference'] . ' (PrestaShop purifier)' . PHP_EOL;
         }
-        if ($plan['weight'] === null) {
-            echo 'WARNING: ' . $plan['reference'] . ' has no source weight; preserving existing/default weight.' . PHP_EOL;
+        if ($plan['weight_origin'] === 'demo') {
+            echo 'DEMO WEIGHT: ' . $plan['reference'] . ', rule: ' . $plan['weight_rule'] . PHP_EOL;
         }
     }
     echo "SUMMARY: {$created} created, {$updated} updated; all base prices and fields verified.\n";

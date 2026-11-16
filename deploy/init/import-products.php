@@ -8,14 +8,15 @@ try {
     $plans = ShopInit\productPlans($products, $context);
     $categoryPlan = ShopInit\categoryPlan($products, $all);
     echo '[2/4] Ready: ' . count($plans) . ' products, ' . count($categoryPlan) . " category nodes.\n";
-    $missingWeight = count(array_filter($plans, fn (array $p): bool => $p['weight'] === null));
+    $demoWeight = count(array_filter($plans, fn (array $p): bool => $p['weight_origin'] === 'demo'));
     $normalizedHtml = count(array_filter($plans, fn (array $p): bool => $p['html_normalized']));
-    echo "SOURCE NOTES: {$missingWeight} missing weights; {$normalizedHtml} descriptions normalized by PrestaShop purifier.\n";
+    echo "SOURCE NOTES: {$demoWeight} demonstration weights for missing/zero source weights; {$normalizedHtml} descriptions normalized by PrestaShop purifier.\n";
     if ($dryRun) {
         foreach ($plans as $plan) {
             echo ($plan['id'] === null ? 'CREATE' : 'UPDATE') . ': ' . $plan['reference']
                 . ', net: ' . $plan['price']['net'] . ', gross: ' . $plan['price']['gross']
-                . ', VAT: ' . $plan['price']['vat'] . '%, default: ' . implode(' > ', $plan['primary']) . PHP_EOL;
+                . ', VAT: ' . $plan['price']['vat'] . '%, default: ' . implode(' > ', $plan['primary'])
+                . ', weight: ' . $plan['weight'] . ' kg (' . $plan['weight_origin'] . ')' . PHP_EOL;
         }
         echo "OK: dry run; no database changes.\n";
         exit(0);

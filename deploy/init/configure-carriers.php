@@ -1,0 +1,12 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/lib/carriers.php';
+
+try {
+    $options = array_slice($argv, 1);
+    if ($options !== [] && $options !== ['--dry-run']) throw new RuntimeException('Usage: php configure-carriers.php [--dry-run]');
+    ShopInit\configureProjectCarriers(ShopInit\boot(), $options === ['--dry-run']);
+} catch (Throwable $error) {
+    fwrite(STDERR, 'ERROR: carrier configuration failed: ' . $error->getMessage() . ' Correct the cause and rerun.' . PHP_EOL);
+    exit(1);
+}
