@@ -7,6 +7,7 @@ COPY config/configure-mail.sh /tmp/init-scripts/10-configure-mail.sh
 COPY config/configure-storefront.sh /tmp/init-scripts/20-configure-storefront.sh
 COPY config/configure-carriers.sh /tmp/init-scripts/24-configure-carriers.sh
 COPY config/configure-payments.sh /tmp/init-scripts/25-configure-payments.sh
+COPY config/configure-orders.sh /tmp/init-scripts/26-configure-orders.sh
 COPY config/configure-menu.sh /tmp/init-scripts/30-configure-menu.sh
 COPY config/configure-content.sh /tmp/init-scripts/40-configure-content.sh
 COPY config/configure-module-texts.sh /tmp/init-scripts/50-configure-module-texts.sh
@@ -14,5 +15,6 @@ COPY config/configure-cookies.sh /tmp/init-scripts/60-configure-cookies.sh
 
 RUN sed -i 's/\r$//' /tmp/init-scripts/10-configure-mail.sh \
     /tmp/init-scripts/24-configure-carriers.sh \
+    /tmp/init-scripts/26-configure-orders.sh \
     /tmp/init-scripts/20-configure-storefront.sh /tmp/init-scripts/25-configure-payments.sh /tmp/init-scripts/30-configure-menu.sh /tmp/init-scripts/40-configure-content.sh /tmp/init-scripts/50-configure-module-texts.sh /tmp/init-scripts/60-configure-cookies.sh \
-    && chmod +x /tmp/init-scripts/24-configure-carriers.sh /tmp/init-scripts/10-configure-mail.sh /tmp/init-scripts/20-configure-storefront.sh /tmp/init-scripts/25-configure-payments.sh /tmp/init-scripts/30-configure-menu.sh /tmp/init-scripts/40-configure-content.sh /tmp/init-scripts/50-configure-module-texts.sh /tmp/init-scripts/60-configure-cookies.sh
+    && chmod +x /tmp/init-scripts/26-configure-orders.sh /tmp/init-scripts/24-configure-carriers.sh /tmp/init-scripts/10-configure-mail.sh /tmp/init-scripts/20-configure-storefront.sh /tmp/init-scripts/25-configure-payments.sh /tmp/init-scripts/30-configure-menu.sh /tmp/init-scripts/40-configure-content.sh /tmp/init-scripts/50-configure-module-texts.sh /tmp/init-scripts/60-configure-cookies.sh

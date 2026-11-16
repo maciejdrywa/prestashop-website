@@ -25,24 +25,25 @@ PrestaShop musi być już zainstalowany i uruchomiony; po odtworzeniu pustych
 wolumenów poczekaj na zakończenie jego automatycznej instalacji, a potem wykonaj
 powyższą komendę. Sam start kontenerów nadal nie uruchamia importu danych.
 
-Komenda wykonuje 16 etapów:
+Komenda wykonuje 17 etapów:
 
 1. Nazwa sklepu, polskie sposoby dostawy oraz usunięcie produktów demonstracyjnych i wyłączenie przykładowych slajdów, banera i bloku tekstowego.
-2. SMTP Mailpit i polskie maile rejestracji, przelewu oraz potwierdzenia zamówienia.
+2. SMTP Mailpit i polskie maile rejestracji, przelewu, zamówienia oraz potwierdzenia płatności.
 3. InPost i DPD ze stawkami 15 zł i 20 zł brutto, przywrócenie podstawowych metod, darmowa dostawa powyżej 2000 zł brutto i wyłączny odbiór osobisty powyżej 50 kg.
 4. Przelew tradycyjny i pobranie, uprawnienia płatności oraz testowe dane przelewu.
-5. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
-6. Menu górne z kategoriami i podkategoriami ze scrapera.
-7. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
-8. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
-9. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
-10. Grupy i wartości atrybutów.
-11. Kombinacje i modyfikatory cen.
-12. Galerie, okładki i miniatury z lokalnych plików.
-13. Kontrola produktów i kombinacji.
-14. Kontrola galerii.
-15. Stany 0–10 i aktywacja.
-16. Końcowa kontrola stanów, dostępności i aktywacji.
+5. Statusy oczekiwania i potwierdzenia płatności oraz demonstracyjne faktury VAT.
+6. Kategorie oraz produkty, w tym ceny, VAT i oba opisy.
+7. Menu górne z kategoriami i podkategoriami ze scrapera.
+8. Polskie strony informacyjne, stopka i odnośniki regulaminu oraz prywatności.
+9. Widoczna informacja o cookies z odnośnikiem do Polityki prywatności.
+10. Polskie bloki informacyjne, kryterium opinii i lista życzeń.
+11. Grupy i wartości atrybutów.
+12. Kombinacje i modyfikatory cen.
+13. Galerie, okładki i miniatury z lokalnych plików.
+14. Kontrola produktów i kombinacji.
+15. Kontrola galerii.
+16. Stany 0–10 i aktywacja.
+17. Końcowa kontrola stanów, dostępności i aktywacji.
 
 Przed pierwszym importem sprawdzane są wszystkie źródła i dostępne reguły VAT,
 kompletność lokalnych zdjęć oraz minimalna struktura kategorii. Walidacja zdjęć
@@ -304,25 +305,24 @@ certyfikatu wyłącznie we własnym kliencie. Nie zastępuje wizualnego testu pr
 
 ### Polskie wiadomości e-mail
 
-`configure-mail.php` konfiguruje SMTP `mailpit:1025` i odtwarza polskie treści
-`account`, `bankwire` oraz `order_conf` w formatach HTML i TXT. Wcześniej folder
-`mails/pl` zawierał angielskie treści, mimo prawidłowych tematów i polskiego języka.
+`configure-mail.php` konfiguruje SMTP `mailpit:1025` i generuje cały dostępny
+zestaw gotowych wiadomości HTML/TXT dla polskiego języka. Biblioteka
+`lib/mail-templates.php` uruchamia `prestashop:mail:generate` z ustawionym
+motywem maili (`PS_MAIL_THEME`, domyślnie `modern`), locale `pl-PL` i nadpisaniem
+istniejących plików. Komenda wywołuje ten sam handler co akcja „Generuj e-maile”
+w panelu administracyjnym przy wybraniu motywu, języka polskiego i opcji zastąpienia.
 
-Biblioteka `lib/mail-templates.php` uruchamia natywny generator
-`prestashop:mail:generate` dla domyślnego polskiego locale i wybranego motywu
-maili (`PS_MAIL_THEME`, domyślnie `modern`). Eksportuje do
-`var/import/generated-mail-pl`, a po walidacji instaluje tylko sześć wskazanych
-plików. Sprawdza UTF-8, polską treść i zachowanie identycznego zestawu zmiennych.
-Pozostałe wygenerowane maile pozostają wyłącznie w katalogu roboczym.
-Stopkę „Powered by” spolszcza na „Oprogramowanie sklepu:”, a etykietę łącznej
-kwoty w potwierdzeniu na „Razem (brutto)”. Zachowuje układ natywnego motywu.
+Generator zapisuje pliki bezpośrednio do `mails/pl` oraz katalogów `mails/pl`
+modułów, zgodnie z układami dostępnymi w wybranym motywie. Treść, stopka,
+etykiety i zmienne pochodzą z generatora PrestaShop. W obecnym motywie `modern`
+test potwierdził zgodność 108 wygenerowanych plików z natywnym wynikiem.
+Jeżeli aktywny motyw strony lub jego rodzic ma już własny katalog `mails/pl`,
+również on otrzymuje pełny zestaw z natywnego generatora. Uwzględnia to
+pierwszeństwo istniejących nadpisań w `Mail::Send`.
 
-Aktualizuje `mails/pl` oraz istniejące nadpisania tych maili w aktywnym motywie
-lub jego motywie nadrzędnym, jeśli występują. Nie tworzy nowych nadpisań motywu
-strony. Nie zmienia danych klientów, zamówień, statusów ani danych bankowych.
-Tematy korzystają z polskiego pakietu tłumaczeń oraz nazwy statusu przelewu.
-Zmiana dotyczy nowo wysyłanych wiadomości; istniejące wiadomości w Mailpit
-zachowują treść otrzymaną wcześniej.
+Domyślny motyw można wybrać w panelu na ekranie „Szablon e-maila”. Kolejne
+uruchomienie inicjalizacji odczyta zapisane `PS_MAIL_THEME`. Tematy wiadomości
+korzystają z tłumaczeń PrestaShop i nazw statusów zamówienia.
 
 Konfiguracja jest drugim etapem `init-shop.php`. Przy instalacji i starcie
 kontenera wykonuje ją również istniejący hook `10-configure-mail.sh`.
@@ -338,9 +338,11 @@ Test kontrolowanej wysyłki:
     docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/mail-templates-test.php
 
 Test wymaga SMTP skierowanego na lokalny Mailpit i odmawia działania przy innym
-serwerze. Wysyła trzy wiadomości do losowego adresu `@example.test`, a następnie
+serwerze. Wysyła cztery wiadomości do losowego adresu `@example.test`, a następnie
 odczytuje tylko te wiadomości przez API Mailpit. Sprawdza polskie tematy, HTML,
 TXT, polskie znaki, podstawienie danych i brak nierozwiązanych zmiennych.
+Przed wysyłką porównuje wszystkie pliki HTML/TXT z niezależnym eksportem
+natywnego generatora, kontrolując również pełny zakres generowania i oryginalną treść.
 Wiadomości pozostają do ręcznej inspekcji w `http://localhost:8025`.
 Nie tworzy klienta ani zamówienia i nie usuwa wcześniejszej korespondencji.
 
@@ -396,7 +398,7 @@ Pomija lokalny certyfikat TLS wyłącznie w kliencie testowym.
    To test przed importem, a nie samodzielny etap ładowania danych.
 2. **configure-mail.php** zapisuje i sprawdza SMTP mailpit:1025.
    Opróżnia login i hasło, wyłącza szyfrowanie dla lokalnego Mailpit i ustawia
-   wysyłkę HTML oraz tekstową i odtwarza trzy polskie szablony maili w obu formatach.
+   wysyłkę HTML oraz tekstową i generuje pełny polski zestaw z gotowego motywu maili PrestaShop.
    Sam nie wysyła wiadomości. Jest też wywoływany przez
    skrypt startowy obrazu sklepu; zachowano tę ścieżkę.
 3. **check-price-settings.php** wymaga PLN, Polski jako kraju domyślnego i włączonego
@@ -607,6 +609,19 @@ Kod 0 oznacza import dostępnych zdjęć, nie zatwierdzenie wyjątku dla braków
 Ten etap korzysta wyłącznie z lokalnych JPEG-ów przygotowanych przez scraper.
 Nie rozpakowuje ZIP-a i nie pobiera jeszcze Release ani zdjęć ze źródłowych URL-i.
 To osobny etap przygotowania plików, do dodania przed docelową jedną komendą.
+
+## Statusy i faktury
+
+`configure-orders.php` odtwarza statusy i dane wystawcy. Przelew i pobranie
+zaczynają jako nieopłacone, bez faktury. Administrator po otrzymaniu płatności
+wybiera „Płatność zaakceptowana”, co generuje PDF dostępny w historii klienta
+i wysyła polskie potwierdzenie z fakturą. Konfiguracja jest w inicjalizacji
+oraz hooku startowym 26, po instalacji modułów płatności. Nie resetuje numeracji
+ani statusów istniejących zamówień. Dokumenty z prefiksem `#FV/DEMO/` i dane
+wystawcy są jawnie demonstracyjne.
+
+Szczegółowy scenariusz, ręczna weryfikacja, skutki testu tworzącego zamówienia
+i instrukcja kontroli PDF: [Statusy i faktury](../../docs/order-invoice-scenario.md).
 
 ## Wagi produktów
 

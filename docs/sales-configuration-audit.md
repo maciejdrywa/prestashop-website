@@ -91,6 +91,17 @@ również ma limit 50 kg. Odbiór osobisty nie ma limitu i powyżej 50 kg jest
 jedyną opcją. Test HTTP potwierdza wyłączny odbiór oraz dostępność obu płatności
 po jego wybraniu, także po próbie przesłania wcześniejszego wyboru kuriera.
 
+## Statusy i faktury — wdrożenie 2026-11-16
+
+`configure-orders.php` oraz hook 26 odtwarzają dwa statusy oczekiwania (nieopłacone,
+bez faktury) i „Płatność zaakceptowana” (opłacone, generowanie faktury i załącznik PDF).
+Uzupełniono fikcyjnego wystawcę, prefiks `#FV/DEMO/` i oznaczenie demonstracyjne.
+Nie resetujemy liczników i nie zmieniamy statusów dotychczasowych zamówień.
+Testy HTTP utworzyły zamówienia 14/15 dla przelewu i pobrania: potwierdzono
+statusy, brak faktury przed płatnością, pobranie po potwierdzeniu, link w historii,
+kwoty VAT/brutto i odmowę anonimowego dostępu. Sprawdzono też świeżą instalację
+na osobnych wolumenach. Szczegóły i ograniczenia: [scenariusz](order-invoice-scenario.md).
+
 ## Powtórzenie audytu bieżącej konfiguracji
 
 Z katalogu projektu:

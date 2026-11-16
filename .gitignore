@@ -54,6 +54,7 @@ deploy/certs/
 # Playwright reports and artifacts
 playwright-report/
 test-results/
+/tmp/pdfs/
 blob-report/
 
 # Build artifacts

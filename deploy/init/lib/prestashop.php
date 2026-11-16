@@ -340,6 +340,8 @@ function importCombinations(array $plans, \Context $context): array
             $combination->id_product = (int) $product->id;
             $combination->reference = $variant['reference'];
             $combination->price = $variant['modifier'];
+            // PrestaShop adds this impact to the product's base weight; zero keeps
+            // all variants equally heavy without affecting their price modifiers.
             $combination->weight = 0;
             $combination->minimal_quantity = 1;
             if (!($id === null ? $combination->add() : $combination->update())

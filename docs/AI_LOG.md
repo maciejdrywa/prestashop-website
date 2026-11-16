@@ -38,6 +38,7 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-15, Maciej Drywa | Codex 6.1 sol | W3.6 - Reguły ceny dostawy | Wyłączono podstawowych przewoźników, ustawiono domyślnie InPost i darmową dostawę od 2000 zł brutto. | Cena zostałą ustawiona na 2000zł, było ją trzeba zmienić na 2000,01 zł | Sprawdzono zmianę darmowej dotawy w koszyku podczas zmiany cen produktów. |
 | 2026-11-15, Maciej Drywa | Codex | W3.6 - Wagi produktów | Import zachowuje dodatnie wagi źródłowe, uzupełnia braki wagami demonstracyjnymi kategorii i zeruje wpływ wariantów. | Brak błędów | Weryfikacaj dodanych wag w panelu administracyjnym |
 | 2026-11-15, Maciej Drywa | Codex | W3.6 - Limit masy dostawy | Ustawiono limit 50 kg na dostawy | Brak błędów | Koszyk powyżej wagi 50 kg dostaje jedynie możliwość odebrania towaru ze sklepu. Sprawdzono zachowanie koszyka ręcznie |
+| 2026-11-16, Maciej Drywa | Codex | W3.6 - Statusy i faktury i maile | Dodano odtwarzanie statusów i danych wystawcy; faktura powstaje po potwierdzeniu płatności przez administratora. Dodano komentarze i polski mail płatności. | Błąd związany ze zmianą języka jedynie maila dla potwierdzenia płatności  | Pełne zakupy z opcją z przelewem i pobraniem działąją poprawnie (sprawdzono ręcznie), maile wymagały poprawienia (skorzystano z gotowego generatora maili od prestashop) |
 
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:
