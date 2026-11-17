@@ -32,6 +32,11 @@ function configureWebservice(): void
         throw new RuntimeException("Klucz API PrestaShop musi mieć dokładnie 32 znaki alfanumeryczne (otrzymano: " . strlen($apiKey) . ").");
     }
 
+    // Zapobiega PHP Warning przy wywołaniu $wsKey->save() w trybie CLI
+    if (!Validate::isLoadedObject(Context::getContext()->employee)) {
+        Context::getContext()->employee = new Employee(1);
+    }
+
     // Sprawdzenie, czy klucz już istnieje w bazie
     $keyId = (int) Db::getInstance()->getValue(
         'SELECT id_webservice_account FROM ' . _DB_PREFIX_ . 'webservice_account WHERE `key` = \'' . pSQL($apiKey) . '\''
