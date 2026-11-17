@@ -94,6 +94,8 @@ function deployProjectTheme(\Context $context): void
             $filesystem->remove(_PS_CONFIG_DIR_ . 'themes/' . PROJECT_THEME . '/shop' . (int) $context->shop->id . '.json');
         }
 
+        deployCategoryPagination($filesystem);
+
         if (!$active || $changed || $previous !== $current) {
             // Media::clearCache korzysta z motywu wczytanego na początku procesu.
             // Przy pierwszej aktywacji byłby to jeszcze Classic.
@@ -108,6 +110,33 @@ function deployProjectTheme(\Context $context): void
         }
     } finally {
         fclose($lock);
+    }
+}
+
+/** Synchronizuje moduł paginacji z obrazem także na istniejącym wolumenie sklepu. */
+function deployCategoryPagination(Filesystem $filesystem): void
+{
+    $name = 'shopcategorypagination';
+    $file = $name . '/' . $name . '.php';
+    $source = '/opt/shop-modules/' . $file;
+    if (!is_readable($source) || ($content = file_get_contents($source)) === false) {
+        throw new RuntimeException('Brakuje modułu paginacji. Przebuduj obraz sklepu.');
+    }
+
+    $target = _PS_MODULE_DIR_ . $file;
+    if (!is_file($target) || hash_file('sha256', $target) !== hash('sha256', $content)) {
+        $filesystem->dumpFile($target, $content);
+    }
+
+    if (!\Module::isInstalled($name)) {
+        (new Process([PHP_BINARY, 'bin/console', 'prestashop:module', 'install', $name, '--env=prod', '--no-interaction'], _PS_ROOT_DIR_))->mustRun();
+        \Module::resetStaticCache();
+    }
+
+    $module = \Module::getInstanceByName($name);
+    if (!$module || !$module->id || (!\Module::isEnabled($name) && !$module->enable())
+        || (!$module->isRegisteredInHook($module::QUERY_HOOK) && !$module->registerHook($module::QUERY_HOOK))) {
+        throw new RuntimeException('Nie udało się włączyć paginacji kategorii.');
     }
 }
 
