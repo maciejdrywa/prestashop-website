@@ -28,7 +28,8 @@ Wszystkie zasoby wrażliwe (np. `customers`, `orders`, `configurations`, `employ
 Za komunikację z Webservice API w języku Python odpowiada moduł [`scraper/prestashop_api.py`](../scraper/prestashop_api.py):
 - Implementuje klasę `PrestaShopClient`, która automatycznie wczytuje konfigurację z `.env` lub zmiennych środowiskowych procesu.
 - Obsługuje uwierzytelnianie HTTP Basic Auth (klucz jako login, puste hasło).
-- Wymusza format JSON (`output_format=JSON`).
+- Obsługuje format JSON dla odczytu (`output_format=JSON`) oraz automatyczną konwersję słowników do XML (wymaganego przez PrestaShop 8.2) dla operacji zapisu (`post`, `put`).
+- Umożliwia przesyłanie zdjęć produktów i kategorii przez dedykowaną metodę `upload_image()` (`multipart/form-data`).
 - Zawiera dedykowaną hierarchię wyjątków (`PrestaShopAuthError`, `PrestaShopNotFoundError`, `PrestaShopValidationError`, `PrestaShopConnectionError`, `PrestaShopAPIError`).
 
 ## 4. Test połączenia i weryfikacja uprawnień

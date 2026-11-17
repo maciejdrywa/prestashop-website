@@ -81,7 +81,7 @@ services:
       PS_DOMAIN: ${PS_DOMAIN:?Uzupełnij PS_DOMAIN}
       # Limit dotyczy gotowości instalatora i HTTPS przed importem katalogu.
       BOOTSTRAP_TIMEOUT: ${BOOTSTRAP_TIMEOUT:-900}
-      PRESTASHOP_API_KEY: ${PRESTASHOP_API_KEY:-}
+      PRESTASHOP_API_KEY: ${PRESTASHOP_API_KEY:?Uzupełnij PRESTASHOP_API_KEY}
     volumes:
       - shop_data:/var/www/html
       - .:/opt/shop/deploy:ro

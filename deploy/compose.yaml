@@ -73,7 +73,7 @@ services:
 
       ADMIN_MAIL: ${ADMIN_EMAIL:?Uzupełnij ADMIN_EMAIL}
       ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
-      PRESTASHOP_API_KEY: ${PRESTASHOP_API_KEY:-}
+      PRESTASHOP_API_KEY: ${PRESTASHOP_API_KEY:?Uzupełnij PRESTASHOP_API_KEY}
 
     volumes:
       # Ten wolumen jest współdzielony z bootstrapem i przechowuje również

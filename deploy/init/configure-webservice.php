@@ -22,13 +22,10 @@ function configureWebservice(): void
     // Jezeli klucz API istnieje to go pobieramy jezeli nie to tworzymy nowy
     $apiKey = getenv('PRESTASHOP_API_KEY') ?: '';
     if (empty($apiKey)) {
-
-        // Jeśli nie podano w .env, generujemy 32-znakowy klucz
-        $apiKey = bin2hex(random_bytes(16));
-        echo "[CONFIG] PRESTASHOP_API_KEY nie był zdefiniowany. Wygenerowano nowy klucz: {$apiKey}\n";
+        throw new RuntimeException("Błąd: Zmienna PRESTASHOP_API_KEY nie jest ustawiona. Skonfiguruj 32-znakowy klucz w pliku .env przed uruchomieniem inicjalizacji sklepu.");
     }
 
-    if (strlen($apiKey) !== 32) {
+    if (strlen($apiKey) !== 32 || !ctype_alnum($apiKey)) {
         throw new RuntimeException("Klucz API PrestaShop musi mieć dokładnie 32 znaki alfanumeryczne (otrzymano: " . strlen($apiKey) . ").");
     }
 
@@ -88,7 +85,7 @@ function configureWebservice(): void
         'REPLACE INTO ' . _DB_PREFIX_ . 'webservice_account_shop (id_webservice_account, id_shop) VALUES (' . (int)$wsKey->id . ', ' . (int)$shopId . ')'
     );
 
-    echo "[CONFIG] Webservice API włączone. Klucz {$apiKey} skonfigurowany z ograniczonymi uprawnieniami.\n";
+    echo "[CONFIG] Webservice API włączone. Klucz API skonfigurowany z uprawnieniami Least Privilege.\n";
 }
 
 // Jeśli skrypt jest uruchamiany bezpośrednio z CLI
