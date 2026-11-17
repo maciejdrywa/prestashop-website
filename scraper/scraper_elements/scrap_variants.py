@@ -1,4 +1,4 @@
-"""Parse only the combination actually represented by this HTML snapshot."""
+"""Odczytuje kombinację faktycznie potwierdzoną w bieżącym HTML produktu."""
 
 from bs4 import BeautifulSoup
 
@@ -7,6 +7,7 @@ from Scrapping_products.variant_prices import attribute_choices, read_product_da
 
 
 def scrap_variants(soup: BeautifulSoup, product_name: str, base_netto: float) -> list[ProductVariant]:
+    """Odczytuje wariant domyślny z HTML przed weryfikacją pełnej listy kombinacji."""
     if soup.select_one("[data-product]") is None:
         if attribute_choices(soup):
             raise ValueError("Formularz wariantów nie zawiera danych wybranej kombinacji.")

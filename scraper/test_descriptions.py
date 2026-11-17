@@ -13,36 +13,45 @@ from scraper_elements.scrap_description import scrap_descriptions
 
 
 class DescriptionTests(unittest.TestCase):
+    """Sprawdza rozdzielenie opisów i ukierunkowane odświeżanie eksportu."""
     def parse(self, short="", full=""):
+        """Buduje lokalny HTML z dwoma polami opisu i przekazuje go parserowi."""
         return scrap_descriptions(BeautifulSoup(
             '<div id="product-description-short-800">' + short
             + '</div><div id="description"><div class="product-description">'
             + full + '</div></div>', "html.parser"))
 
     def test_two_distinct_descriptions_are_preserved(self):
+        """Sprawdza zachowanie obu różnych opisów."""
         self.assertEqual(self.parse("<p>Short</p>", "<p>Full</p>"),
                          {"description": "<p>Full</p>", "description_short": "<p>Short</p>"})
 
     def test_identical_descriptions_stay_in_both_fields(self):
+        """Sprawdza zachowanie identycznych opisów w obu polach źródła."""
         self.assertEqual(self.parse("<p>Same</p>", "<p>Same</p>"),
                          {"description": "<p>Same</p>", "description_short": "<p>Same</p>"})
 
     def test_only_full_description_leaves_summary_empty(self):
+        """Sprawdza pusty skrót przy dostępnym wyłącznie pełnym opisie."""
         self.assertEqual(self.parse("", "<p>Full</p>"),
                          {"description": "<p>Full</p>", "description_short": ""})
 
     def test_only_short_description_is_moved_to_bottom(self):
+        """Sprawdza przeniesienie jedynego opisu do pełnego pola."""
         self.assertEqual(self.parse("<p>Only text</p>", ""),
                          {"description": "<p>Only text</p>", "description_short": ""})
 
     def test_empty_html_is_not_an_existing_summary(self):
+        """Sprawdza traktowanie pustego znacznika jako brak krótkiego opisu."""
         self.assertEqual(self.parse("<p>&nbsp;<br></p>", "<p>Full</p>")["description_short"], "")
 
     def test_missing_both_descriptions_is_reported(self):
+        """Wymaga zgłoszenia braku obu opisów."""
         with self.assertRaises(ValueError):
             self.parse()
 
     def test_refresh_only_changes_description_fields(self):
+        """Sprawdza zachowanie pozostałych pól przy odświeżeniu opisów."""
         products = [{"product_id": "800", "description": "Old", "price_brutto": 17.87,
                      "images": ["image"], "cover_image": "image", "variants": [{"price_modifier": 5}]}]
         before = copy.deepcopy(products)
@@ -53,6 +62,7 @@ class DescriptionTests(unittest.TestCase):
                 self.assertEqual(products[0][key], before[0][key])
 
     def test_main_resume_fills_descriptions_without_repricing(self):
+        """Sprawdza uzupełnienie opisów podczas wznowienia z zachowaniem cen."""
         product = {"product_id": "800", "name": "Item", "description": "Old combined text",
                    "images": ["image"], "variants": [], "price_brutto": 17.87}
         entry = {"product_url": "https://pandomu.com.pl/item", "category_paths": [["Root"]],

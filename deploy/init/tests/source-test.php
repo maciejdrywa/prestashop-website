@@ -1,12 +1,38 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test kontraktu źródłowego oraz przeliczeń cen produktów i kombinacji.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/source-test.php
+ *
+ * Wymaga BCMath oraz products.json. Weryfikuje plany w pamięci.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/source.php';
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $condition Warunek asercji wymagany przez bieżący scenariusz.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
 function check(bool $condition, string $message): void
 {
     if (!$condition) {
         throw new RuntimeException($message);
     }
 }
+/**
+ * Sprawdza, że przekazana operacja zgłasza oczekiwany błąd walidacji.
+ *
+ * @param callable $callback Operacja, która powinna zgłosić RuntimeException.
+ * @return void
+ * @throws \RuntimeException Gdy oczekiwany błąd walidacji nie wystąpi.
+ */
 function rejects(callable $callback): void
 {
     try {
@@ -17,6 +43,8 @@ function rejects(callable $callback): void
     throw new RuntimeException('Malformed data accepted');
 }
 try {
+    // Pierwsza część sprawdza wszystkie rzeczywiste ceny katalogu. Kolejne fixture
+    // izolują granice zaokrągleń i błędne kontrakty bez zapisywania danych sklepu.
     $products = ShopInit\readCatalog();
     $combinations = $adjustments = 0;
     foreach ($products as $product) {

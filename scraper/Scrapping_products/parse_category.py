@@ -1,4 +1,4 @@
-"""Parse category contents without following sorting and faceted-search links."""
+"""Odczytuje kategorie z pominięciem odnośników filtrów i sortowania."""
 
 import logging
 import re
@@ -6,10 +6,11 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from parser_classes.category_page import category_page, CategoryLink
+from parser_classes.category_page import CategoryPage, CategoryLink
 
 
 def store_url(href: str, base_url: str, *, pagination: bool = False) -> str | None:
+    """Normalizuje wewnętrzny adres sklepu, opcjonalnie zachowując parametry paginacji."""
     parts = urlsplit(urljoin(base_url, href))
     if parts.scheme not in {"http", "https"} or parts.netloc != urlsplit(base_url).netloc:
         return None
@@ -17,12 +18,13 @@ def store_url(href: str, base_url: str, *, pagination: bool = False) -> str | No
 
 
 def link_name(anchor) -> str:
-    # Exclude nested menu expand/collapse icons.
+    # Pomijamy tekst ikon rozwijania i zwijania menu.
+    """Odczytuje nazwę odnośnika z pominięciem tekstów zagnieżdżonych ikon menu."""
     return " ".join(" ".join(anchor.find_all(string=True, recursive=False)).split())
 
 
 def parse_navigation(html: str, base_url: str) -> list[list[CategoryLink]]:
-    """Return full paths from the category menu, including its nested lists."""
+    """Odczytuje pełne ścieżki z menu kategorii. Brak drzewa zgłasza jako błąd."""
     soup = BeautifulSoup(html, "html.parser")
     menu = soup.select_one("#top-menu")
     if menu is None:
@@ -47,7 +49,8 @@ def parse_navigation(html: str, base_url: str) -> list[list[CategoryLink]]:
     return paths
 
 
-def parse_category(html_content: str, base_url: str) -> category_page | None:
+def parse_category(html_content: str, base_url: str) -> CategoryPage | None:
+    """Parsuje listę produktów, podkategorie i następną stronę. Niepoprawny HTML zwraca jako None."""
     soup = BeautifulSoup(html_content, "html.parser")
     try:
         urls = []
@@ -63,7 +66,7 @@ def parse_category(html_content: str, base_url: str) -> category_page | None:
                 continue
             url = store_url(anchor.get("href", ""), base_url)
             image_link = item.select_one(".subcategory-image a[title]")
-            # Displayed labels can be truncated; the title contains the full name.
+            # Etykieta może być ucięta, pełna nazwa znajduje się w tytule odnośnika.
             name = (image_link.get("title") if image_link else None) or anchor.get_text(" ", strip=True)
             if not url or not name.strip():
                 raise ValueError("Niepoprawny link podkategorii.")
@@ -87,7 +90,7 @@ def parse_category(html_content: str, base_url: str) -> category_page | None:
         if not urls and total is None and soup.select_one("#products, #subcategories") is None:
             raise ValueError("Strona nie zawiera rozpoznawalnego katalogu produktów.")
 
-        return category_page(
+        return CategoryPage(
             product_urls=urls,
             next_page_url=next_url,
             subcategories=list(children.values()),

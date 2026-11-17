@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Kontrola mapowania, okładek, podpisów i wszystkich artefaktów galerii.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/check-images.php [ID|--all]
+ *
+ * Domyślnie sprawdza cały katalog. Wymaga lokalnych JPEG i ukończonego importu zdjęć.
+ *
+ * Odczytuje bazę oraz pliki i porównuje je z lib/images.php. Brak galerii źródłowej pozostaje jawnie
+ * raportowanym wyjątkiem.
+ */
+
 require_once __DIR__ . '/lib/images.php';
 try {
     [$products] = ShopInit\selectProducts($argv, true);

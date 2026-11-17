@@ -1,4 +1,4 @@
-"""Refresh only source cover metadata; preserve all existing catalog fields."""
+"""Odświeża okładki źródłowe z zachowaniem pozostałych pól katalogu."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,6 +16,7 @@ from scraper_elements.scrap_images import scrap_cover_image
 
 
 def fetch_source_soup(product):
+    """Pobiera stronę produktu i potwierdza źródłowy identyfikator przed odświeżeniem metadanych."""
     url = urldefrag(product["product_url"])[0]
     if urlsplit(url).scheme != "https" or urlsplit(url).hostname != "pandomu.com.pl":
         raise ValueError("Unexpected source product URL.")
@@ -32,10 +33,12 @@ def fetch_source_soup(product):
 
 
 def fetch_cover(product):
+    """Odczytuje źródłową okładkę zgodną z galerią zapisanego produktu."""
     return scrap_cover_image(fetch_source_soup(product), product["images"])
 
 
 def refresh_covers(products, fetch=fetch_cover, *, refresh=False, workers=2):
+    """Odświeża okładki, zachowując pozostałe pola i zbierając błędy poszczególnych produktów."""
     pending = []
     for product in products:
         images = product.get("images", [])
@@ -61,6 +64,7 @@ def refresh_covers(products, fetch=fetch_cover, *, refresh=False, workers=2):
 
 
 def main():
+    """Obsługuje punkt wejścia narzędzia i zwraca kod zakończenia procesu."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path, default=Path(__file__).resolve().parents[1] / "scraper-results")
     parser.add_argument("--product-id")
@@ -71,7 +75,7 @@ def main():
     if not selected:
         raise ValueError("No source products selected.")
     errors = refresh_covers(selected, refresh=args.refresh)
-    # Replace only after requests finish; save_json uses atomic replacement.
+    # Podmiana następuje po zakończeniu żądań, a save_json wykonuje zapis atomowy.
     save_json(args.results_dir / "products.json", products)
     report = {"complete": not errors, "selected_products": len(selected), "errors": errors}
     save_json(args.results_dir / "image-cover-report.json", report)

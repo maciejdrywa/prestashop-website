@@ -3,11 +3,12 @@ declare(strict_types=1);
 
 if (!defined('_PS_VERSION_')) exit;
 
-/** Informational notice for the educational storefront; no theme overrides. */
+/** Udostępnia informację o cookies przez natywne hooki modułu PrestaShop. */
 class ShopCookieInfo extends Module
 {
     public const DISMISSAL_MAX_AGE = 180 * 24 * 60 * 60;
 
+    /** Ustawia metadane autorskiego modułu informacji o cookies. */
     public function __construct()
     {
         $this->name = 'shopcookieinfo';
@@ -22,22 +23,26 @@ class ShopCookieInfo extends Module
         $this->description = 'Polski komunikat z odnośnikiem do polityki prywatności i zapamiętywaniem zamknięcia.';
     }
 
+    /** Instaluje moduł i rejestruje hooki komunikatu oraz jego zasobów. */
     public function install()
     {
         return parent::install() && $this->registerHook('displayAfterBodyOpeningTag')
             && $this->registerHook('actionFrontControllerSetMedia');
     }
 
+    /** Zwraca nazwę cookie zamknięcia komunikatu z identyfikatorem sklepu. */
     public function noticeCookieName(): string
     {
         return 'shop_cookie_info_v1_' . (int) $this->context->shop->id;
     }
 
+    /** Sprawdza zapamiętane zamknięcie komunikatu dla bieżącego sklepu. */
     private function isDismissed(): bool
     {
         return ($_COOKIE[$this->noticeCookieName()] ?? null) === '1';
     }
 
+    /** Dodaje wersjonowany JavaScript i CSS, jeśli klient nie zamknął komunikatu. */
     public function hookActionFrontControllerSetMedia($params): void
     {
         if ($this->isDismissed()) return;
@@ -47,6 +52,7 @@ class ShopCookieInfo extends Module
             ['position'=>'bottom', 'priority'=>200, 'version'=>substr(hash_file('sha256', __DIR__.'/views/js/notice.js'),0,12)]);
     }
 
+    /** Buduje dostępny komunikat HTML z bezpiecznym odnośnikiem do polityki prywatności. */
     public function hookDisplayAfterBodyOpeningTag($params): string
     {
         if ($this->isDismissed()) return '';

@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Ścisłe porównanie zapisanych produktów z planem źródłowym.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/check-products.php [ID|--all] [--with-combinations]
+ *
+ * Domyślnie sprawdza cały katalog. Wymaga produktów, kategorii i opcjonalnie gotowych kombinacji.
+ *
+ * Odczytuje pola, tłumaczenia, przypisania, ceny i wagę. Ręczne edycje mogą zgłaszać rozbieżność, a
+ * wznowienie używa odrębnych kontroli spójności.
+ */
+
 require_once __DIR__ . '/lib/products.php';
 try {
     $withCombinations = in_array('--with-combinations', $argv, true);
@@ -18,8 +31,10 @@ try {
         ShopInit\verifyProduct($plan, $plan['id'], $categories, $context);
         $saved = new Product($plan['id'], false, null, (int) $context->shop->id);
         $inactive += !$saved->active ? 1 : 0;
-        $missingWeight += $plan['weight'] === null ? 1 : 0;
+        $missingWeight += $plan['weight_origin'] === 'demo' ? 1 : 0;
     }
+    // Pełny zakres dodatkowo porównuje liczbę referencji pandomu z eksportem
+    // i minimalną strukturę gałęzi. Dla pojedynczego ID te warunki katalogowe są pomijane.
     if ($all) {
         $query = new DbQuery();
         $query->select('COUNT(*)')->from('product', 'p');
@@ -45,6 +60,8 @@ try {
     }
     echo "[3/3] Checking optional combinations...\n";
     $count = 0;
+    // Opcjonalna kontrola łączy referencje wariantów, posortowane ID atrybutów
+    // i natywną cenę brutto. Wymaga zgodności z planem początkowym produktu.
     if ($withCombinations) {
         foreach (ShopInit\combinationPlan($products, $context) as $entry) {
             $productId = (int) $entry['product']->id;
@@ -87,7 +104,7 @@ try {
             }
         }
     }
-    echo 'OK: ' . count($plans) . " products, {$inactive} inactive, {$missingWeight} without source weight; "
+    echo 'OK: ' . count($plans) . " products, {$inactive} inactive, {$missingWeight} with demonstration weights; all variant weight impacts zero; "
         . ($withCombinations ? "{$count} combinations verified" : 'combinations not checked')
         . ". No database changes. Images and stock are not checked at this stage.\n";
 } catch (Throwable $error) {

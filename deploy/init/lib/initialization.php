@@ -1,5 +1,16 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Walidacja wejścia i wspólna lista etapów pełnej inicjalizacji.
+ *
+ * Dołączana przez init-shop.php i obsługę wznowienia. Preflight wymaga działającego kontekstu sklepu, obu
+ * JSON-ów i lokalnych zdjęć.
+ *
+ * Plany łączą kategorie, produkty, CMS, obrazy i magazyn. Etapy CLI są uruchamiane w podprocesach z
+ * kontrolą kodu zakończenia.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
@@ -9,6 +20,13 @@ require_once __DIR__ . '/stock.php';
 require_once __DIR__ . '/menu.php';
 require_once __DIR__ . '/content.php';
 
+/**
+ * Sprawdza czytelność wymaganych JSON-ów i katalogu zdjęć, zwracając ich ścieżki.
+ *
+ * @param string $directory Katalog zawierający products.json, categories.json i images/.
+ * @return array{products: string, categories: string, images: string}
+ * @throws \RuntimeException Przy braku czytelnych JSON-ów lub katalogu images.
+ */
 function initializationInputs(string $directory): array
 {
     $paths = [
@@ -27,6 +45,13 @@ function initializationInputs(string $directory): array
     return $paths;
 }
 
+/**
+ * Liczy główne gałęzie z dwiema niepustymi podkategoriami i wymaga przynajmniej czterech.
+ *
+ * @param array $products Lista zweryfikowanych rekordów źródłowych products.json.
+ * @return int Liczba głównych gałęzi spełniających minimum podkategorii.
+ * @throws \RuntimeException Gdy mniej niż cztery główne gałęzie mają po dwie niepuste bezpośrednie podkategorie.
+ */
 function initializationCategoryCoverage(array $products): int
 {
     $branches = [];
@@ -44,6 +69,14 @@ function initializationCategoryCoverage(array $products): int
     return $count;
 }
 
+/**
+ * Weryfikuje dane, VAT, kategorie i zdjęcia przed importem. Zwraca liczności oraz odciski źródeł.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array Liczności katalogu, without_images oraz mapy source_hashes i image_hashes indeksowane ścieżką pliku.
+ * @throws \RuntimeException Przy niespójności wejścia, braku zależności środowiska lub błędzie planowania danych.
+ * @throws \JsonException Przy niepoprawnym JSON lub błędzie kodowania danych planu.
+ */
 function initializationPreflight(\Context $context): array
 {
     if (!function_exists('proc_open')) {
@@ -60,6 +93,8 @@ function initializationPreflight(\Context $context): array
         throw new RuntimeException('categories.json must contain a non-empty category list.');
     }
     $categoryPlan = categoryPlan($products, true);
+    // Każda ścieżka przypisana do produktu musi występować w pełnym eksporcie
+    // kategorii. Chroni to wspólne założenia importu katalogu i menu.
     $sourcePaths = [];
     foreach ($categories as $category) {
         $path = $category['category_path'] ?? null;
@@ -82,19 +117,25 @@ function initializationPreflight(\Context $context): array
             throw new RuntimeException('Invalid category name: ' . $category['name']);
         }
     }
+    // Planowanie sprawdza docelowe ograniczenia pól, masę, walutę i VAT przed
+    // rozpoczęciem etapów zapisu. Lokalny plan zdjęć dopuszcza jeszcze brak produktów.
     productPlans($products, $context);
     if (!\Configuration::get('PS_STOCK_MANAGEMENT')) {
         throw new RuntimeException('Stock management must be enabled before initialization.');
     }
     $stock = catalogStockPlan($products);
     productImageTypes();
-    // On a fresh installation the source products do not exist yet. Validate
-    // local photos now, while retaining strict target-gallery checks on reruns.
+    // Na świeżej instalacji produkty dopiero powstaną. Walidacja obejmuje
+    // lokalne zdjęcia, a kolejne przebiegi sprawdzają również galerie docelowe.
     $imagePlans = imagePlans($products, $context, $paths['images'], true);
     $missing = [];
     $images = 0;
+    $imageHashes = [];
     foreach ($imagePlans as $plan) {
         $images += count($plan['images']);
+        foreach ($plan['images'] as $entry) {
+            $imageHashes[$entry['path']] = $entry['source']['hash'];
+        }
         if ($plan['images'] === []) {
             $missing[] = $plan['source_id'];
         }
@@ -106,36 +147,54 @@ function initializationPreflight(\Context $context): array
         'unavailable_products' => count(array_filter($stock, fn (int $quantity): bool => $quantity === 0)),
         'without_images' => $missing,
         'source_hashes' => $hashes,
+        'image_hashes' => $imageHashes,
     ];
 }
 
+/**
+ * Zwraca uporządkowaną listę etapów, ich skrypty i argumenty CLI.
+ *
+ * @return list<array{name: string, script: string, args: list<string>}>
+ */
 function initializationStages(): array
 {
+    // Kolejność jest zależnością wykonania. Płatności poprzedzają statusy,
+    // CMS poprzedza cookies i treści modułów, a kontrola katalogu i galerii poprzedza aktywację.
     return [
-        ['name' => 'Shop name, Polish delivery and demo cleanup', 'script' => 'configure-storefront.php', 'args' => []],
-        ['name' => 'Polish transactional emails and local SMTP', 'script' => 'configure-mail.php', 'args' => []],
-        ['name' => 'Categories and products', 'script' => 'import-products.php', 'args' => ['--all']],
-        ['name' => 'Source category navigation', 'script' => 'configure-menu.php', 'args' => []],
-        ['name' => 'Polish information pages and footer', 'script' => 'configure-content.php', 'args' => []],
-        ['name' => 'Cookie information notice', 'script' => 'configure-cookies.php', 'args' => []],
-        ['name' => 'Polish module wording', 'script' => 'configure-module-texts.php', 'args' => []],
-        ['name' => 'Attribute dictionary', 'script' => 'import-attributes.php', 'args' => ['--all']],
-        ['name' => 'Product combinations and prices', 'script' => 'import-combinations.php', 'args' => ['--all']],
-        ['name' => 'Galleries, covers and thumbnails', 'script' => 'import-images.php', 'args' => ['--all']],
-        ['name' => 'Product and combination validation', 'script' => 'check-products.php', 'args' => ['--all', '--with-combinations']],
-        ['name' => 'Gallery validation', 'script' => 'check-images.php', 'args' => ['--all']],
-        ['name' => 'Stock and activation', 'script' => 'import-stock.php', 'args' => ['--all']],
-        ['name' => 'Final stock and activation validation', 'script' => 'check-stock.php', 'args' => ['--all']],
+        ['name' => 'Nazwa sklepu, polskie dostawy i usunięcie demonstracji', 'script' => 'configure-storefront.php', 'args' => []],
+        ['name' => 'Polskie wiadomości i lokalny SMTP', 'script' => 'configure-mail.php', 'args' => []],
+        ['name' => 'Przewoźnicy projektu i taryfy dostaw', 'script' => 'configure-carriers.php', 'args' => []],
+        ['name' => 'Przelew tradycyjny i pobranie', 'script' => 'configure-payments.php', 'args' => []],
+        ['name' => 'Statusy zamówień i demonstracyjne faktury VAT', 'script' => 'configure-orders.php', 'args' => []],
+        ['name' => 'Kategorie i produkty', 'script' => 'import-products.php', 'args' => ['--all']],
+        ['name' => 'Menu kategorii źródłowych', 'script' => 'configure-menu.php', 'args' => []],
+        ['name' => 'Polskie strony informacyjne i stopka', 'script' => 'configure-content.php', 'args' => []],
+        ['name' => 'Informacja o cookies', 'script' => 'configure-cookies.php', 'args' => []],
+        ['name' => 'Polskie treści modułów', 'script' => 'configure-module-texts.php', 'args' => []],
+        ['name' => 'Słownik atrybutów', 'script' => 'import-attributes.php', 'args' => ['--all']],
+        ['name' => 'Kombinacje produktów i ceny', 'script' => 'import-combinations.php', 'args' => ['--all']],
+        ['name' => 'Galerie, okładki i miniatury', 'script' => 'import-images.php', 'args' => ['--all']],
+        ['name' => 'Kontrola produktów i kombinacji', 'script' => 'check-products.php', 'args' => ['--all', '--with-combinations']],
+        ['name' => 'Kontrola galerii', 'script' => 'check-images.php', 'args' => ['--all']],
+        ['name' => 'Magazyn i aktywacja', 'script' => 'import-stock.php', 'args' => ['--all']],
+        ['name' => 'Końcowa kontrola magazynu i aktywacji', 'script' => 'check-stock.php', 'args' => ['--all']],
     ];
 }
 
+/**
+ * Uruchamia etap bez pośrednictwa powłoki i zwraca jego kod zakończenia.
+ *
+ * @param array $stage Definicja etapu z nazwą, skryptem i argumentami procesu PHP.
+ * @return int Kod zakończenia podprocesu PHP.
+ * @throws \RuntimeException Przy brakującym skrypcie lub nieudanym uruchomieniu procesu PHP.
+ */
 function runInitializationScript(array $stage): int
 {
     $script = dirname(__DIR__) . '/' . $stage['script'];
     if (!is_readable($script)) {
         throw new RuntimeException('Initialization stage script is missing: ' . $script);
     }
-    // Array form bypasses the shell; children stream their progress and errors.
+    // Tablica argumentów omija powłokę. Podprocesy przekazują postęp i błędy na bieżąco.
     $process = proc_open([PHP_BINARY, $script, ...$stage['args']], [
         0 => ['pipe', 'r'], 1 => STDOUT, 2 => STDERR,
     ], $pipes, dirname(__DIR__));
@@ -146,6 +205,15 @@ function runInitializationScript(array $stage): int
     return proc_close($process);
 }
 
+/**
+ * Wykonuje etapy po kolei z kontrolą źródeł i zatrzymuje przebieg przy pierwszym błędzie.
+ *
+ * @param array $stages Uporządkowane definicje etapów do wykonania.
+ * @param callable $runner Callback wykonujący etap i zwracający jego kod zakończenia.
+ * @param callable|null $guard Opcjonalna kontrola wywoływana przed i po etapie, zgłaszająca naruszenie warunków.
+ * @return void
+ * @throws \RuntimeException Gdy runner zwróci kod różny od zera. Wyjątki runnera i guarda propagują się do wywołującego.
+ */
 function runInitializationStages(array $stages, callable $runner, ?callable $guard = null): void
 {
     foreach ($stages as $index => $stage) {
@@ -154,6 +222,8 @@ function runInitializationStages(array $stages, callable $runner, ?callable $gua
         }
         $started = microtime(true);
         echo PHP_EOL . '[INIT ' . ($index + 1) . '/' . count($stages) . '] ' . $stage['name'] . PHP_EOL;
+        // Każdy etap jest granicą błędu. Udany wcześniejszy etap może mieć trwałe
+        // zapisy, dlatego dalsze etapy ruszają wyłącznie po kodzie 0 i kontroli źródeł.
         $code = $runner($stage);
         if ($code !== 0) {
             throw new RuntimeException('Stage "' . $stage['name'] . '" (' . $stage['script'] . ') failed with exit code ' . $code . '. Later stages were not run.');
@@ -165,6 +235,13 @@ function runInitializationStages(array $stages, callable $runner, ?callable $gua
     }
 }
 
+/**
+ * Porównuje aktualne skróty źródeł z planem i odrzuca zmianę w trakcie pracy.
+ *
+ * @param array $hashes Mapa ścieżek na oczekiwane SHA-256 plików źródłowych.
+ * @return void
+ * @throws \RuntimeException Gdy plik źródłowy zniknął, stał się nieczytelny lub ma inny SHA-256.
+ */
 function unchangedInitializationSources(array $hashes): void
 {
     foreach ($hashes as $path => $expected) {

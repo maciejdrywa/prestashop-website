@@ -1,5 +1,17 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Import drzewa kategorii wybranego zakresu źródła.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/import-category.php [ID|--all] [--dry-run]
+ *
+ * Wybór domyślny to źródłowe ID 5. categoryPlan buduje rodziców, --all uwzględnia również categories.json.
+ *
+ * Tryb próbny sprawdza źródło. Zapis wykorzystuje importCategories w transakcji i klasy Category.
+ */
+
 require_once __DIR__ . '/lib/prestashop.php';
 try {
     echo "[1/3] Validating source and planning category paths...\n";

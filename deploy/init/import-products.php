@@ -1,5 +1,19 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Import produktów z opisami, cenami, VAT, masą i kategoriami.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/import-products.php [ID|--all] [--dry-run]
+ *
+ * Wymaga działającego kontekstu PL/PLN, reguł VAT i aktualnego products.json. Domyślny produkt źródłowy ma
+ * ID 5.
+ *
+ * Oddzielne transakcje obejmują kategorie i produkty. Nowe produkty powstają nieaktywne, a kolejne etapy
+ * przygotowują warianty, zdjęcia i magazyn.
+ */
+
 require_once __DIR__ . '/lib/products.php';
 try {
     echo "[1/4] Reading and validating source products...\n";
@@ -8,19 +22,22 @@ try {
     $plans = ShopInit\productPlans($products, $context);
     $categoryPlan = ShopInit\categoryPlan($products, $all);
     echo '[2/4] Ready: ' . count($plans) . ' products, ' . count($categoryPlan) . " category nodes.\n";
-    $missingWeight = count(array_filter($plans, fn (array $p): bool => $p['weight'] === null));
+    $demoWeight = count(array_filter($plans, fn (array $p): bool => $p['weight_origin'] === 'demo'));
     $normalizedHtml = count(array_filter($plans, fn (array $p): bool => $p['html_normalized']));
-    echo "SOURCE NOTES: {$missingWeight} missing weights; {$normalizedHtml} descriptions normalized by PrestaShop purifier.\n";
+    echo "SOURCE NOTES: {$demoWeight} demonstration weights for missing/zero source weights; {$normalizedHtml} descriptions normalized by PrestaShop purifier.\n";
     if ($dryRun) {
         foreach ($plans as $plan) {
             echo ($plan['id'] === null ? 'CREATE' : 'UPDATE') . ': ' . $plan['reference']
                 . ', net: ' . $plan['price']['net'] . ', gross: ' . $plan['price']['gross']
-                . ', VAT: ' . $plan['price']['vat'] . '%, default: ' . implode(' > ', $plan['primary']) . PHP_EOL;
+                . ', VAT: ' . $plan['price']['vat'] . '%, default: ' . implode(' > ', $plan['primary'])
+                . ', weight: ' . $plan['weight'] . ' kg (' . $plan['weight_origin'] . ')' . PHP_EOL;
         }
         echo "OK: dry run; no database changes.\n";
         exit(0);
     }
     echo "[3/4] Preparing category tree...\n";
+    // Kategorie są zatwierdzane osobno przed produktami. Jeśli późniejszy zapis
+    // produktu zakończy się błędem, wcześniejsze kategorie mogą już istnieć przy ponowieniu.
     $categories = ShopInit\transaction(fn () => ShopInit\importCategories($categoryPlan, $context));
     echo "[4/4] Saving product data and checking PrestaShop prices...\n";
     $ids = ShopInit\transaction(fn () => ShopInit\importProducts($plans, $categories, $context));

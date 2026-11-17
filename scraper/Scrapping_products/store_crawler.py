@@ -10,9 +10,11 @@ from Scrapping_products.catalog_discovery import discover_catalog, scan_category
 from Scrapping_products.variant_prices import collect_variants
 
 
-class store_crawler:
+class StoreCrawler:
+    """Obsługuje sesję Playwright oraz pobieranie katalogu i rzeczywistych kombinacji produktów."""
     def __init__(self, cookies: str = "", *, headless: bool = False):
 
+        """Otwiera trwały profil Chromium z polską lokalizacją i opcjonalnym cookie sesji źródła."""
         self.playwright = sync_playwright().start()
 
         self.context = self.playwright.chromium.launch_persistent_context(
@@ -31,12 +33,13 @@ class store_crawler:
                 }
             ])
 
-        self.page = self.context.pages[0] if self.context.pages else self.context.new_page() # albo uzywamy juz gotowej strony (karty) albo otwieramy nowa
+        self.page = self.context.pages[0] if self.context.pages else self.context.new_page() # Wykorzystujemy istniejącą kartę trwałego profilu lub otwieramy nową.
 
         self.page.set_default_timeout(15000)
 
 
     def fetch_page(self, url:str) -> str | None:
+        """Pobiera HTML z kontrolą odpowiedzi i wyzwania Cloudflare. Nieudana próba zwraca None."""
         time.sleep(1)
 
         try:
@@ -49,7 +52,7 @@ class store_crawler:
             if self.is_challenge():
                 if not self.wait_for_cloudflare():
                     return None
-                # Navigate again to check the actual requested page's status.
+                # Ponowna nawigacja potwierdza kod odpowiedzi żądanej strony po wyzwaniu.
                 response = self.page.goto(url, wait_until="domcontentloaded", timeout=15000)
 
             if response is None or not response.ok or self.is_challenge():
@@ -69,23 +72,25 @@ class store_crawler:
             return None
 
 
-
     def discover_category(self, start_url: str) -> set:
-        """Compatibility API: one category and its pagination, without descendants."""
+        """Zwraca adresy produktów jednej kategorii wraz z jej stronami paginacji."""
         return set(scan_category(self.fetch_page, start_url)["products"].values())
 
     def discover_catalog(self) -> dict:
+        """Przechodzi pełne drzewo źródła i zwraca kategorie oraz przypisania produktów."""
         return discover_catalog(self.fetch_page)
 
     def fetch_variants(self, html: str, product):
+        """Weryfikuje ceny kombinacji przez żądania kontrolera produktu, zachowując sesję przeglądarki."""
         soup = BeautifulSoup(html, "html.parser")
         form = soup.select_one("#add-to-cart-or-refresh")
 
         def refresh_selection(selection):
+            """Wysyła wybór atrybutów do kontrolera produktu i zwraca odpowiedź odświeżenia."""
             if form is None:
                 raise ValueError("Brak formularza aktualizacji wariantu.")
-            # The form action is the CART endpoint. Refresh must target the
-            # product controller, exactly as the storefront's variant request.
+            # Formularz wskazuje kontroler koszyka. Odświeżenie wariantu kierujemy do
+            # kontrolera produktu, zgodnie z żądaniem wariantu w sklepie źródłowym.
             endpoint = product.product_url.split("#", 1)[0]
             fields = {
                 node["name"]: node.get("value", "")
@@ -112,12 +117,14 @@ class store_crawler:
         return collect_variants(html, product, refresh_selection)
 
     def is_challenge(self) -> bool:
+        """Rozpoznaje stronę wyzwania Cloudflare zamiast oczekiwanej zawartości."""
         title = self.page.title().casefold()
         return not title or any(text in title for text in ("just a moment", "cierpliwości", "cierpliwosci"))
 
-    # To na wszelki wypadek jakby sie nie chcialo zalogowac przez ten cloudflare (!)
+    # Ograniczone oczekiwanie umożliwia ręczne rozwiązanie wyzwania Cloudflare.
 
     def wait_for_cloudflare(self, max_wait = 100):
+        """Czeka ograniczony czas na rozwiązanie wyzwania w bieżącej sesji."""
         start_time = time.time()
 
         while time.time() - start_time < max_wait:
@@ -132,8 +139,13 @@ class store_crawler:
         return False
 
     def close(self):
+        """Zamyka kontekst przeglądarki i zatrzymuje instancję Playwright."""
         logging.info(f"Zamkniecie przegladarki")
         try:
             self.context.close()
         finally:
             self.playwright.stop()
+
+
+# Zgodność ze starszymi importami narzędzi diagnostycznych.
+store_crawler = StoreCrawler

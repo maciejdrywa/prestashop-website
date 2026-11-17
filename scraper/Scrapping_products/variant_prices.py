@@ -1,4 +1,4 @@
-"""Read actual PrestaShop combinations and their displayed prices."""
+"""Odczytuje rzeczywiste kombinacje PrestaShop i ich wyświetlane ceny."""
 
 from collections import deque
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -14,6 +14,7 @@ from parser_classes.ProductVariant import ProductVariant
 
 
 def decimal_price(value, field: str) -> Decimal:
+    """Waliduje źródłową cenę i zwraca Decimal bez utraty precyzji."""
     try:
         if isinstance(value, bool):
             raise ValueError("Boolean is not a price")
@@ -26,6 +27,7 @@ def decimal_price(value, field: str) -> Decimal:
 
 
 def read_product_data(html_or_soup) -> dict:
+    """Odczytuje dane produktu z HTML albo obiektu BeautifulSoup."""
     soup = BeautifulSoup(html_or_soup, "html.parser") if isinstance(html_or_soup, str) else html_or_soup
     node = soup.select_one("#product-details[data-product]")
     if node is None:
@@ -39,6 +41,7 @@ def read_product_data(html_or_soup) -> dict:
 
 
 def selected_attributes(data: dict) -> dict[str, str]:
+    """Zwraca mapę wybranych grup i wartości z danych kombinacji."""
     attributes = data.get("attributes") or {}
     if not isinstance(attributes, dict):
         raise ValueError("Niepoprawne atrybuty kombinacji.")
@@ -51,6 +54,7 @@ def selected_attributes(data: dict) -> dict[str, str]:
 
 
 def attribute_choices(html_or_soup) -> dict[str, set[str]]:
+    """Zbiera dostępne opcje aktualnego formularza produktu."""
     soup = BeautifulSoup(html_or_soup, "html.parser") if isinstance(html_or_soup, str) else html_or_soup
     choices = {}
     for control in soup.select('.product-variants select[name], .product-variants input[type="radio"][name]'):
@@ -65,6 +69,7 @@ def attribute_choices(html_or_soup) -> dict[str, set[str]]:
 
 
 def variant_from_data(data: dict, product_name: str, base_netto) -> ProductVariant:
+    """Buduje kombinację z odpowiedzi źródła i różnicą netto względem ceny bazowej."""
     variant_id = str(data.get("id_product_attribute") or "")
     if not variant_id.isdigit() or int(variant_id) <= 0:
         raise ValueError("Źródło nie zwróciło ID rzeczywistej kombinacji.")
@@ -94,10 +99,12 @@ def variant_from_data(data: dict, product_name: str, base_netto) -> ProductVaria
 
 
 def collect_variants(html: str, source_product, refresh_selection) -> list[ProductVariant]:
-    """Resolve candidate selections through the source; never invent combinations.
+    """Zwraca rzeczywiste kombinacje z cenami i sześciocyfrowym modyfikatorem netto.
 
-    A source may substitute a valid combination for an impossible selection.
-    Only exact matches are exported. Newly exposed options extend the queue.
+    HTML udostępnia aktualne opcje, source_product cenę bazową, a callback
+    refresh_selection odpowiedź kontrolera dla mapy wybranych atrybutów.
+    Nieistniejące wybory są pomijane po rozpoznaniu odpowiedzi zastępczej.
+    ValueError przerywa pobieranie przy niepotwierdzonym produkcie lub cenach.
     """
     choices = attribute_choices(html)
     if not choices:
@@ -106,9 +113,9 @@ def collect_variants(html: str, source_product, refresh_selection) -> list[Produ
     if str(initial.get("id_product", initial.get("id"))) != str(source_product.product_id):
         raise ValueError("Odpowiedź wariantów dotyczy innego produktu.")
     initial_selection = selected_attributes(initial)
-    # Some source URLs point at an old combination whose attributes no longer
-    # match the current form (e.g. product 631: old size vs current colors).
-    # In that case resolve every current choice through the source controller.
+    # Niektóre adresy wskazują starą kombinację, której atrybuty różnią się
+    # od aktualnego formularza, np. produkt 631 ze starym rozmiarem i aktualnymi kolorami.
+    # Każdy obecny wybór należy wtedy potwierdzić przez kontroler źródła.
     if not set(choices) <= set(initial_selection):
         logging.warning(
             "Domyślna kombinacja ma grupy %s, a formularz %s. "
@@ -124,6 +131,7 @@ def collect_variants(html: str, source_product, refresh_selection) -> list[Produ
     queued = set()
 
     def enqueue_choices():
+        """Dodaje nieodwiedzone wybory atrybutów do kolejki odświeżania kombinacji."""
         groups = sorted(choices, key=int)
         for values in cartesian_product(*(sorted(choices[group], key=int) for group in groups)):
             selection = tuple(zip(groups, values))
@@ -155,8 +163,8 @@ def collect_variants(html: str, source_product, refresh_selection) -> list[Produ
             if expanded:
                 enqueue_choices()
         actual = selected_attributes(data)
-        # Extra attributes may represent fixed groups not exposed by the form.
-        # Every actively requested attribute must still be confirmed exactly.
+        # Dodatkowe atrybuty mogą należeć do stałych grup niewidocznych w formularzu.
+        # Każdy żądany atrybut musi mieć dokładne potwierdzenie w odpowiedzi.
         if not all(actual.get(group) == value for group, value in requested.items()):
             logging.info("Źródło nie potwierdziło kombinacji %s; pominięto zastępczy wybór %s", requested, actual)
             continue

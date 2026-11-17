@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from typing import List
 
 def scrap_catalog(soup: BeautifulSoup) -> List[str]:
+    """Odczytuje oryginalną ścieżkę breadcrumbs produktu."""
     breadcrumbs = []
 
     nav_tag = soup.find('nav', class_='breadcrumb hidden-sm-down')

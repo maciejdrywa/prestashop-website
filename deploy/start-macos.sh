@@ -1,4 +1,10 @@
 #!/bin/bash
+# Pełny start lokalnego sklepu na macOS z opcjonalnym zaufaniem certyfikatowi.
+# Wywołanie z katalogu repozytorium
+# bash deploy/start-macos.sh [--trust]
+# Wymaga Docker Desktop, .env i przygotowanych źródeł. Wywołuje wspólny bootstrap,
+# a --trust dodaje wygenerowany certyfikat do pęku kluczy bieżącego użytkownika.
+# Katalog TLS jest domyślnie poza repozytorium i może być wskazany przez środowisko.
 set -euo pipefail
 
 trust=false
@@ -18,19 +24,12 @@ docker info >/dev/null
 # Eksport ma pierwszeństwo nad windowsową lub pustą ścieżką w .env.
 export TLS_CERT_DIR="${TLS_CERT_DIR:-$HOME/.prestashop-website/certs}"
 [[ "$TLS_CERT_DIR" = /* ]] || { echo 'TLS_CERT_DIR musi być ścieżką bezwzględną.' >&2; exit 1; }
-compose=(docker compose --env-file "$repo_dir/.env" -f "$repo_dir/deploy/compose.yaml")
-"${compose[@]}" config --quiet
-if [[ ! -e "$TLS_CERT_DIR/localhost.crt" && ! -e "$TLS_CERT_DIR/localhost.key" ]]; then
-    bash "$repo_dir/deploy/generate-cert.sh"
-fi
-[[ -s "$TLS_CERT_DIR/localhost.crt" && -s "$TLS_CERT_DIR/localhost.key" ]] || {
-    echo 'Niekompletna para certyfikatu i klucza. Sprawdź TLS_CERT_DIR.' >&2; exit 1;
-}
-openssl x509 -in "$TLS_CERT_DIR/localhost.crt" -checkend 0 -noout
+# Tablica zachowuje granice argumentów także przy spacjach w ścieżce projektu.
+# Eksport TLS_CERT_DIR ma pierwszeństwo przed wartością zapisaną w .env.
+compose=(docker compose --env-file "$repo_dir/.env" -f "$repo_dir/deploy/compose.yaml" -f "$repo_dir/deploy/compose.bootstrap.yaml")
+"${compose[@]}" run --build --rm bootstrap
 if "$trust"; then
-    # Zaufanie dotyczy tylko konta bieżącego użytkownika.
+    # Zaufanie dotyczy konta bieżącego użytkownika i wymaga natywnego pęku kluczy.
     security add-trusted-cert -r trustRoot -k "$HOME/Library/Keychains/login.keychain-db" \
         "$TLS_CERT_DIR/localhost.crt"
 fi
-"${compose[@]}" up -d --build
-printf '\nSklep: https://localhost\nLogi: docker compose --env-file .env -f deploy/compose.yaml logs -f shop\n'

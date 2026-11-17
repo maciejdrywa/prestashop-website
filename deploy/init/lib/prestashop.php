@@ -2,12 +2,34 @@
 
 declare(strict_types=1);
 
+/**
+ * Warstwa integracji planów źródłowych z natywnymi klasami PrestaShop.
+ *
+ * Dołączana przez biblioteki domenowe. Operacje na sklepie wymagają wcześniejszego boot() i konfiguracji
+ * istniejącej instalacji.
+ *
+ * Udostępnia kontekst, transakcje, zapis Configuration, kategorii, atrybutów i kombinacji. boot() może
+ * utworzyć cache purifier.
+ */
+
+
 namespace ShopInit;
 
 use RuntimeException;
 
 require_once __DIR__ . '/source.php';
 
+/**
+ * Ładuje kontekst CLI PrestaShop, sprawdza bazę i przygotowuje cache HTMLPurifier.
+ *
+ * Ładuje autoloader, stałe i konfigurację natywnego sklepu. Ustawia globalny kontekst jednego sklepu i
+ * sprawdza SELECT 1. Przygotowanie katalogu purifier jest skutkiem ubocznym również w komendach
+ * diagnostycznych.
+ *
+ * @param string $root Katalog z zainstalowanym PrestaShop i config/config.inc.php.
+ * @return \Context Bieżący kontekst z ustawionym zakresem jednego sklepu.
+ * @throws \RuntimeException Przy niepoprawnym trybie wykonania, brakującej instalacji, kontekście, bazie lub katalogu cache.
+ */
 function boot(string $root = '/var/www/html'): \Context
 {
     if (PHP_SAPI !== 'cli') {
@@ -22,13 +44,50 @@ function boot(string $root = '/var/www/html'): \Context
     if (!\Validate::isLoadedObject($context->shop)) {
         throw new RuntimeException('Cannot determine the current shop.');
     }
+    // Jawny zakres sklepu jest wykorzystywany przez natywne modele, Configuration
+    // i ograniczenia SQL w tabelach *_shop podczas całego procesu CLI.
     \Shop::setContext(\Shop::CONTEXT_SHOP, (int) $context->shop->id);
     if ((string) \Db::getInstance()->getValue('SELECT 1') !== '1') {
         throw new RuntimeException('Database connection failed.');
     }
+    // Instalator może pozostawić pusty katalog cache. HTMLPurifier wymaga własnego podkatalogu.
+    $purifier = _PS_CACHE_DIR_ . 'purifier';
+    if (!is_dir($purifier) && !mkdir($purifier, 0775, true) && !is_dir($purifier)) {
+        throw new RuntimeException('Nie można przygotować cache HTMLPurifier. Sprawdź właściciela var/cache.');
+    }
     return $context;
 }
 
+/**
+ * Zapisuje ustawienie dla bieżącego sklepu i grupy, zgłaszając nieudany zapis.
+ *
+ * Zakres zapisu obejmuje bieżący sklep i jego grupę. Dla ustawień wielojęzycznych wartość jest mapą id_lang
+ * na tekst. Błąd updateValue przerywa konfigurację.
+ *
+ * @param string $key Klucz Configuration zapisywany w zakresie sklepu i grupy.
+ * @param mixed $value Wartość ustawienia lub mapa id_lang na wartości wielojęzyczne.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $html Zezwala natywnemu mechanizmowi Configuration na zapis zawartości HTML.
+ * @return void
+ * @throws \RuntimeException Przy nieudanym zapisie Configuration w zakresie sklepu.
+ */
+function saveShopSetting(string $key, $value, \Context $context, bool $html = false): void
+{
+    if (!\Configuration::updateValue($key, $value, $html, (int) $context->shop->id_shop_group, (int) $context->shop->id)) {
+        throw new RuntimeException('Nie można zapisać ustawienia sklepu: ' . $key);
+    }
+}
+
+/**
+ * Wymaga PLN, Polski i podatków oraz izoluje obliczenia od bieżącego koszyka klienta.
+ *
+ * Zastępuje kontekst waluty, koszyka i klienta w bieżącym procesie. Dzięki temu sprawdzenie ceny źródłowej
+ * korzysta z PLN i domyślnego kraju bez wpływu kontekstu aktualnego klienta lub koszyka.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Gdy domyślna waluta, kraj lub ustawienia podatków nie odpowiadają PLN i Polsce.
+ */
 function priceContext(\Context $context): void
 {
     $context->currency = new \Currency((int) \Configuration::get('PS_CURRENCY_DEFAULT'));
@@ -38,10 +97,22 @@ function priceContext(\Context $context): void
         || !\Configuration::get('PS_TAX')) {
         throw new RuntimeException('Expected PLN, Poland as default country, and enabled taxes.');
     }
+    // Kalkulator ma działać w kontrolowanym kontekście. Podstawienie pustych
+    // obiektów usuwa zależność od ewentualnego klienta i koszyka procesu.
     $context->cart = new \Cart();
     $context->customer = new \Customer();
 }
 
+/**
+ * Zwraca pojedynczy identyfikator lub null. Błąd odczytu i duplikaty przerywają wyszukiwanie.
+ *
+ * Odróżnia poprawny brak rekordu od błędu zapytania i wieloznacznego dopasowania. Wywołujący decyduje, czy
+ * null oznacza utworzenie obiektu, czy błąd brakującej zależności.
+ *
+ * @param \DbQuery $query Zapytanie SELECT zwracające identyfikator pod aliasem id.
+ * @return int|null Identyfikator z kolumny id albo null przy pustym wyniku.
+ * @throws \RuntimeException Przy błędzie zapytania lub więcej niż jednym dopasowanym rekordzie.
+ */
 function uniqueId(\DbQuery $query): ?int
 {
     $rows = \Db::getInstance()->executeS($query);
@@ -51,9 +122,22 @@ function uniqueId(\DbQuery $query): ?int
     return $rows === [] ? null : (int) $rows[0]['id'];
 }
 
+/**
+ * Wykonuje operację w transakcji. Przy błędzie żąda rollbacku i zgłasza możliwe skutki hooków.
+ *
+ * Callback działa na wspólnym połączeniu Db. Wyjątek powoduje próbę ROLLBACK i jest opakowany w
+ * RuntimeException z zachowaną przyczyną. Hook wykonujący TRUNCATE lub inne operacje z implicit commit
+ * ogranicza możliwość cofnięcia całej operacji.
+ *
+ * @param callable $callback Operacja objęta transakcją, której wynik zostanie zwrócony bez przekształcenia.
+ * @return mixed Wynik przekazanego callbacku po zatwierdzeniu transakcji.
+ * @throws \RuntimeException Przy nieudanej transakcji lub wyjątku callbacku, z zachowaną przyczyną.
+ */
 function transaction(callable $callback)
 {
     $db = \Db::getInstance();
+    // Transakcja obejmuje callback na tym połączeniu. Kod nie tworzy savepointów,
+    // więc wywołujący odpowiada za poprawne granice transakcji i sekwencję operacji.
     if (!$db->execute('START TRANSACTION')) {
         throw new RuntimeException('Cannot start initialization transaction.');
     }
@@ -65,14 +149,27 @@ function transaction(callable $callback)
         return $result;
     } catch (\Throwable $error) {
         $db->execute('ROLLBACK');
-        // Some module hooks execute TRUNCATE, which implicitly commits MySQL.
+        // Hooki modułów mogą wykonać TRUNCATE, zatwierdzające transakcję MySQL.
         throw new RuntimeException($error->getMessage() . ' Rollback requested; module hooks may have committed earlier writes. Correct the error and rerun.', 0, $error);
     }
 }
 
+/**
+ * Rozwiązuje drzewo kategorii po rodzicach i nazwach, opcjonalnie tworząc brakujące węzły.
+ *
+ * Wyszukuje węzeł przez rodzica, nazwę w języku domyślnym i powiązanie ze sklepem. Tworzone kategorie
+ * otrzymują tłumaczenia dla wszystkich języków. Istniejące dopasowane węzły są wykorzystywane do budowania
+ * mapy ID.
+ *
+ * @param array $plan Węzły z categoryPlan, uporządkowane od rodziców do dzieci.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $create Pozwala utworzyć brakujące kategorie. Przy false brak węzła kończy się błędem.
+ * @return array<string, int> Mapa pełnych ścieżek JSON na ID kategorii.
+ * @throws \RuntimeException Przy niepoprawnej nazwie, brakującym rodzicu, wieloznacznym dopasowaniu lub błędzie zapisu.
+ */
 function importCategories(array $plan, \Context $context, bool $create = true): array
 {
-    // Validate all names before the first write.
+    // Wszystkie nazwy sprawdzamy przed pierwszą operacją zapisu.
     foreach ($plan as $entry) {
         if (!\Validate::isCatalogName($entry['name']) || mb_strlen($entry['name']) > 128
             || !\Validate::isLinkRewrite(\Tools::link_rewrite($entry['name']))) {
@@ -95,6 +192,8 @@ function importCategories(array $plan, \Context $context, bool $create = true): 
         $query->select('c.id_category AS id')->from('category', 'c');
         $query->innerJoin('category_lang', 'cl', 'cl.id_category = c.id_category');
         $query->innerJoin('category_shop', 'cs', 'cs.id_category = c.id_category');
+        // Identyfikacja po rodzicu, języku i sklepie rozróżnia kategorie o tej samej
+        // nazwie występujące w różnych gałęziach. uniqueId odrzuca wieloznaczne dopasowanie.
         $query->where('c.id_parent = ' . $parentId);
         $query->where('cl.id_lang = ' . $languageId);
         $query->where('cl.id_shop = ' . $shopId)->where('cs.id_shop = ' . $shopId);
@@ -127,6 +226,14 @@ function importCategories(array $plan, \Context $context, bool $create = true): 
     return $ids;
 }
 
+/**
+ * Wyszukuje grupę atrybutów po nazwie w bieżącym sklepie.
+ *
+ * @param string $name Nazwa wyszukiwanego obiektu w języku domyślnym sklepu.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int|null ID grupy albo null przy braku dopasowania.
+ * @throws \RuntimeException Przy wieloznacznym dopasowaniu lub błędzie odczytu identyfikatora.
+ */
 function findGroup(string $name, \Context $context): ?int
 {
     $query = new \DbQuery();
@@ -139,6 +246,15 @@ function findGroup(string $name, \Context $context): ?int
     return uniqueId($query);
 }
 
+/**
+ * Wyszukuje wartość we wskazanej grupie atrybutów sklepu.
+ *
+ * @param int $groupId ID grupy atrybutów w PrestaShop.
+ * @param string $value Wartość przekazana do walidacji lub zapisu.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int|null ID wartości albo null przy braku dopasowania.
+ * @throws \RuntimeException Przy wieloznacznym dopasowaniu lub błędzie odczytu identyfikatora.
+ */
 function findAttribute(int $groupId, string $value, \Context $context): ?int
 {
     $query = new \DbQuery();
@@ -152,6 +268,17 @@ function findAttribute(int $groupId, string $value, \Context $context): ?int
     return uniqueId($query);
 }
 
+/**
+ * Tworzy brakujące grupy i wartości atrybutów, zachowując istniejące identyfikatory.
+ *
+ * Nazwy są sprawdzane przed zapisami. Grupy mają typ select, a wartości są dopisywane z kolejną pozycją.
+ * Tworzenie grup i wartości wykorzystuje klasy PrestaShop, co zachowuje ich powiązania i hooki.
+ *
+ * @param array $groups Wynik attributePlan, nazwy grup z mapą unikalnych wartości.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array Mapa nazw grup i kluczy wartości z attributePlan na zapisane ID atrybutów.
+ * @throws \RuntimeException Przy błędnych nazwach, konflikcie dopasowania lub nieudanym zapisie grupy i wartości.
+ */
 function importAttributes(array $groups, \Context $context): array
 {
     foreach ($groups as $name => $values) {
@@ -209,8 +336,23 @@ function importAttributes(array $groups, \Context $context): array
     return $result;
 }
 
+/**
+ * Oblicza cenę brutto przez natywny mechanizm cen PrestaShop i zwraca zapis dziesiętny.
+ *
+ * Wywołuje natywny kalkulator z VAT, wyłączoną redukcją, redukcją grupową
+ * i use_customer_price=false. Przed obliczeniem czyści cache cen. false wskazuje
+ * cenę bazową, a konkretne ID uwzględnia wpływ wybranej kombinacji.
+ *
+ * @param int $productId Docelowe ID produktu w PrestaShop.
+ * @param int|false $combinationId ID kombinacji lub false do obliczenia ceny bazowej bez wariantu.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return string Cena brutto w PLN zaokrąglona do dwóch miejsc.
+ * @throws \RuntimeException Gdy natywny kalkulator zwróci null lub wynik nie przejdzie walidacji kwoty.
+ */
 function productGross(int $productId, $combinationId, \Context $context): string
 {
+    // Weryfikacja dotyczy świeżego zapisu. Cache ceny jest czyszczony przed
+    // wywołaniem natywnego kalkulatora z jawnie wyłączonymi redukcjami.
     \Product::flushPriceCache();
     $gross = \Product::getPriceStatic(
         id_product: $productId, usetax: true, id_product_attribute: $combinationId,
@@ -223,6 +365,18 @@ function productGross(int $productId, $combinationId, \Context $context): string
     return rounded(decimal($gross, 'PrestaShop gross'), 2);
 }
 
+/**
+ * Łączy zweryfikowane ceny źródłowe z produktami i wartościami atrybutów w sklepie.
+ *
+ * Przed zapisem wymaga istniejącego produktu z poprawnym netto i brutto bazowym oraz gotowego słownika
+ * atrybutów. Posortowane attribute_ids pozwalają porównać zestawy wartości niezależnie od kolejności
+ * źródła.
+ *
+ * @param array $products Lista zweryfikowanych rekordów źródłowych products.json.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return list<array{product: \Product, source_id: string, prices: array}> Plan cen z rozwiązanymi attribute_ids wariantów.
+ * @throws \RuntimeException Przy brakującym produkcie, niespójnej cenie bazowej lub nierozwiązanej wartości atrybutu.
+ */
 function combinationPlan(array $products, \Context $context): array
 {
     priceContext($context);
@@ -271,6 +425,65 @@ function combinationPlan(array $products, \Context $context): array
     return $result;
 }
 
+/**
+ * Odczytuje warianty mające niezerowy wpływ na wagę produktu.
+ *
+ * @param int $productId Docelowe ID produktu w PrestaShop.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return list<array{id_product_attribute: string}> Warianty z niezerowym wpływem masy w tabeli bazowej lub sklepowej.
+ * @throws \RuntimeException Przy nieudanym odczycie wpływu masy kombinacji.
+ */
+function nonzeroCombinationWeights(int $productId, \Context $context): array
+{
+    $rows = \Db::getInstance()->executeS('SELECT pa.id_product_attribute FROM ' . _DB_PREFIX_ . 'product_attribute pa INNER JOIN '
+        . _DB_PREFIX_ . 'product_attribute_shop s ON s.id_product_attribute=pa.id_product_attribute WHERE pa.id_product=' . $productId
+        . ' AND s.id_shop=' . (int) $context->shop->id . ' AND (pa.weight<>0 OR s.weight<>0)', true, false);
+    if ($rows === false) throw new RuntimeException('Cannot read combination weight impacts.');
+    return $rows;
+}
+
+/**
+ * Odrzuca warianty zmieniające masę, ponieważ wszystkie warianty produktu mają ważyć jednakowo.
+ *
+ * @param int $productId Docelowe ID produktu w PrestaShop.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Gdy przynajmniej jeden wariant ma niezerowy wpływ na masę produktu.
+ */
+function verifyUniformCombinationWeights(int $productId, \Context $context): void
+{
+    if (nonzeroCombinationWeights($productId, $context) !== []) throw new RuntimeException('Combination weight must have zero impact for product ' . $productId);
+}
+
+/**
+ * Zeruje wpływ wariantów na masę przez natywne obiekty Combination.
+ *
+ * @param int $productId Docelowe ID produktu w PrestaShop.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Przy błędzie odczytu lub aktualizacji masy kombinacji.
+ */
+function resetCombinationWeights(int $productId, \Context $context): void
+{
+    foreach (nonzeroCombinationWeights($productId, $context) as $row) {
+        $combination = new \Combination((int) $row['id_product_attribute'], null, (int) $context->shop->id);
+        $combination->weight = 0;
+        if (!$combination->update()) throw new RuntimeException('Cannot reset combination weight: ' . $combination->id);
+    }
+}
+
+/**
+ * Zapisuje kombinacje i modyfikatory netto, wybiera domyślną kombinację oraz sprawdza brutto.
+ *
+ * Rozpoznaje wariant po referencji lub zestawie ID atrybutów i odrzuca sprzeczne dopasowania. Zapisuje
+ * wpływ ceny netto oraz zerowy wpływ masy. Po ustawieniu wariantu domyślnego sprawdza każdą cenę brutto
+ * przez PrestaShop. Transakcję zapewnia wywołujący.
+ *
+ * @param array $plans Plany combinationPlan zawierające obiekty Product i ID wartości atrybutów.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array<string, list<int>> Zapisane ID kombinacji pogrupowane według źródłowego ID produktu.
+ * @throws \RuntimeException Przy konflikcie wariantów, błędzie zapisu albo rozbieżności docelowego brutto.
+ */
 function importCombinations(array $plans, \Context $context): array
 {
     $result = [];
@@ -284,6 +497,8 @@ function importCombinations(array $plans, \Context $context): array
         if ($existing === false) {
             throw new RuntimeException('Cannot read existing combinations.');
         }
+        // Dwa indeksy pozwalają rozpoznać wcześniejszy zapis po referencji lub zestawie
+        // atrybutów. Ich konflikt oznacza niejednoznaczny stan do wyjaśnienia przed zapisem.
         $byReference = [];
         $byAttributes = [];
         foreach ($existing as $row) {
@@ -317,6 +532,9 @@ function importCombinations(array $plans, \Context $context): array
             $combination->id_product = (int) $product->id;
             $combination->reference = $variant['reference'];
             $combination->price = $variant['modifier'];
+            // PrestaShop dodaje wpływ kombinacji do wagi bazowej. Zero zapewnia
+            // jednakową masę wariantów, zachowując ich modyfikatory cen.
+            $combination->weight = 0;
             $combination->minimal_quantity = 1;
             if (!($id === null ? $combination->add() : $combination->update())
                 || !$combination->setAttributes($variant['attribute_ids'])) {
@@ -325,12 +543,14 @@ function importCombinations(array $plans, \Context $context): array
             $ids[] = (int) $combination->id;
             echo ($id === null ? 'CREATED' : 'UPDATED') . ': ' . $variant['reference'] . ', ID: ' . $combination->id . PHP_EOL;
         }
-        // Preserve a valid existing default, otherwise select the first source combination.
+        // Zachowujemy poprawny wariant domyślny lub wybieramy pierwszy ze źródła.
         $default = in_array((int) $product->cache_default_attribute, $ids, true)
             ? (int) $product->cache_default_attribute : $ids[0];
         if (!$product->deleteDefaultAttributes() || !$product->setDefaultAttribute($default)) {
             throw new RuntimeException('Cannot set the default combination.');
         }
+        // Sama zgodność zapisanego wpływu netto nie wystarcza. Ostateczną cenę każdej
+        // kombinacji potwierdzamy kalkulatorem PrestaShop po ustawieniu atrybutów.
         foreach ($entry['prices']['variants'] as $index => $variant) {
             $gross = productGross((int) $product->id, $ids[$index], $context);
             if ($gross !== $variant['gross']) {
@@ -339,6 +559,7 @@ function importCombinations(array $plans, \Context $context): array
             echo 'PRICE OK: ' . $variant['source_id'] . ", {$gross} PLN gross" . PHP_EOL;
         }
         $result[$entry['source_id']] = $ids;
+        verifyUniformCombinationWeights((int) $product->id, $context);
     }
     return $result;
 }

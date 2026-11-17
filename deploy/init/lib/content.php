@@ -1,5 +1,16 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Strony informacyjne CMS, tokeny treści i bloki stopki ps_linklist.
+ *
+ * Wywoływana przez configure-content.php po przygotowaniu płatności i dostaw, a przed cookies i tekstami
+ * modułów.
+ *
+ * Czyta pięć content/*.html, rozwiązuje ID stron oraz odnośniki i zapisuje CMS, LinkBlock oraz ustawienia
+ * regulaminu i prywatności.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
@@ -7,6 +18,11 @@ use PrestaShop\Module\LinkList\Model\LinkBlock;
 
 require_once __DIR__ . '/prestashop.php';
 
+/**
+ * Zwraca tytuły i identyfikatory pięciu stron informacyjnych oraz ich poprzednie nazwy.
+ *
+ * @return array<string, array> Klucze stron, tytuły, slugi i sygnatury stron instalatora.
+ */
 function informationalPageDefinitions(): array
 {
     return [
@@ -18,6 +34,16 @@ function informationalPageDefinitions(): array
     ];
 }
 
+/**
+ * Wczytuje szablony HTML w UTF-8 i odrzuca brakujące lub niekompletne treści.
+ *
+ * Pliki content/*.html są treścią początkową zapisywaną później w CMS. Ich tokeny są rozwiązywane po
+ * uzyskaniu ID stron. Kontrola UTF-8, długości i lorem ipsum odbywa się przed zapisem.
+ *
+ * @param string|null $directory Katalog pięciu szablonów HTML, domyślnie deploy/init/content.
+ * @return array<string, string> HTML stron indeksowany kluczami definicji CMS.
+ * @throws \RuntimeException Przy brakującym pliku, błędnym UTF-8 lub niekompletnej treści strony.
+ */
 function informationalTemplates(?string $directory = null): array
 {
     $directory ??= dirname(__DIR__) . '/content';
@@ -35,6 +61,17 @@ function informationalTemplates(?string $directory = null): array
     return $templates;
 }
 
+/**
+ * Podstawia tokeny w HTML i zgłasza błąd pozostawionych znaczników.
+ *
+ * Wartości tokenów muszą być wcześniej przygotowane zgodnie z ich kontekstem HTML. Funkcja wykonuje strtr i
+ * wykrywa pozostałe znaczniki, a walidację wynikowego HTML zapewnia konfigurator.
+ *
+ * @param string $html Szablon strony z tokenami w postaci {{nazwa}}.
+ * @param array $tokens Mapa pełnych znaczników {{token}} na przygotowane fragmenty HTML lub bezpieczne adresy.
+ * @return string HTML z kompletnie rozwiązanymi tokenami.
+ * @throws \RuntimeException Gdy po podstawieniu pozostaje nierozwiązany token.
+ */
 function renderInformationalTemplate(string $html, array $tokens): string
 {
     $html = strtr($html, $tokens);
@@ -42,18 +79,24 @@ function renderInformationalTemplate(string $html, array $tokens): string
     return $html;
 }
 
-function contentSetting(string $key, $value, \Context $context, bool $html = false): void
-{
-    if (!\Configuration::updateValue($key, $value, $html, (int) $context->shop->id_shop_group, (int) $context->shop->id)) {
-        throw new RuntimeException('Cannot save content setting: ' . $key);
-    }
-}
-
+/**
+ * Odczytuje zapisane powiązanie treści, sprawdzając przynależność rekordu do sklepu.
+ *
+ * Weryfikuje istnienie rekordu i powiązanie w tabeli *_shop, zanim zapisane w Configuration ID zostanie
+ * ponownie wykorzystane. Nazwy tabel i kolumn muszą pochodzić z kodu aplikacji.
+ *
+ * @param string $setting Klucz konfiguracji przechowujący ID należącego do projektu rekordu.
+ * @param string $table Nazwa tabeli bez prefiksu, pochodząca z zaufanego kodu.
+ * @param string $primary Nazwa klucza głównego tabeli, pochodząca z zaufanego kodu.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int|null ID powiązanego rekordu dostępnego w bieżącym sklepie.
+ * @throws \RuntimeException Przy wieloznacznym dopasowaniu lub błędzie odczytu identyfikatora.
+ */
 function ownedContentId(string $setting, string $table, string $primary, \Context $context): ?int
 {
     $id = (int) \Configuration::get($setting);
     if (!$id) return null;
-    // All table and column names come from constants in this file, never from request input.
+    // Nazwy tabel i kolumn pochodzą ze stałych kodu i są niezależne od danych żądania.
     $query = new \DbQuery();
     $query->select('t.' . $primary . ' AS id')->from($table, 't');
     $query->innerJoin($table . '_shop', 's', 's.' . $primary . '=t.' . $primary);
@@ -61,6 +104,15 @@ function ownedContentId(string $setting, string $table, string $primary, \Contex
     return uniqueId($query);
 }
 
+/**
+ * Rozpoznaje istniejącą stronę przez mapowanie lub dotychczasowy tytuł i adres.
+ *
+ * @param string $key Klucz definicji lub ustawienia używany przez wywołujący obszar konfiguracji.
+ * @param array $page Definicja strony z tytułem oraz aktualną i poprzednią sygnaturą adresu.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int|null ID strony znalezione przez mapowanie lub zgodną sygnaturę.
+ * @throws \RuntimeException Przy wieloznacznym dopasowaniu lub błędzie odczytu identyfikatora.
+ */
 function informationalPageId(string $key, array $page, \Context $context): ?int
 {
     $saved = ownedContentId('SHOP_INIT_CMS_' . strtoupper($key), 'cms', 'id_cms', $context);
@@ -76,6 +128,17 @@ function informationalPageId(string $key, array $page, \Context $context): ?int
     return uniqueId($query);
 }
 
+/**
+ * Wyszukuje blok stopki w danym hooku, uwzględniając poprzednią nazwę.
+ *
+ * @param string $key Klucz definicji lub ustawienia używany przez wywołujący obszar konfiguracji.
+ * @param string $title Docelowy tytuł bloku stopki.
+ * @param string $legacyTitle Tytuł instalatora uwzględniany przy pierwszym rozpoznaniu bloku.
+ * @param int $hookId ID hooka, do którego należy szukany blok.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int|null ID bloku stopki do aktualizacji albo null przy braku dopasowania.
+ * @throws \RuntimeException Przy wieloznacznym dopasowaniu lub błędzie odczytu identyfikatora.
+ */
 function footerBlockId(string $key, string $title, string $legacyTitle, int $hookId, \Context $context): ?int
 {
     $saved = ownedContentId('SHOP_INIT_FOOTER_' . strtoupper($key), 'link_block', 'id_link_block', $context);
@@ -90,6 +153,13 @@ function footerBlockId(string $key, string $title, string $legacyTitle, int $hoo
     return uniqueId($query);
 }
 
+/**
+ * Odczytuje dostępne przewozy i płatności do treści stron sklepu.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array<string, string> Fragmenty HTML dla tokenów delivery_methods i payment_methods.
+ * @throws \RuntimeException Przy nieudanym odczycie metod dostawy lub modułów płatności.
+ */
 function informationalMethods(\Context $context): array
 {
     $db = \Db::getInstance();
@@ -108,6 +178,8 @@ function informationalMethods(\Context $context): array
         'ps_wirepayment'=>'Przelew bankowy (testowy)', 'ps_checkpayment'=>'Czek (testowy)'];
     $delivery = array_map(fn (array $row): string => $deliveryLabels[$row['name']] ?? $row['name'], $carriers);
     $payment = array_map(fn (array $row): string => $paymentLabels[$row['name']] ?? 'Inna metoda udostępniona w podsumowaniu zamówienia', $payments);
+    // Etykiety metod pochodzą z bazy i są escapowane jako tekst HTML.
+    // Gotowe fragmenty list są podstawiane do dedykowanych tokenów szablonów CMS.
     $list = function (array $labels): string {
         if ($labels === []) return '<p>Obecnie nie udostępniono żadnej metody. Spróbuj ponownie po aktualizacji konfiguracji sklepu.</p>';
         return '<ul>' . implode('', array_map(fn (string $label): string => '<li>'
@@ -116,6 +188,19 @@ function informationalMethods(\Context $context): array
     return ['{{delivery_methods}}'=>$list($delivery), '{{payment_methods}}'=>$list($payment)];
 }
 
+/**
+ * Odtwarza strony, bloki stopki i odnośniki, a w trybie próbnym przedstawia plan.
+ *
+ * Najpierw rozpoznaje strony i bloki oraz sprawdza HTML. Podczas zapisu rezerwuje ID wszystkich stron,
+ * następnie rozwiązuje wzajemne odnośniki i zapisuje treść. Odtwarza bloki ps_linklist, odnośnik regulaminu
+ * i komunikat prywatności, po czym odświeża cache.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param array $templates Mapa kluczy stron CMS na zweryfikowane szablony HTML.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return array<string, int|null> ID pięciu stron, w trybie próbnym możliwe wartości null.
+ * @throws \RuntimeException Przy niespełnionych zależnościach, konflikcie mapowań lub błędzie zapisu CMS i stopki.
+ */
 function configureInformationPages(\Context $context, array $templates, bool $dryRun = false): array
 {
     $languageId = (int) \Configuration::get('PS_LANG_DEFAULT');
@@ -124,6 +209,8 @@ function configureInformationPages(\Context $context, array $templates, bool $dr
     if (!$module || !$module->id || !class_exists(LinkBlock::class)) throw new RuntimeException('Required ps_linklist module is unavailable.');
     $hookId = (int) \Hook::getIdByName('displayFooter');
     if (!$hookId) throw new RuntimeException('Required displayFooter hook is missing.');
+    // Wszystkie strony projektu należą do istniejącej głównej kategorii CMS sklepu.
+    // Niejednoznaczne mapowanie stron lub bloków jest odrzucane przed transakcją.
     $rootQuery = new \DbQuery();
     $rootQuery->select('c.id_cms_category AS id')->from('cms_category', 'c');
     $rootQuery->innerJoin('cms_category_shop', 's', 's.id_cms_category=c.id_cms_category');
@@ -139,6 +226,8 @@ function configureInformationPages(\Context $context, array $templates, bool $dr
         'information'=>footerBlockId('information', 'Informacje o sklepie', 'Our company', $hookId, $context),
     ];
     if ($blockIds['products'] !== null && $blockIds['products'] === $blockIds['information']) throw new RuntimeException('Footer block mappings overlap.');
+    // Do walidacji HTML wystarczą zastępcze adresy. Właściwe URL-e mogą powstać
+    // dopiero po rezerwacji ID wszystkich wzajemnie odsyłających stron.
     $tokens = informationalMethods($context);
     foreach ($definitions as $key=>$page) $tokens['{{' . $key . '_url}}'] = '#';
     $tokens['{{contact_url}}'] = '#';
@@ -153,6 +242,8 @@ function configureInformationPages(\Context $context, array $templates, bool $dr
         return $pageIds;
     }
     transaction(function () use ($context, $languageId, $rootId, $definitions, $templates, &$pageIds, $blockIds, $hookId, $tokens): void {
+        // Pierwszy przebieg zapisuje strony i trwałe ID. Drugi rozwiązuje odnośniki
+        // CMS i podstawia pełne HTML do już utworzonych obiektów.
         $objects = [];
         foreach ($definitions as $key=>$page) {
             $cms = new \CMS($pageIds[$key], null, (int) $context->shop->id);
@@ -169,7 +260,7 @@ function configureInformationPages(\Context $context, array $templates, bool $dr
             if (!$cms->save()) throw new RuntimeException('Cannot save information page: ' . $page['title']);
             $pageIds[$key] = (int) $cms->id;
             $objects[$key] = $cms;
-            contentSetting('SHOP_INIT_CMS_' . strtoupper($key), $cms->id, $context);
+            saveShopSetting('SHOP_INIT_CMS_' . strtoupper($key), $cms->id, $context);
         }
         $escape = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         foreach ($definitions as $key=>$page) {
@@ -183,6 +274,8 @@ function configureInformationPages(\Context $context, array $templates, bool $dr
             echo 'SAVED: ' . $definitions[$key]['title'] . ', ID ' . $cms->id . PHP_EOL;
         }
         echo "[2/3] Configuring Polish footer links...\n";
+        // Treść stopki moduł ps_linklist interpretuje jako kategorie odnośników
+        // CMS, produktowych i statycznych. Przechowujemy ID stron zamiast wpisanych na stałe URL-i.
         $blocks = [
             'products'=>['title'=>'Produkty', 'content'=>['cms'=>[], 'product'=>['prices-drop','new-products','best-sales'], 'static'=>[], 'category'=>[]]],
             'information'=>['title'=>'Informacje o sklepie', 'content'=>['cms'=>array_values($pageIds), 'product'=>[], 'static'=>['contact','sitemap'], 'category'=>[]]],
@@ -200,12 +293,12 @@ function configureInformationPages(\Context $context, array $templates, bool $dr
                 'id_link_block=' . (int) $block->id . ' AND id_shop=' . (int) $context->shop->id)) {
                 throw new RuntimeException('Cannot save footer block: ' . $definition['title']);
             }
-            contentSetting('SHOP_INIT_FOOTER_' . strtoupper($key), $block->id, $context);
+            saveShopSetting('SHOP_INIT_FOOTER_' . strtoupper($key), $block->id, $context);
             $position++;
         }
-        contentSetting('PS_CONDITIONS', 1, $context);
-        contentSetting('PS_CONDITIONS_CMS_ID', $pageIds['terms'], $context);
-        contentSetting('CUSTPRIV_MSG_AUTH', [$languageId=>'Dane wpisane w formularzu służą obsłudze konta i zamówień testowych. Używaj danych fikcyjnych. Szczegóły opisuje <a href="'
+        saveShopSetting('PS_CONDITIONS', 1, $context);
+        saveShopSetting('PS_CONDITIONS_CMS_ID', $pageIds['terms'], $context);
+        saveShopSetting('CUSTPRIV_MSG_AUTH', [$languageId=>'Dane wpisane w formularzu służą obsłudze konta i zamówień testowych. Używaj danych fikcyjnych. Szczegóły opisuje <a href="'
             . $tokens['{{privacy_url}}'] . '">Polityka prywatności</a>.'], $context, true);
     });
     echo "[3/3] Enabling footer module and clearing page caches...\n";

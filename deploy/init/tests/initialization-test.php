@@ -1,13 +1,40 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/../lib/initialization.php';
 
+/**
+ * Test dziennika, walidacji wejścia, kolejności etapów i zatrzymania po błędzie.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/initialization-test.php
+ *
+ * Tworzy pliki tymczasowe i uruchamia kontrolowany podproces z błędnym argumentem. Kontrola świeżego
+ * produktu odczytuje sklep, a finally sprząta fixture plikowe.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
+require_once __DIR__ . '/../lib/initialization-state.php';
+
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $condition Warunek asercji wymagany przez bieżący scenariusz.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
 function initTest(bool $condition, string $message): void
 {
     if (!$condition) {
         throw new RuntimeException($message);
     }
 }
+/**
+ * Sprawdza, że przekazana operacja zgłasza oczekiwany błąd walidacji.
+ *
+ * @param callable $callback Operacja, która powinna zgłosić RuntimeException.
+ * @return void
+ * @throws \RuntimeException Gdy oczekiwany błąd walidacji nie wystąpi.
+ */
 function initRejects(callable $callback): void
 {
     $failed = false;
@@ -25,6 +52,22 @@ try {
     initTest(is_string($temporary), 'Cannot create temporary test directory');
     unlink($temporary);
     mkdir($temporary);
+    // Dziennik jest badany na odrębnym pliku tymczasowym. Próby z inną tożsamością
+    // lub hashem muszą zostać odrzucone, a kolejny zapis zachować wcześniejsze checkpointy.
+    $journal = ShopInit\readInitializationState($temporary . '/state.json', 'test-installation', ['products' => 'test-hash']);
+    $journal['records']['5'] = ['id' => 20, 'done' => ['import-products.php']];
+    ShopInit\saveInitializationState($temporary . '/state.json', $journal);
+    initTest(json_decode((string) file_get_contents($temporary . '/state.json'), true, 512, JSON_THROW_ON_ERROR) === $journal,
+        'Journal contents changed during atomic write');
+    initTest(ShopInit\readInitializationState($temporary . '/state.json', 'test-installation', ['products' => 'test-hash']) === $journal,
+        'Matching journal was rejected');
+    initRejects(fn () => ShopInit\readInitializationState($temporary . '/state.json', 'other-installation', ['products' => 'test-hash']));
+    initRejects(fn () => ShopInit\readInitializationState($temporary . '/state.json', 'test-installation', ['products' => 'changed-hash']));
+    $journal['records']['5']['done'][] = 'import-images.php';
+    ShopInit\saveInitializationState($temporary . '/state.json', $journal);
+    initTest(count(glob($temporary . '/.initialization-*')) === 0, 'Temporary journal files were left behind');
+    initTest(json_decode((string) file_get_contents($temporary . '/state.json'), true, 512, JSON_THROW_ON_ERROR) === $journal,
+        'Journal replacement lost completed records');
     initRejects(fn () => ShopInit\initializationInputs($temporary));
     file_put_contents($temporary . '/products.json', '[]');
     initRejects(fn () => ShopInit\initializationInputs($temporary));
@@ -45,8 +88,16 @@ try {
     initTest(ShopInit\initializationCategoryCoverage($fixture) === 4, 'Valid category structure rejected');
     array_pop($fixture);
     initRejects(fn () => ShopInit\initializationCategoryCoverage($fixture));
+    // Runner jest kontrolowany przez test. Pozwala sprawdzić kolejność, granicę
+    // błędu i opóźnienie aktywacji bez uruchamiania rzeczywistych konfiguratorów.
     $stages = ShopInit\initializationStages();
+    $scripts = array_column($stages, 'script');
+    initTest(in_array('configure-orders.php', $scripts, true), 'Order/invoice configuration is missing');
+    initTest(array_search('configure-payments.php', $scripts, true) < array_search('configure-orders.php', $scripts, true), 'Order statuses must follow native payment module installation');
+    initTest(array_search('configure-carriers.php', array_column($stages, 'script'), true) < array_search('configure-payments.php', array_column($stages, 'script'), true), 'Project carriers must precede payment permission synchronization');
+    initTest(in_array('configure-carriers.php', array_column($stages, 'script'), true), 'Project carrier configuration is missing');
     initTest(in_array('configure-mail.php', array_column($stages,'script'), true), 'Polish email configuration is missing');
+    initTest(in_array('configure-payments.php', array_column($stages,'script'), true), 'Offline payment configuration is missing');
     $calls = [];
     $runner = function (array $stage) use (&$calls): int {
         $calls[] = $stage['script'];
@@ -97,7 +148,7 @@ try {
     $exitCode = 1;
 } finally {
     if (is_string($temporary) && is_dir($temporary)) {
-        foreach (['products.json', 'categories.json'] as $filename) {
+        foreach (['products.json', 'categories.json', 'state.json'] as $filename) {
             if (is_file($temporary . '/' . $filename)) {
                 unlink($temporary . '/' . $filename);
             }

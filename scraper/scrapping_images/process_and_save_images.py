@@ -1,4 +1,4 @@
-"""Normalize product photos before saving them locally or as repository samples."""
+"""Normalizuje zdjęcia produktów przed zapisem lokalnym i przygotowaniem próbek."""
 
 import io
 import logging
@@ -14,7 +14,7 @@ MAX_IMAGE_BYTES = 300_000
 
 
 def image_meets_requirements(path: Path) -> bool:
-    """Check actual encoded content, dimensions and byte size, not just extension."""
+    """Sprawdza format JPEG, długość boku i limit bajtów istniejącego pliku."""
     try:
         if not 0 < path.stat().st_size <= MAX_IMAGE_BYTES:
             return False
@@ -30,13 +30,14 @@ def image_meets_requirements(path: Path) -> bool:
 
 
 def _resize(image: Image.Image, edge: int) -> Image.Image:
+    """Przeskalowuje obraz do wskazanego dłuższego boku z zachowaniem proporcji."""
     factor = edge / max(image.size)
     size = tuple(max(1, round(side * factor)) for side in image.size)
     return image.resize(size, Image.Resampling.LANCZOS)
 
 
 def process_and_save_images(image_bytes: bytes, target_dir: Path) -> bool:
-    """Save JPEG only after all constraints are met; retain old file on failure."""
+    """Normalizuje orientację i tło, skaluje oraz zapisuje JPEG do 300 KB atomowo. Zwraca powodzenie."""
     temporary = None
     try:
         if target_dir.suffix.lower() not in {".jpg", ".jpeg"}:
@@ -53,7 +54,7 @@ def process_and_save_images(image_bytes: bytes, target_dir: Path) -> bool:
             if edge < MIN_LONG_EDGE or edge > MAX_LONG_EDGE:
                 image = _resize(image, min(MAX_LONG_EDGE, max(MIN_LONG_EDGE, edge)))
 
-            # Lower quality first, then dimensions, never below 800 px.
+            # Najpierw obniżamy jakość, następnie wymiary z dolną granicą 800 px.
             while True:
                 encoded = None
                 for quality in range(85, 39, -5):

@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Nazwa projektu i przygotowanie strony głównej do właściwego katalogu.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/configure-storefront.php [--dry-run]
+ *
+ * Pierwszy etap inicjalizacji, oparty na lib/storefront.php i istniejącym sklepie.
+ *
+ * Zapisuje nazwę, polskie etykiety przewoźników, usuwa rozpoznane produkty demo i wyłącza trzy moduły
+ * demonstracyjne.
+ */
+
 require_once __DIR__ . '/lib/storefront.php';
 
 try {

@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Przygotowanie wspólnego słownika grup i wartości atrybutów.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/import-attributes.php [ID|--all] [--dry-run]
+ *
+ * Wczytuje variants z products.json. Domyślnie wybiera ID 5, a tryb próbny działa na samym źródle.
+ *
+ * Po boot() zapisuje brakujące AttributeGroup i ProductAttribute w transakcji. Kombinacje powstają w
+ * następnym importerze.
+ */
+
 require_once __DIR__ . '/lib/prestashop.php';
 try {
     echo "[1/3] Validating source and collecting all attribute groups...\n";

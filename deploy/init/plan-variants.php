@@ -1,5 +1,17 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Podgląd źródłowych kombinacji oraz korekt dokładności ceny.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/plan-variants.php [ID|--all]
+ *
+ * Korzysta z lib/source.php i products.json. Domyślnie wybiera produkt źródłowy 5.
+ *
+ * Oblicza plany w pamięci i wypisuje wynik, umożliwiając kontrolę cen przed zapisem do sklepu.
+ */
+
 require_once __DIR__ . '/lib/source.php';
 try {
     [$products] = ShopInit\selectProducts($argv);

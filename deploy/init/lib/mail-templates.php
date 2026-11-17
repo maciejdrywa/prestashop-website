@@ -1,89 +1,86 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Generowanie polskich wiadomości przez natywny silnik motywów poczty.
+ *
+ * Używana przez configure-mail.php po boot(), z wybranym motywem PrestaShop i polskim językiem domyślnym.
+ *
+ * Podproces bin/console zapisuje HTML/TXT w mails/pl, katalogach modułów i istniejących nadpisaniach
+ * motywu. Funkcja sprawdza wynik i czyści cache Smarty.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
 
 require_once __DIR__ . '/prestashop.php';
 
-function polishTransactionalMailTemplates(): array
-{
-    return ['account'=>'Dziękujemy za utworzenie konta',
-        'bankwire'=>'Oczekuje na płatność', 'order_conf'=>'Szczegóły zamówienia'];
-}
-
-function mailTemplatePlaceholders(string $contents): array
-{
-    preg_match_all('/\{[a-z][a-z0-9_]*\}/i',$contents,$matches);
-    $keys = array_values(array_unique($matches[0]));
-    sort($keys);
-    return $keys;
-}
-
+/**
+ * Generuje pełny polski motyw e-maili natywnym poleceniem PrestaShop, sprawdzając wynik.
+ *
+ * Uruchamia natywny generator z aktualnym motywem, polskim locale i --overwrite=1. Obejmuje katalog główny,
+ * moduły oraz istniejące nadpisania motywu i rodzica. Weryfikuje osiem plików czterech kluczowych
+ * wiadomości w obu formatach.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Przy braku motywu, błędzie procesu generatora lub niekompletnych wymaganych plikach e-mail.
+ */
 function configurePolishMailTemplates(\Context $context): void
 {
     $language = new \Language((int) \Configuration::get('PS_LANG_DEFAULT'));
-    if ($language->iso_code !== 'pl') throw new RuntimeException('Transactional email initialization requires Polish as the default language.');
+    if ($language->iso_code !== 'pl') throw new RuntimeException('Mail initialization requires Polish as the default language.');
     if (!function_exists('proc_open')) throw new RuntimeException('PHP proc_open is required by the native mail generator.');
     $theme = (string) (\Configuration::get('PS_MAIL_THEME') ?: 'modern');
-    if (!preg_match('/^[a-zA-Z0-9_-]+$/',$theme) || !is_dir(_PS_MAIL_DIR_ . 'themes/' . $theme)) {
+    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $theme) || !is_dir(_PS_MAIL_DIR_ . 'themes/' . $theme)) {
         throw new RuntimeException('Configured mail theme is unavailable: ' . $theme);
     }
-    $output = _PS_ROOT_DIR_ . '/var/import/generated-mail-pl';
-    if (!is_dir($output) && !mkdir($output,0775,true) && !is_dir($output)) throw new RuntimeException('Cannot create mail generation directory.');
-    echo '[MAIL 1/3] Generating native ' . $theme . ' email templates for ' . $language->locale . '...' . PHP_EOL;
-    $process = proc_open([PHP_BINARY,_PS_ROOT_DIR_.'/bin/console','prestashop:mail:generate',$theme,$language->locale,
-        $output,$output,'--overwrite=1','--no-interaction','--env=prod'],
-        [0=>['pipe','r'],1=>STDOUT,2=>STDERR],$pipes,_PS_ROOT_DIR_);
-    if (!is_resource($process)) throw new RuntimeException('Cannot start native mail generator.');
-    fclose($pipes[0]);
-    if (proc_close($process) !== 0) throw new RuntimeException('Native Polish mail generation failed.');
 
-    echo "[MAIL 2/3] Validating Polish content and template placeholders...\n";
-    $files = [];
+    // Używamy tego samego mechanizmu co akcja „Generuj e-maile” w panelu,
+    // z językiem polskim, skonfigurowanym motywem i zastępowaniem szablonów.
+    $destinations = [['core' => _PS_MAIL_DIR_, 'modules' => _PS_MODULE_DIR_]];
     $themeFolders = [_PS_THEME_DIR_];
     $parent = $context->shop->theme->get('parent');
     if ($parent) $themeFolders[] = _PS_ROOT_DIR_ . '/themes/' . $parent . '/';
-    foreach (polishTransactionalMailTemplates() as $template=>$expected) {
-        $destinations = [_PS_MAIL_DIR_ . 'pl/'];
-        // Respect Mail::Send's precedence when a mail override already exists.
-        foreach ($themeFolders as $folder) {
-            $folder = $folder . 'mails/pl/';
-            if (is_file($folder.$template.'.html') || is_file($folder.$template.'.txt')) $destinations[] = $folder;
-        }
-        foreach (['html','txt'] as $extension) {
-            $source = $output . '/pl/' . $template . '.' . $extension;
-            if (!is_readable($source)) throw new RuntimeException('Generated email is missing: '.$source);
-            $contents = (string) file_get_contents($source);
-            $contents = str_replace(['Powered by','Zapłacono w sumie'],['Oprogramowanie sklepu:','Razem (brutto)'],$contents);
-            if (!mb_check_encoding($contents,'UTF-8') || !str_contains(strip_tags($contents),$expected)) {
-                throw new RuntimeException('Generated email is not Polish: '.$template.'.'.$extension);
-            }
-            foreach (array_unique($destinations) as $folder) {
-                $target = $folder.$template.'.'.$extension;
-                if (is_file($target) && mailTemplatePlaceholders((string)file_get_contents($target)) !== mailTemplatePlaceholders($contents)) {
-                    throw new RuntimeException('Email placeholders changed unexpectedly: '.$target);
-                }
-                $files[$target] = $contents;
-            }
+    foreach (array_unique($themeFolders) as $folder) {
+        // Mail::Send nadaje szablonom motywu pierwszeństwo przed katalogiem głównym.
+        // Istniejące nadpisania również regenerujemy natywnym mechanizmem sklepu.
+        if (is_dir($folder . 'mails/pl')) {
+            $destinations[] = ['core' => $folder . 'mails/', 'modules' => $folder . 'modules/'];
         }
     }
-    echo "[MAIL 3/3] Saving account, bankwire and order-confirmation emails (HTML and text)...\n";
-    foreach ($files as $target=>$contents) {
-        if (is_file($target) && file_get_contents($target) === $contents) continue;
-        if (!is_dir(dirname($target)) && !mkdir(dirname($target),0775,true) && !is_dir(dirname($target))) {
-            throw new RuntimeException('Cannot create mail destination directory: '.dirname($target));
-        }
-        $temporary = tempnam(dirname($target),'mail-pl-');
-        if ($temporary === false) throw new RuntimeException('Cannot prepare email destination: '.$target);
-        try {
-            if (file_put_contents($temporary,$contents) === false || !chmod($temporary,0644) || !rename($temporary,$target)) {
-                throw new RuntimeException('Cannot write Polish email: '.$target);
+
+    foreach ($destinations as $index => $destination) {
+        foreach ($destination as $folder) {
+            if (!is_dir($folder) && !mkdir($folder, 0775, true) && !is_dir($folder)) {
+                throw new RuntimeException('Cannot create native mail output folder: ' . $folder);
             }
-        } finally {
-            if (is_file($temporary)) unlink($temporary);
+        }
+        echo '[MAIL ' . ($index + 1) . '/' . count($destinations) . '] Generating complete native '
+            . $theme . ' theme for ' . $language->locale . ' into ' . $destination['core'] . PHP_EOL;
+        // Argumenty tablicowe omijają interpretację powłoki. Generator odpowiada
+        // natywnej akcji panelu i nadpisuje pliki w wyznaczonym katalogu docelowym.
+        $process = proc_open([
+            PHP_BINARY, _PS_ROOT_DIR_ . '/bin/console', 'prestashop:mail:generate', $theme, $language->locale,
+            $destination['core'], $destination['modules'], '--overwrite=1', '--no-interaction', '--env=prod',
+        ], [0 => ['pipe', 'r'], 1 => STDOUT, 2 => STDERR], $pipes, _PS_ROOT_DIR_);
+        if (!is_resource($process)) throw new RuntimeException('Cannot start native mail generator.');
+        fclose($pipes[0]);
+        if (proc_close($process) !== 0) throw new RuntimeException('Native Polish mail generation failed.');
+
+        // Sprawdzamy krytyczne wiadomości obu formatów po zakończeniu generatora.
+        // Zakres generacji obejmuje pełny motyw, a ta pętla stanowi kontrolę kluczowych rezultatów.
+        foreach (['account', 'bankwire', 'order_conf', 'payment'] as $template) {
+            foreach (['html', 'txt'] as $extension) {
+                $file = $destination['core'] . 'pl/' . $template . '.' . $extension;
+                $body = is_readable($file) ? file_get_contents($file) : false;
+                if ($body === false || trim($body) === '' || !mb_check_encoding($body, 'UTF-8')) {
+                    throw new RuntimeException('Missing or invalid native email: ' . $file);
+                }
+            }
         }
     }
     \Tools::clearSmartyCache();
-    echo 'OK: Polish account, pending-bank-transfer and order-confirmation email bodies configured (' . count($files) . ' files).' . PHP_EOL;
+    echo 'OK: complete native mail theme generated in Polish, with original HTML/text and module layouts.' . PHP_EOL;
 }
