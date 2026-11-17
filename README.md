@@ -1,27 +1,43 @@
 # Twoje Drzwi do Sukcesu
 
-Projekt realizowany w ramach przedmiotu **Biznes elektroniczny** na Politechnice Gdańskiej.
+Sklep edukacyjny na PrestaShop 8.2.8 realizowany w ramach Biznesu elektronicznego na Politechnice Gdańskiej. Katalog odwzorowuje sklep Pan Domu. Projekt obsługuje polskie treści, warianty i galerie produktów, przelew, pobranie, dostawy, demonstracyjne faktury VAT i pocztę w Mailpit.
 
-## Odwzorowywany sklep
+## Uruchomienie
 
-Budujemy sklep internetowy na podstawie sklepu **Pan Domu**:
-https://pandomu.com.pl/
+Wymagane są Docker Engine z Compose v2, plik `.env` uzupełniony na podstawie `.env.example` oraz `products.json`, `categories.json` i komplet lokalnych zdjęć w `scraper-results/images/`.
 
-## Cel projektu
+Z głównego katalogu repozytorium wykonaj jedną komendę.
 
-Celem projektu jest odtworzenie sklepu internetowego z wykorzystaniem PrestaShop 8.x, uruchamianego w kontenerach Docker.
+```sh
+docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.bootstrap.yaml run --build --rm bootstrap
+```
 
-Zakres pierwszego etapu obejmuje:
-- Pobranie kategorii, danych produktów i zdjęć ze sklepu źródłowego.
-- Przygotowanie środowiska oraz inicjalizacji danych sklepu.
-- Konfigurację katalogu, kont klientów, koszyka, płatności i dostawy.
-- Zapewnienie HTTPS oraz obsługi poczty testowej.
-- Automatyczne testy procesu zakupowego w Playwright.
-- Pracę zespołową z wykorzystaniem GitHub Issues, osobnych gałęzi i recenzowanych Pull Requestów.
+Polecenie przygotowuje certyfikat, uruchamia usługi, instaluje pusty sklep i wznawia import. Przy ponownym wykonaniu zachowuje istniejące produkty, treści, zamówienia i magazyn. Zmienione dane źródłowe wymagają świadomego importu opisanego w dokumentacji.
 
-Projekt ma charakter dydaktyczny. Sklep z pobranymi danymi nie jest przeznaczony do publicznego udostępniania ani prowadzenia rzeczywistej sprzedaży.
+Sklep jest dostępny pod `https://localhost`, panel pod `https://localhost/admin-dev/`, a poczta pod `http://localhost:8025`. Dane administratora określa `.env` podczas pierwszej instalacji. Lokalny certyfikat wymaga dodania do zaufanych zgodnie z instrukcją systemu.
 
-## Skład zespołu
+## Dokumentacja
+
+- Przygotowanie `.env`, certyfikat i uruchamianie ręczne opisuje [wdrożenie](docs/DEPLOYMENT.md).
+- Kolejność etapów, wznowienie i jawne aktualizacje opisuje [inicjalizacja](docs/INITIALIZATION.md).
+- Pobieranie katalogu i zdjęć opisuje [scraper](docs/SCRAPER.md).
+- Reguły sprzedaży, treści i faktury opisuje [konfiguracja](docs/CONFIGURATION.md).
+- Pozostałe dokumenty i testy zbiera [indeks dokumentacji](docs/README.md).
+
+## Struktura
+
+| Katalog | Odpowiedzialność |
+|---|---|
+| `shop/` | Obraz PHP 8.1, konfiguracja i autorski moduł cookies |
+| `scraper/` | Crawler Playwright, parsery i testy lokalnych danych |
+| `scraper-results/` | Eksport UTF-8 i do 20 próbek zdjęć, pełne zdjęcia lokalnie |
+| `deploy/` | Compose, HTTPS, inicjalizacja i testy klas PHP |
+| `docs/` | Instrukcje, audyt i dziennik AI |
+| `tests/` | Informacja o bieżącym zakresie testowania |
+
+Baza korzysta z MariaDB 10.11.14, HTTPS obsługuje Nginx. Pełny katalog danych zawiera obecnie 574 produkty, 80 kategorii, 1269 kombinacji i 1388 zdjęć. Produkt 539 nie ma galerii źródłowej. Zestaw zdjęć i archiwum są wykluczone z Gita, a do dystrybucji służy GitHub Releases.
+
+## Zespół
 
 | Imię i nazwisko | Numer indeksu |
 |---|---|
@@ -29,45 +45,6 @@ Projekt ma charakter dydaktyczny. Sklep z pobranymi danymi nie jest przeznaczony
 | Paweł Krajewski | s203918 |
 | Wiktor Adamczyk | s203519 |
 
-## Zasady współpracy
+## Współpraca
 
-Każdą zmianę realizujemy według procesu:
-
-GitHub Issue → osobna gałąź → Pull Request → recenzja → scalenie do main.
-
-1. **Issue** — tworzymy zadanie z opisem, kryteriami zakończenia i przypisaną osobą odpowiedzialną za wykonanie.
-2. **Gałąź** — wykonawca tworzy osobną gałąź od aktualnego main, np. chore/1-repository-setup.
-3. **Pull Request** — po wykonaniu zadania otwiera PR do main. Opisuje zmiany, sposób ich sprawdzenia i łączymy z PR z Issue.
-4. **Recenzja** — inna osoba z zespołu sprawdza zmiany i dodaje merytoryczne komentarze. Autor wprowadza potrzebne poprawki.
-5. **Scalenie** — po akceptacji i przejściu skonfigurowanych kontroli zmiany są scalane do main. Zadanie w Jirze zostaje oznaczone jako zakończone.
-
-Nie wykonujemy bezpośrednich commitów ani pushów do main, poza commitem inicjalnym. Nie nadpisujemy historii main przez force push.
-
-PR zawierające istotne fragmenty wygenerowane przez AI oznaczamy etykietą ai-assisted. W tym samym PR uzupełniamy docs/AI_LOG.md i opisujemy sposób weryfikacji wyników.
-
-## Struktura repozytorium
-
-| Katalog | Zawartość |
-|---|---|
-| shop/ | Kod sklepu, motyw potomny, własne moduły i Dockerfile |
-| scraper/ | Kod scrapera i testy jednostkowe parsowania |
-| scraper-results/ | Wyniki scrapowania i przykładowe zdjęcia |
-| tests/ | Testy E2E w Playwright |
-| deploy/ | Konfiguracja kontenerów i skrypty obsługi środowiska |
-| docs/ | Dokumentacja, dziennik AI i decyzje architektoniczne |
-
-## Technologie
-
-Projekt wykorzystuje następujące technologie:
-
-- **PrestaShop 8.2.8** – platforma e-commerce.
-- **PHP** – język programowania wykorzystywany przez PrestaShop.
-- **MariaDB 10.11.14** – relacyjna baza danych.
-- **Docker** – konteneryzacja aplikacji.
-- **Docker Compose v2** – zarządzanie środowiskiem kontenerowym.
-- **Playwright** – automatyczne testy E2E.
-
-## Uruchomienie
-
-Instrukcja uruchomienia sklepu, przygotowania lokalnego certyfikatu
-i weryfikacji HTTPS znajduje się w [deploy/README.md](deploy/README.md).
+Zmiany przechodzą przez GitHub Issue, osobną gałąź, Pull Request, recenzję i scalenie do `main`. PR należy powiązać z Issue. Istotny udział AI opisujemy w `docs/AI_LOG.md` i oznaczamy etykietą `ai-assisted`. Historia decyzji i wpisy dziennika pozostają zachowane.

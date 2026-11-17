@@ -42,6 +42,7 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-17, Maciej Drywa | Codex 6.1 sol | Ujednolicenie formatowania | Dodano .editorconfig i .gitattributes z regułami UTF-8 oraz LF. | Brak błędów przy wykonaniu zadania | Kontrola diffu oraz składni skryptów. |
 | 2026-11-17, Maciej Drywa | Codex 6.1 sol | Uporządkowanie scrapera | Wydzielono etapy pobierania i raportowania, uporządkowano nazwy oraz dodano polskie opisy funkcji. | Poprawiono zbędne oczekiwanie przy zdjęciach dostępnych w cache. | Przeszło 58 testów unittest, obejmujących również parsery zapisanych HTML. |
 | 2026-11-17, Maciej Drywa | Codex 6.1 sol | Automatyzacja uruchamiania sklepu | Dodano bootstrap, dziennik i bezpieczne wznowienie oraz szczegółowe polskie komentarze deployu. Usunięto powielone skrypty startowe i wskazane scenariusze HTTP. | Poprawiono uprawnienia cache, pierwszą instalację cookies i odświeżanie cache konfiguracji. | Przeszło 14 skryptów PHP i 5 testów JS. Pełny start trwał 5 min 11 s. Sprawdzono wznowienie i zachowanie edycji. |
+| 2026-11-17, Maciej Drywa | Codex 6.1 sol | Uporządkowanie dokumentacji | Przygotowano instrukcje architektury, wdrożenia, inicjalizacji, scrapera, konfiguracji i diagnostyki oraz raport po refaktoryzacji. | Nie usunięto nieaktualnych instrukcji, wymagało to doprecyzowania. | Sprawdzono lokalne odnośniki oraz udokumentowane polecenia uruchomienia i testowania. |
 
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:
