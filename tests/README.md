@@ -68,13 +68,13 @@ Otwiera stronę główną pod adresem z `BASE_URL`. Sprawdza, że serwer odpowia
 Wykonuje scenariusz koszyka wymagany na odbiorze. Każda operacja kończy się asercją sprawdzającą jej efekt.
 
 1. **Dodanie 10 różnych produktów z dwóch kategorii**: po 5 z kategorii „Akcesoria meblowe” i „Klamki do drzwi”, w różnych ilościach (1–3 szt.). Po każdym dodaniu test sprawdza, że pojawiło się okno potwierdzenia koszyka. Następnie sprawdza, że koszyk zawiera 10 pozycji z właściwymi ilościami.
-2. **Wyszukanie produktu po nazwie**: wpisuje frazę (domyślnie `klamka`) w wyszukiwarkę i sprawdza, że są wyniki.
+2. **Wyszukanie produktu po nazwie**: wpisuje frazę (domyślnie `klamka`) w wyszukiwarkę. Czeka na stronę wyników dla tej frazy (adres z parametrem `s`) i sprawdza, że lista wyników nie jest pusta. Losowanie korzysta tylko z tej listy.
 3. **Losowanie produktu z wyników**: wybiera losowo produkt, którego nie ma jeszcze w koszyku i który jest dostępny, a potem dodaje go do koszyka. Test sprawdza, że koszyk ma 11 pozycji.
 4. **Usunięcie 3 produktów**: po każdym usunięciu sprawdza, że zniknął właściwy wiersz i liczba pozycji zmalała o 1.
 5. **Stan końcowy**: koszyk zawiera 8 pozycji, pozostałe ilości są niezmienione, a usunięte produkty nie występują.
 
 Sposób działania:
-- **Dobór produktów.** Test nie ma zapisanych na sztywno adresów ani ID produktów. Otwiera kategorie przez menu, a na stronie produktu odczytuje ID i stan magazynowy (`data-stock`). Bierze tylko produkty z aktywnym przyciskiem „Dodaj do koszyka” i stanem nie mniejszym niż wymagana ilość. Dlatego test nie próbuje dodać niedostępnych produktów i działa przy losowych stanach 0–10 w lokalnym sklepie.
+- **Dobór produktów.** Test nie ma zapisanych na sztywno adresów ani ID produktów. Otwiera kategorie przez menu, a na stronie produktu odczytuje ID i stan magazynowy (`data-stock`). Bierze tylko produkty z aktywnym przyciskiem „Dodaj do koszyka” i stanem nie mniejszym niż wymagana ilość. Produkty bez widocznego stanu są pomijane, bo aktywny przycisk potwierdza dostępność tylko 1 sztuki. Dlatego test nie próbuje dodać niedostępnych produktów i działa przy losowych stanach 0–10 w lokalnym sklepie.
 - **Rozpoznawanie pozycji w koszyku.** Pozycje są rozpoznawane po ID produktu, a nie po nazwie.
 - **Brak stałych opóźnień.** Test czeka na stan strony, np. na okno koszyka albo zniknięcie wiersza.
 - **Limit czasu.** Cały scenariusz ma limit 5 minut.
