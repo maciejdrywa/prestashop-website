@@ -1,29 +1,22 @@
-
-$ErrorActionPreference = "Stop"
-
-Get-Command openssl -ErrorAction Stop | Out-Null
-
-$certDir = Join-Path $env:USERPROFILE ".prestashop-website/certs"
-$certPath = Join-Path $certDir "localhost.crt"
-$keyPath = Join-Path $certDir "localhost.key"
-
-if ((Test-Path $certPath) -or (Test-Path $keyPath)) {
-    throw "Certyfikat lub klucz już istnieje. Nie nadpisuję plików."
+<#
+Przygotowanie certyfikatu przez wspólny entrypoint PHP, uruchamiane na Windows.
+Wywołanie z PowerShell
+  .\deploy\generate-cert.ps1
+Wymaga Docker Engine, .env, obu JSON-ów, lokalnych zdjęć i TLS_CERT_DIR.
+Uruchamia jednorazową usługę certificates bez startowania jej zależności.
+Zapis pary TLS i walidację wejścia wykonuje bootstrap.php --certificates.
+#>
+$ErrorActionPreference = 'Stop'
+$projectDirectory = Split-Path $PSScriptRoot -Parent
+Push-Location $projectDirectory
+try {
+    docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.bootstrap.yaml run --build --rm --no-deps certificates
+    # Błędy procesów natywnych są odczytywane z kodu wyjścia Dockera.
+    # ErrorActionPreference obejmuje błędy PowerShell, więc kod sprawdzamy jawnie.
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Przygotowanie certyfikatu nie powiodło się. Sprawdź komunikat kontenera.'
+    }
+} finally {
+    # Przywrócenie katalogu wywołującego obowiązuje także po nieudanym poleceniu.
+    Pop-Location
 }
-
-New-Item -ItemType Directory -Force -Path $certDir | Out-Null
-
-openssl req -x509 -newkey rsa:2048 -sha256 -nodes `
-    -days 365 `
-    -keyout $keyPath `
-    -out $certPath `
-    -subj "/CN=localhost" `
-    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" `
-    -addext "extendedKeyUsage=serverAuth"
-
-if ($LASTEXITCODE -ne 0) {
-    throw "Generowanie certyfikatu nie powiodło się."
-}
-
-Write-Host "Certyfikat: $certPath"
-Write-Host "Klucz: $keyPath"

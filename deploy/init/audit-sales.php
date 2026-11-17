@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Odczytowy raport konfiguracji płatności, dostaw, statusów i faktur.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/audit-sales.php
+ *
+ * Wymaga boot() istniejącego sklepu i opiera zapytania na bieżących ID sklepu i języka.
+ *
+ * Wypisuje JSON ustawień, zakresów i uprawnień. Dane bankowe i pola wystawcy przedstawia jako informację o
+ * ich uzupełnieniu.
+ */
+
 require_once __DIR__ . '/lib/prestashop.php';
 
 try {
@@ -7,6 +20,8 @@ try {
     $db=Db::getInstance();
     $shopId=(int)$context->shop->id;
     $langId=(int)Configuration::get('PS_LANG_DEFAULT');
+    // Wrapper utrzymuje jednolitą obsługę nieudanego SELECT dla sekcji raportu.
+    // Wszystkie zapytania są zbudowane przez ten skrypt z ID bieżącego sklepu i języka.
     $query=function(string $sql) use($db):array {
         $rows=$db->executeS($sql);
         if($rows===false) throw new RuntimeException('Cannot read sales configuration.');
@@ -17,6 +32,8 @@ try {
         'PS_WEIGHT_UNIT','PS_TAX','PS_INVOICE','PS_INVOICE_START_NUMBER','PS_INVOICE_MODEL','PS_CONDITIONS','PS_CONDITIONS_CMS_ID',
         'PS_OS_BANKWIRE','PS_OS_PAYMENT','PS_OS_COD_VALIDATION'] as $key) $settings[$key]=Configuration::get($key);
     $settings['PS_INVOICE_PREFIX']=Configuration::get('PS_INVOICE_PREFIX',$langId);
+    // Moduły identyfikujemy po hookach płatności, a ich aktywność raportujemy osobno.
+    // Pozwala to odróżnić moduł obecny w instalacji od aktualnie dostępnej metody checkout.
     $paymentIds=array_map(fn($row)=>(int)$row['id_module'],$query('SELECT DISTINCT m.id_module FROM '._DB_PREFIX_
         . 'module m INNER JOIN '._DB_PREFIX_.'hook_module hm ON hm.id_module=m.id_module INNER JOIN '
         . _DB_PREFIX_."hook h ON h.id_hook=hm.id_hook WHERE hm.id_shop=".$shopId." AND h.name IN ('paymentOptions','payment','displayPayment') ORDER BY m.id_module"));
@@ -31,6 +48,8 @@ try {
     }
     $states=[];
     foreach(OrderState::getOrderStates($langId) as $state) $states[]=array_intersect_key($state,array_flip(['id_order_state','name','module_name','invoice','paid','logable','send_email','template','pdf_invoice','pdf_delivery','delivery']));
+    // Dane rachunku i wystawcy są reprezentowane flagami uzupełnienia.
+    // Raport konfiguracji pozostaje użyteczny bez wypisywania ich rzeczywistych treści.
     $bank=[];
     foreach(['BANK_WIRE_OWNER','BANK_WIRE_DETAILS','BANK_WIRE_ADDRESS'] as $key) $bank[$key.'_configured']=trim((string)Configuration::get($key))!=='';
     $issuer=[];

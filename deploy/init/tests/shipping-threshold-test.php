@@ -1,5 +1,17 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test progów darmowej wysyłki, masy zamówienia i dostępności odbioru osobistego.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/shipping-threshold-test.php
+ *
+ * Korzysta z klas koszyka oraz pomocniczych produktów, klientów i reguł. Wymaga gotowych przewoźników i
+ * sprząta utworzone fixture w finally.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/carriers.php';
 
 $customer = $address = null;
@@ -15,6 +27,8 @@ try {
         if ($id === null) throw new RuntimeException('Run configure-carriers.php before this test.');
         $expectedIds[] = $id;
     }
+    // Identyfikatory oczekiwanych metod pochodzą z referencji konfiguracji.
+    // Dalsze przypadki rozróżniają kurierów projektu, metodę bazową i odbiór osobisty.
     $projectIds = $expectedIds;
     $installerPlans = ShopInit\installerCarrierPlans($context);
     $pickupId = $installerPlans['PICKUP']['id'];
@@ -44,7 +58,7 @@ try {
     $context->customer = $customer;
     $context->country = new Country($address->id_country);
     $context->currency = new Currency((int) Configuration::get('PS_CURRENCY_DEFAULT'));
-    // Separate carts/products avoid stale price and shipping caches between cases.
+    // Oddzielne koszyki i produkty izolują cache cen oraz dostaw pomiędzy przypadkami.
     $cases = [
         ['gross' => '1999.99', 'discount' => '0.00', 'total' => '1999.99', 'free' => false],
         ['gross' => '2000.00', 'discount' => '0.00', 'total' => '2000.00', 'free' => false],

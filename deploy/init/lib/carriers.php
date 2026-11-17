@@ -1,5 +1,16 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Konfiguracja przewoźników, taryf i progów dostawy projektu.
+ *
+ * Używana przez configure-carriers.php przed configure-payments.php, po przygotowaniu Polski, PLN, kg i VAT
+ * 23%.
+ *
+ * Zapisuje przewoźników, zakresy mas, opłaty, referencje w Configuration i uprawnienia modułów płatności.
+ * Wykorzystuje products.php i payments.php.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
@@ -7,6 +18,16 @@ use RuntimeException;
 require_once __DIR__ . '/products.php';
 require_once __DIR__ . '/payments.php';
 
+// PrestaShop stosuje górną granicę masy wyłącznie i próg darmowej ceny włącznie.
+const COURIER_MAX_WEIGHT_KG = 50;
+const COURIER_WEIGHT_UPPER_BOUND = '50.000001';
+const FREE_SHIPPING_MIN_GROSS = '2000.01';
+
+/**
+ * Zwraca nazwy, opłaty brutto i komunikaty dwóch przewoźników projektu.
+ *
+ * @return array<string, array{name: string, gross: string, delay: string, grade: int}>
+ */
 function projectCarrierDefinitions(): array
 {
     return [
@@ -15,9 +36,20 @@ function projectCarrierDefinitions(): array
     ];
 }
 
+/**
+ * Wyszukuje bieżącą wersję przewoźnika po trwałej referencji i sklepie.
+ *
+ * Wyszukuje nieusunięty rekord na podstawie id_reference zapisanego w konfiguracji. Referencja łączy wersje
+ * przewoźnika tworzone przez panel. Wieloznaczny wynik jest błędem.
+ *
+ * @param string $key Klucz definicji lub ustawienia używany przez wywołujący obszar konfiguracji.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int|null ID bieżącego rekordu przewoźnika w sklepie albo null.
+ * @throws \RuntimeException Przy wieloznacznym dopasowaniu lub błędzie odczytu identyfikatora.
+ */
 function projectCarrierId(string $key, \Context $context): ?int
 {
-    // The reference survives the new carrier versions created by the back office.
+    // Referencja pozostaje stała po utworzeniu nowej wersji przewoźnika w panelu.
     $reference = (int) \Configuration::get('SHOP_INIT_CARRIER_' . $key . '_REF');
     if (!$reference) return null;
     $query = new \DbQuery();
@@ -28,6 +60,16 @@ function projectCarrierId(string $key, \Context $context): ?int
     return uniqueId($query);
 }
 
+/**
+ * Rozpoznaje metody instalatora i ich docelową dostępność.
+ *
+ * Pierwsze rozpoznanie dopuszcza nazwy oryginalne i polskie. Wymaga odrębnych rekordów sklepu, aby
+ * późniejsza aktualizacja nie zmieniła przewoźnika współdzielonego z inną instalacją sklepową.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array<string, array> Rozpoznane ID metod instalatora oraz flagi enabled i pickup.
+ * @throws \RuntimeException Przy brakującej, wieloznacznej lub współdzielonej metodzie instalatora.
+ */
 function installerCarrierPlans(\Context $context): array
 {
     $definitions = [
@@ -56,6 +98,18 @@ function installerCarrierPlans(\Context $context): array
     return $definitions;
 }
 
+/**
+ * Zapisuje przewoźników, taryfy oraz progi ceny i masy. Tryb próbny tylko raportuje.
+ *
+ * Ustawia InPost 15 PLN i DPD 20 PLN brutto przy VAT 23%, zakresie do 50 kg i braku opłaty manipulacyjnej.
+ * Odtwarza odbiór osobisty i podstawową dostawę, wyłącza metody economy/light, synchronizuje płatności oraz
+ * sprawdza taryfy natywnym kalkulatorem.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return void
+ * @throws \RuntimeException Przy błędnych zależnościach, zapisie taryf lub rozbieżności natywnych reguł dostawy.
+ */
 function configureProjectCarriers(\Context $context, bool $dryRun = false): void
 {
     priceContext($context);
@@ -68,6 +122,8 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
     if ((int) $context->currency->precision !== 2) throw new RuntimeException('Shipping threshold requires PLN precision of two decimal places.');
     $shopId = (int) $context->shop->id;
     $db = \Db::getInstance();
+    // Najpierw rozpoznajemy istniejące referencje i odrzucamy obiekty współdzielone
+    // między sklepami. Docelowe opłaty netto wynikają z ustalonych taryf brutto i VAT 23%.
     $plans = [];
     foreach (projectCarrierDefinitions() as $key => $definition) {
         $id = projectCarrierId($key, $context);
@@ -103,15 +159,15 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             $carrier->shipping_handling = false;
             $carrier->shipping_method = \Carrier::SHIPPING_METHOD_WEIGHT;
             $carrier->range_behavior = true;
-            $carrier->max_weight = 50;
+            $carrier->max_weight = COURIER_MAX_WEIGHT_KG;
             $carrier->max_width = $carrier->max_height = $carrier->max_depth = 0;
             $carrier->grade = $plan['grade'];
             foreach (\Language::getLanguages(false) as $language) $carrier->delay[(int) $language['id_lang']] = $plan['delay'];
             if (!($plan['id'] === null ? $carrier->add() : $carrier->update())) throw new RuntimeException('Cannot save carrier: ' . $plan['name']);
             $id = (int) $carrier->id;
-            // Carrier::add writes id_reference in SQL; reload before saving the mapping.
+            // Carrier::add zapisuje id_reference w SQL. Odczytujemy ją ponownie przed mapowaniem.
             $carrier = new \Carrier($id);
-            contentSetting('SHOP_INIT_CARRIER_' . $key . '_REF', (int) $carrier->id_reference, $context);
+            saveShopSetting('SHOP_INIT_CARRIER_' . $key . '_REF', (int) $carrier->id_reference, $context);
             if (!$carrier->setTaxRulesGroup($taxGroup) || !$carrier->setGroups($inputs['groups'])) throw new RuntimeException('Cannot save carrier taxes/groups.');
             $zones = $db->executeS('SELECT id_zone FROM ' . _DB_PREFIX_ . 'carrier_zone WHERE id_carrier=' . $id);
             if ($zones === false) throw new RuntimeException('Cannot read carrier zones.');
@@ -120,13 +176,15 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             }
             if (!$carrier->getZone((int) $zone->id) && !$carrier->addZone((int) $zone->id)) throw new RuntimeException('Cannot assign Polish delivery zone.');
             $query = new \DbQuery();
+            // Taryfa projektu używa pojedynczego zakresu masy. Wieloznaczny zastany
+            // zakres zatrzyma uniqueId zamiast arbitralnie wybrać wiersz do aktualizacji.
             $query->select('id_range_weight AS id')->from('range_weight')->where('id_carrier=' . $id);
             $range = new \RangeWeight(uniqueId($query));
             $range->id_carrier = $id;
             $range->delimiter1 = 0;
-            // Ranges use an exclusive upper bound; weights are stored to 6 decimals.
-            // Together with max_weight=50 this permits exactly 50 kg, never more.
-            $range->delimiter2 = '50.000001';
+            // Górna granica przedziału jest wyłączna. Masa jest zapisywana do sześciu miejsc.
+            // W połączeniu z max_weight=50 pozwala to obsłużyć dokładnie 50 kg.
+            $range->delimiter2 = COURIER_WEIGHT_UPPER_BOUND;
             if (!$range->save()) throw new RuntimeException('Cannot save carrier tariff range.');
             if (!$carrier->deleteDeliveryPrice('range_weight') || !$carrier->addDeliveryPrice([[
                 'id_carrier' => $id, 'id_range_price' => null, 'id_range_weight' => (int) $range->id,
@@ -139,9 +197,9 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             $carrier->id_shop_list = [$shopId];
             $carrier->name = $plan['name'];
             $carrier->active = $plan['enabled'];
-            $carrier->max_weight = $plan['pickup'] ? 0 : 50;
-            // Keep installer tariffs/ranges, including their original fallback behavior.
-            // Native max_weight checks the sum of all products, before offering delivery.
+            $carrier->max_weight = $plan['pickup'] ? 0 : COURIER_MAX_WEIGHT_KG;
+            // Zachowujemy taryfy, zakresy i sposób obsługi przekroczeń metod instalatora.
+            // Natywna kontrola max_weight sprawdza sumę mas przed udostępnieniem dostawy.
             if ($plan['pickup']) {
                 $carrier->is_free = true;
                 $carrier->range_behavior = false;
@@ -153,17 +211,19 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
             }
             if (!$carrier->update() || !$carrier->setGroups($inputs['groups'])) throw new RuntimeException('Cannot restore installer carrier: ' . $plan['name']);
             if (!$carrier->getZone((int) $zone->id) && !$carrier->addZone((int) $zone->id)) throw new RuntimeException('Cannot restore carrier zone.');
-            contentSetting('SHOP_INIT_CARRIER_INSTALLER_' . $key . '_REF', (int) $carrier->id_reference, $context);
+            saveShopSetting('SHOP_INIT_CARRIER_INSTALLER_' . $key . '_REF', (int) $carrier->id_reference, $context);
             echo ($plan['enabled'] ? 'ENABLED: ' : 'DISABLED: ') . $carrier->name . ', ID ' . $carrier->id . ', max weight: ' . $carrier->max_weight . PHP_EOL;
         }
-        contentSetting('PS_CARRIER_DEFAULT', projectCarrierId('STANDARD', $context), $context);
-        // The core compares >=. PLN has two decimals, so >2000 means >=2000.01.
-        // Keep the native cart calculation (gross after discounts, without shipping).
-        contentSetting('PS_SHIPPING_FREE_PRICE', '2000.01', $context);
-        // Weight must not grant free shipping independently of the price threshold.
-        contentSetting('PS_SHIPPING_FREE_WEIGHT', 0, $context);
+        saveShopSetting('PS_CARRIER_DEFAULT', projectCarrierId('STANDARD', $context), $context);
+        // Rdzeń porównuje >=. Dla PLN próg ponad 2000 zł zapisujemy jako >=2000.01.
+        // Korzystamy z natywnej sumy koszyka brutto po rabatach, z pominięciem dostawy.
+        saveShopSetting('PS_SHIPPING_FREE_PRICE', FREE_SHIPPING_MIN_GROSS, $context);
+        // Darmowa wysyłka zależy od ceny, a próg darmowej dostawy według masy jest wyłączony.
+        saveShopSetting('PS_SHIPPING_FREE_WEIGHT', 0, $context);
     });
     echo "[2/3] Synchronizing offline payment permissions for carrier references...\n";
+    // Moduły płatności zapisują uprawnienia według referencji przewoźników.
+    // Synchronizacja po utworzeniu metod udostępnia płatności również nowym referencjom.
     transaction(function () use ($context, $db, $shopId): void {
         $inputs = paymentInputs($context);
         foreach (allowedPaymentModules() as $name) {
@@ -176,12 +236,14 @@ function configureProjectCarriers(\Context $context, bool $dryRun = false): void
         }
     });
     echo "[3/3] Checking Polish gross delivery tariffs...\n";
+    // Kontrola korzysta z natywnych reguł wyboru taryfy i kalkulacji podatku,
+    // aby sprawdzić dostępność granicy masy i brutto, które otrzyma koszyk.
     \Carrier::resetStaticCache();
     $address = new \Address();
     $address->id_country = (int) $country->id;
     foreach ($plans as $key => $plan) {
         $carrier = new \Carrier(projectCarrierId($key, $context));
-        if ((float) $carrier->max_weight !== 50.0 || !$carrier->range_behavior
+        if ((float) $carrier->max_weight !== (float) COURIER_MAX_WEIGHT_KG || !$carrier->range_behavior
             || !\Carrier::checkDeliveryPriceByWeight((int) $carrier->id, 50, (int) $zone->id)
             || \Carrier::checkDeliveryPriceByWeight((int) $carrier->id, 50.000001, (int) $zone->id)) {
             throw new RuntimeException('Carrier weight limit/range mismatch: ' . $plan['name']);

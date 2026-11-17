@@ -1,18 +1,44 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Odwzorowanie źródłowego drzewa kategorii w menu ps_mainmenu.
+ *
+ * configure-menu.php wywołuje tę bibliotekę po imporcie kategorii i produktów. Wejście pochodzi z
+ * categories.json.
+ *
+ * Plan określa korzenie i pozycje, zapis aktywuje kategorie i ustawia MOD_BLOCKTOPMENU_ITEMS. Moduł buduje
+ * podmenu z natywnej hierarchii.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
 
 require_once __DIR__ . '/prestashop.php';
 
-/** Root order in the source shop's navigation; merchandising branches are omitted. */
+/**
+ * Zwraca kolejność głównych kategorii odwzorowaną z menu źródłowego.
+ *
+ * @return list<string> Nazwy sześciu głównych gałęzi w kolejności menu.
+ */
 function mainMenuRoots(): array
 {
     return ['Klamki do drzwi', 'Okucia drzwiowe', 'Bramy i ogrodzenia',
         'Okucia budowlane', 'Dom i ogród', 'Akcesoria meblowe'];
 }
 
+/**
+ * Tworzy plan zagnieżdżonego menu, kontrolując rodziców, duplikaty i kolejność.
+ *
+ * Wybiera sześć głównych gałęzi projektu i zachowuje kolejność rodzeństwa ze źródła. Klucze JSON całych
+ * ścieżek rozróżniają powtarzające się nazwy, a kontrola rodziców zabezpiecza tworzenie hierarchii.
+ *
+ * @param array $categories Mapa pełnych ścieżek JSON na zapisane ID kategorii.
+ * @return array{roots: list<string>, categories: array<string, array>} Klucze pełnych ścieżek i węzły z pozycjami rodzeństwa.
+ * @throws \RuntimeException Przy niepoprawnym drzewie, duplikatach albo brakującym rodzicu lub wymaganym korzeniu menu.
+ * @throws \JsonException Przy niepoprawnym JSON lub błędzie kodowania danych planu.
+ */
 function mainMenuPlan(array $categories): array
 {
     if (!array_is_list($categories) || $categories === []) {
@@ -57,12 +83,20 @@ function mainMenuPlan(array $categories): array
             throw new RuntimeException('Menu category parent is missing: ' . implode(' > ', $entry['path']));
         }
     }
-    // Parents must exist before children; stable sorting retains source sibling order.
+    // Rodzice poprzedzają dzieci. Stabilne sortowanie zachowuje kolejność rodzeństwa.
     uasort($plan, fn (array $a, array $b): int => count($a['path']) <=> count($b['path'])
         ?: ($a['parent'] === null ? $a['position'] <=> $b['position'] : 0));
     return ['roots' => $roots, 'categories' => $plan];
 }
 
+/**
+ * Wczytuje categories.json i zwraca zweryfikowany plan menu.
+ *
+ * @param string|null $file Opcjonalna ścieżka categories.json, domyślnie obok products.json.
+ * @return array{roots: list<string>, categories: array<string, array>} Zweryfikowany plan menu.
+ * @throws \RuntimeException Przy braku pliku lub niezgodnym kontrakcie planu menu.
+ * @throws \JsonException Przy niepoprawnym JSON lub błędzie kodowania danych planu.
+ */
 function readMainMenuPlan(?string $file = null): array
 {
     $file ??= dirname(SOURCE_FILE) . '/categories.json';
@@ -76,6 +110,19 @@ function readMainMenuPlan(?string $file = null): array
     return mainMenuPlan($categories);
 }
 
+/**
+ * Odtwarza powiązania kategorii i ustawienia modułu górnego menu.
+ *
+ * Rozwiązuje lub tworzy kategorie, aktywuje je i ustawia pozycje. Do ps_mainmenu zapisuje wyłącznie główne
+ * CAT-ID, ponieważ zagnieżdżenie moduł odczytuje z drzewa kategorii. Kończy natywnym unieważnieniem cache
+ * menu.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param array $plan Wynik mainMenuPlan z roots i categories oraz pozycjami węzłów.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return void
+ * @throws \RuntimeException Przy braku modułu, błędzie aktywacji i pozycji kategorii lub zapisu pozycji menu.
+ */
 function configureMainMenu(\Context $context, array $plan, bool $dryRun = false): void
 {
     echo '[1/3] Preparing source menu: ' . count($plan['roots']) . ' roots, '
@@ -111,6 +158,8 @@ function configureMainMenu(\Context $context, array $plan, bool $dryRun = false)
         }
     }
     echo "[3/3] Replacing top menu items and clearing navigation cache...\n";
+    // ps_mainmenu przyjmuje główne pozycje CAT-ID w konfiguracji. Podkategorie
+    // wynikają z relacji rodziców i pozycji zapisanych wcześniej w tabelach kategorii.
     $items = implode(',', array_map(fn (string $key): string => 'CAT' . $ids[$key], $plan['roots']));
     $groupId = (int) $context->shop->id_shop_group;
     if (!\Configuration::updateValue('MOD_BLOCKTOPMENU_ITEMS', $items, false, $groupId, $shopId)
@@ -119,7 +168,7 @@ function configureMainMenu(\Context $context, array $plan, bool $dryRun = false)
         throw new RuntimeException('Cannot save or enable the source navigation menu.');
     }
     \Cache::clean('Module::isEnabledps_mainmenu');
-    // Public category-update hook clears JSON caches for every customer group.
+    // Publiczny hook aktualizacji kategorii czyści cache JSON każdej grupy klientów.
     $module->hookActionCategoryUpdate([]);
     \Tools::clearSmartyCache();
     echo 'OK: ' . implode(' | ', mainMenuRoots()) . '; nested categories restored.' . PHP_EOL;

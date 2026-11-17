@@ -2,12 +2,34 @@
 
 declare(strict_types=1);
 
+/**
+ * Kontrakt źródeł i dziesiętne plany cen, kategorii oraz atrybutów.
+ *
+ * Wspólna biblioteka importerów, diagnostyki i bootstrapu. Operuje na JSON i BCMath bez ładowania sklepu.
+ *
+ * Czyta products.json, opcjonalnie categories.json. Wynikami są plany w pamięci i wyjątki walidacji.
+ */
+
+
 namespace ShopInit;
 
 use RuntimeException;
 
 const SOURCE_FILE = '/opt/shop/scraper-results/products.json';
 
+/**
+ * Waliduje wartość dziesiętną i zwraca ją w postaci tekstowej dla obliczeń BCMath.
+ *
+ * Wartości bool, NaN, nieskończoność i niedozwolone wartości ujemne są odrzucane. Dla zapisu wykładniczego
+ * normalizacja korzysta z float oraz sprintf z czternastoma miejscami, co określa dokładność tej ścieżki
+ * wejścia.
+ *
+ * @param mixed $value Wartość przekazana do walidacji lub zapisu.
+ * @param string $label Kontekst diagnostyczny dodawany do komunikatu błędu.
+ * @param bool $negative Dopuszcza ujemną wartość, wymaganą m.in. dla obniżających cenę modyfikatorów.
+ * @return string Zapis dziesiętny bez początkowego znaku plus, gotowy do obliczeń BCMath.
+ * @throws \RuntimeException Przy nieliczbowej, nieskończonej lub niedozwolonej wartości ujemnej.
+ */
 function decimal($value, string $label, bool $negative = false): string
 {
     if (is_bool($value) || !is_numeric($value) || !is_finite((float) $value)) {
@@ -23,6 +45,17 @@ function decimal($value, string $label, bool $negative = false): string
     return ltrim($text, '+');
 }
 
+/**
+ * Zaokrągla liczbę dziesiętną do wskazanej skali bez pośrednictwa liczb binarnych.
+ *
+ * Dodaje połowę jednostki ostatniej zachowywanej pozycji ze znakiem liczby, następnie obcina wynik BCMath.
+ * Daje zaokrąglenie połówek od zera i eliminuje zapis ujemnego zera.
+ *
+ * @param string $value Wartość przekazana do walidacji lub zapisu.
+ * @param int $scale Liczba miejsc dziesiętnych wyniku.
+ * @return string Liczba z dokładnie $scale miejscami dziesiętnymi, ze znormalizowanym zerem.
+ * @throws \RuntimeException Przy niedostępnym rozszerzeniu BCMath.
+ */
 function rounded(string $value, int $scale): string
 {
     if (!extension_loaded('bcmath')) {
@@ -33,16 +66,42 @@ function rounded(string $value, int $scale): string
     return bccomp($result, '0', $scale) === 0 ? number_format(0, $scale, '.', '') : $result;
 }
 
+/**
+ * Przelicza netto na brutto dla stawki VAT z zaokrągleniem do groszy.
+ *
+ * @param string $net Kwota netto w zapisie dziesiętnym PLN.
+ * @param string $vat Stawka VAT w procentach, np. 23.
+ * @return string Cena brutto w PLN z dwoma miejscami dziesiętnymi.
+ */
 function grossFromNet(string $net, string $vat): string
 {
     return rounded(bcmul($net, bcadd('1', bcdiv($vat, '100', 12), 12), 12), 2);
 }
 
+/**
+ * Oblicza sześciocyfrowe netto odpowiadające cenie brutto źródła.
+ *
+ * @param string $gross Kwota brutto w zapisie dziesiętnym PLN.
+ * @param string $vat Stawka VAT w procentach, np. 23.
+ * @return string Cena netto w PLN z sześcioma miejscami dziesiętnymi.
+ */
 function netFromGross(string $gross, string $vat): string
 {
     return rounded(bcdiv($gross, bcadd('1', bcdiv($vat, '100', 12), 12), 12), 6);
 }
 
+/**
+ * Wyznacza ceny bazowe i modyfikatory kombinacji z kontrolą zgodności brutto.
+ *
+ * Cena brutto źródła wyznacza bazowe netto przechowywane w PrestaShop. Każdy wariant musi mieć tę samą
+ * listę grup i unikalny zestaw wartości. Wariant zawiera source_id, reference, attributes, source_modifier,
+ * modifier i gross. Korekty dokładności są jawnie raportowane w adjustments.
+ *
+ * @param array $product Rekord źródłowy z product_id, VAT, netto/brutto i pełnymi cenami variants.
+ * @return array{net: string, gross: string, vat: string, variants: list<array>, adjustments: list<array>}
+ * @throws \RuntimeException Przy niespójnych cenach, grupach atrybutów lub kombinacjach.
+ * @throws \JsonException Przy niepoprawnym JSON lub błędzie kodowania danych planu.
+ */
 function pricePlan(array $product): array
 {
     $id = (string) ($product['product_id'] ?? '?');
@@ -61,6 +120,8 @@ function pricePlan(array $product): array
     $result = ['net' => $net, 'gross' => $gross, 'vat' => $vat, 'variants' => [], 'adjustments' => []];
     $seenIds = [];
     $seenAttributes = [];
+    // W obrębie produktu każda rzeczywista kombinacja musi opisywać ten sam zbiór
+    // grup. Sygnatura wartości wykrywa duplikaty niezależnie od kolejności kluczy.
     $groupSet = null;
     foreach ($variants as $variant) {
         $variantId = (string) ($variant['variant_id'] ?? '');
@@ -92,13 +153,15 @@ function pricePlan(array $product): array
         $observedNet = decimal($variant['price_netto'] ?? null, "combination {$variantId} net");
         $target = rounded(decimal($variant['price_brutto'] ?? null, "combination {$variantId} gross"), 2);
         assertSourceGross($observedNet, $target, $vat, "combination {$variantId}");
+        // Spójność modyfikatora sprawdzamy względem netto zapisanej ceny źródłowej.
+        // Dopiero później uwzględniamy normalizację netto bazowego do skali PrestaShop.
         if (abs((float) bcsub(bcadd($sourceNet, $raw, 12), $observedNet, 12)) > 0.0000011) {
             throw new RuntimeException("Source net and price_modifier disagree for combination {$variantId}");
         }
         $modifier = $raw;
         if (grossFromNet(bcadd($net, $modifier, 6), $vat) !== $target) {
-            // Preserve the source modifier where possible. One micro-unit fixes
-            // source half-cent boundaries lost when the base net is stored at 6 dp.
+            // Zachowujemy źródłowy modyfikator. Korekta o milionową część złotego obsługuje
+            // granicę połowy grosza po zapisie bazowej ceny netto do sześciu miejsc.
             $matched = false;
             for ($step = 1; $step <= 5 && !$matched; $step++) {
                 foreach ([$step, -$step] as $offset) {
@@ -110,6 +173,8 @@ function pricePlan(array $product): array
                     }
                 }
             }
+            // Po nieudanej korekcie kilku milionowych wyznaczamy wpływ od ceny docelowej
+            // brutto. Końcowa kontrola nadal wymaga dokładnego odtworzenia groszy.
             if (!$matched) {
                 $modifier = bcsub(netFromGross($target, $vat), $net, 6);
             }
@@ -130,15 +195,40 @@ function pricePlan(array $product): array
     return $result;
 }
 
+/**
+ * Sprawdza zgodność źródłowego netto i brutto z tolerancją dokładności zapisu źródła.
+ *
+ * Tolerancja 0.005002 PLN obejmuje połowę grosza i niepewność sześciocyfrowego zapisu źródłowego. Jest to
+ * kontrola spójności wejścia przed późniejszym dokładnym odtworzeniem brutto.
+ *
+ * @param string $net Kwota netto w zapisie dziesiętnym PLN.
+ * @param string $gross Kwota brutto w zapisie dziesiętnym PLN.
+ * @param string $vat Stawka VAT w procentach, np. 23.
+ * @param string $label Kontekst diagnostyczny dodawany do komunikatu błędu.
+ * @return void
+ * @throws \RuntimeException Gdy zależność netto, VAT i brutto przekracza dopuszczalną tolerancję źródła.
+ */
 function assertSourceGross(string $net, string $gross, string $vat, string $label): void
 {
     $difference = bcsub(bcmul($net, bcadd('1', bcdiv($vat, '100', 12), 12), 12), $gross, 12);
-    // Allow source six-decimal uncertainty at a half-cent boundary.
+    // Uwzględniamy dokładność sześciu miejsc źródła na granicy połowy grosza.
     if (bccomp($difference, '0.005002', 12) > 0 || bccomp($difference, '-0.005002', 12) < 0) {
         throw new RuntimeException("Source net, VAT and gross disagree for {$label}");
     }
 }
 
+/**
+ * Wczytuje i waliduje aktualny format produktów JSON w UTF-8.
+ *
+ * Wymaga niepustej listy, dodatnich i unikalnych ID, nazw oraz pełnych ścieżek kategorii. Wywołuje
+ * pricePlan dla każdego produktu. Pełne wymagania pól opisów, masy i galerii sprawdzają odpowiednie plany
+ * domenowe.
+ *
+ * @param string $path Ścieżka pliku wejściowego.
+ * @return list<array> Rekordy źródłowe po walidacji identyfikatorów, kategorii i cen.
+ * @throws \RuntimeException Przy błędzie odczytu lub niespójnym kontrakcie katalogu.
+ * @throws \JsonException Przy niepoprawnym JSON lub błędzie kodowania danych planu.
+ */
 function readCatalog(string $path = SOURCE_FILE): array
 {
     if (!is_readable($path)) {
@@ -177,8 +267,18 @@ function readCatalog(string $path = SOURCE_FILE): array
     return $products;
 }
 
+/**
+ * Obsługuje wybór ID, całego katalogu i trybu próbnego z argumentów CLI.
+ *
+ * @param array $argv Argumenty CLI łącznie z nazwą uruchomionego skryptu.
+ * @param bool $defaultAll Wybiera cały katalog przy pominięciu selektora, w przeciwnym razie domyślnym ID jest 5.
+ * @return array{0: list<array>, 1: bool, 2: bool} Wybrane produkty, tryb próbny i wybór całego katalogu.
+ * @throws \RuntimeException Przy niepoprawnych argumentach CLI, błędnym katalogu albo braku wybranego produktu.
+ */
 function selectProducts(array $argv, bool $defaultAll = false): array
 {
+    // Selektor dotyczy dalszej operacji. Cały JSON jest walidowany przed filtrowaniem,
+    // więc błędny rekord poza wybranym ID również zatrzyma polecenie.
     $selection = $defaultAll ? '--all' : '5';
     $specified = false;
     $dryRun = false;
@@ -202,6 +302,18 @@ function selectProducts(array $argv, bool $defaultAll = false): array
     return [$products, $dryRun, $selection === '--all'];
 }
 
+/**
+ * Buduje plan ścieżek kategorii z kolejnością rodziców przed dziećmi.
+ *
+ * Kluczem węzła jest JSON całej ścieżki, dlatego identyczne nazwy pod różnymi rodzicami pozostają odrębnymi
+ * kategoriami. parent wskazuje klucz rodzica, a sortowanie zapewnia rozwiązanie rodzica przed dzieckiem.
+ *
+ * @param array $products Lista zweryfikowanych rekordów źródłowych products.json.
+ * @param bool $includeEmpty Dołącza ścieżki z categories.json, także bez przypisanych produktów.
+ * @return array<string, array{name: string, path: array, parent: string|null}> Węzły indeksowane pełną ścieżką JSON.
+ * @throws \RuntimeException Przy niepoprawnej ścieżce lub błędzie odczytu pełnego drzewa kategorii.
+ * @throws \JsonException Przy niepoprawnym JSON lub błędzie kodowania danych planu.
+ */
 function categoryPlan(array $products, bool $includeEmpty = false): array
 {
     $paths = [];
@@ -234,6 +346,8 @@ function categoryPlan(array $products, bool $includeEmpty = false): array
             $parent = $prefix === [] ? null : json_encode($prefix, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
             $prefix[] = $name;
             $key = json_encode($prefix, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            // Pełna ścieżka jest tożsamością węzła. Wspólny prefiks wielu produktów
+            // scala się tutaj w pojedynczą kategorię z jednoznacznym rodzicem.
             $result[$key] = ['name' => $name, 'path' => $prefix, 'parent' => $parent];
         }
     }
@@ -241,12 +355,20 @@ function categoryPlan(array $products, bool $includeEmpty = false): array
     return $result;
 }
 
+/**
+ * Zbiera unikalne grupy i wartości atrybutów wszystkich źródłowych kombinacji.
+ *
+ * @param array $products Lista zweryfikowanych rekordów źródłowych products.json.
+ * @return array<string, array<string, string>> Grupy atrybutów i wartości pod kluczami value:NAZWA.
+ */
 function attributePlan(array $products): array
 {
     $groups = [];
     foreach ($products as $product) {
         foreach ($product['variants'] as $variant) {
             foreach ($variant['attributes'] as $group => $value) {
+                // Prefiks klucza chroni wartości wyglądające jak liczby przed konwersją
+                // klucza tablicy PHP i pozwala zachować odrębność etykiet słownika.
                 $groups[$group]['value:' . $value] = $value;
             }
         }

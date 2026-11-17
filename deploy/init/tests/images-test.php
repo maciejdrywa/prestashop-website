@@ -1,13 +1,39 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test ponowienia importu galerii, naprawy plików i rozpoznawania konfliktów mapowania.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/images-test.php
+ *
+ * Tworzy odrębny produkt, mapowania i pliki. finally usuwa obiekty pomocnicze oraz obrazy, a kontrola
+ * końcowa porównuje liczności tabel.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/images.php';
 
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $condition Warunek asercji wymagany przez bieżący scenariusz.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
 function imageTest(bool $condition, string $message): void
 {
     if (!$condition) {
         throw new RuntimeException($message);
     }
 }
+/**
+ * Sprawdza, że przekazana operacja zgłasza oczekiwany błąd walidacji.
+ *
+ * @param callable $callback Operacja, która powinna zgłosić RuntimeException.
+ * @return void
+ */
 function imageRejects(callable $callback): void
 {
     $rejected = false;
@@ -18,6 +44,11 @@ function imageRejects(callable $callback): void
     }
     imageTest($rejected, 'Expected failure was not reported.');
 }
+/**
+ * Odczytuje liczności tabel galerii i mapowań przed testem importu.
+ *
+ * @return array<string, int> Liczności tabel produktów, galerii i mapowań.
+ */
 function imageTestCounts(): array
 {
     $counts = [];
@@ -58,6 +89,8 @@ try {
     imageRejects(fn () => ShopInit\imagePlans([$ambiguous], $context));
     $types = ShopInit\productImageTypes();
     $plans = ShopInit\imagePlans([$fixture], $context);
+    // Pierwszy import tworzy ID, a drugi powinien rozpoznać komplet artefaktów.
+    // Dalsze przypadki celowo uszkadzają pliki i manifest, sprawdzając naprawę w miejscu.
     $first = ShopInit\importProductImages($plans, $types, $context);
     imageTest($first['created'] === 4, 'Expected four new images');
     ShopInit\verifyProductImages($plans, $types, $context);
@@ -79,7 +112,7 @@ try {
     unlink($files['original']);
     $repaired = ShopInit\importProductImages($plans, $types, $context);
     imageTest($repaired['regenerated'] === 1 && $repaired['created'] === 0, 'Missing original was not repaired in place');
-    // Simulate interruption after the image ID was reserved, before finishing files.
+    // Symulujemy przerwanie po rezerwacji ID zdjęcia i przed ukończeniem plików.
     imageTest((bool) Db::getInstance()->update(ShopInit\IMAGE_MAP_TABLE, ['content_hash' => ''], ShopInit\imageMapWhere($plans[0], $entry, $context)), 'Cannot prepare interrupted-write fixture');
     $resumed = ShopInit\importProductImages($plans, $types, $context);
     imageTest($resumed['regenerated'] === 1 && $resumed['created'] === 0, 'Resume duplicated an image');
@@ -99,6 +132,8 @@ try {
 } catch (Throwable $error) {
     $failed = $error;
 } finally {
+    // Operacje plikowe są poza transakcją bazy, dlatego sprzątamy produkt i jego
+    // mapowania jawnie także po błędzie. Usunięcie Product usuwa powiązane obrazy.
     if ($testProductId !== null) {
         if (!(new Product($testProductId))->delete()) {
             $failed = new RuntimeException('Cannot delete image test product.');

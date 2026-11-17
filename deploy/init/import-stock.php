@@ -1,9 +1,25 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Ustawienie początkowych ilości i udostępnienie produktów w katalogu.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/import-stock.php [ID|--all] [--dry-run]
+ *
+ * Wymaga produktów i kompletnych kombinacji. Plan ilości zawsze powstaje z całego products.json, także przy
+ * wyborze pojedynczego ID.
+ *
+ * Zapis w transakcji nadpisuje magazyn, wyłącza backorders i aktywuje produkty. Do zachowawczego ponownego
+ * startu służy init-shop.php --resume.
+ */
+
 require_once __DIR__ . '/lib/stock.php';
 try {
     echo "[1/3] Preparing deterministic full-catalog stock plan...\n";
     [$products, $dryRun, $all] = ShopInit\selectProducts($argv);
+    // Odsetek produktów bez stanu jest własnością całego katalogu. Plan powstaje
+    // przed ograniczeniem zapisu do wybranych produktów, co zachowuje stały wybór zer.
     $catalog = ShopInit\catalogStockPlan(ShopInit\readCatalog());
     $zeros = count(array_filter($catalog, fn (int $q): bool => $q === 0));
     echo 'CATALOG PLAN: ' . $zeros . '/' . count($catalog) . ' unavailable ('

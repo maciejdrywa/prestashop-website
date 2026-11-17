@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Statusy oczekiwania i płatności oraz demonstracyjne faktury VAT.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/configure-orders.php [--dry-run]
+ *
+ * Wywoływany po configure-payments.php, ponieważ korzysta z utworzonych przez moduły statusów.
+ *
+ * Zapisuje definicje OrderState i dane wystawcy przez lib/orders.php. Wystawienie dokumentu następuje przy
+ * późniejszym przejściu statusu zamówienia.
+ */
+
 require_once __DIR__ . '/lib/orders.php';
 try {
     $options = array_slice($argv, 1);

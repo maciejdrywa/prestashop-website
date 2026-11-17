@@ -1,5 +1,16 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test rozpoznawania produktów demonstracyjnych i kolejności czyszczenia katalogu.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/storefront-test.php
+ *
+ * Sprawdza definicje i plan etapów bez uruchamiania konfiguratorów.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/storefront.php';
 require_once __DIR__ . '/../lib/initialization.php';
 

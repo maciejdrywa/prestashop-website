@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Menu górne z głównymi kategoriami i pełnym zagnieżdżeniem.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/configure-menu.php [--dry-run]
+ *
+ * Wymaga categories.json, kontekstu sklepu i ps_mainmenu. Następuje po imporcie produktów.
+ *
+ * Wykorzystuje lib/menu.php do rozpoznania drzewa, aktywacji węzłów, zapisania kolejności i odświeżenia
+ * cache menu.
+ */
+
 require_once __DIR__ . '/lib/menu.php';
 
 try {

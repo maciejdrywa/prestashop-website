@@ -1,5 +1,18 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Kontrola PL/PLN, aktywnych reguł VAT i planów cen źródłowych.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/check-price-settings.php [ID|--all]
+ *
+ * Domyślnie sprawdza cały katalog. Wymaga kontekstu sklepu i products.json.
+ *
+ * Raportuje reguły podatkowe oraz korekty dokładności modyfikatorów. Operacje bazodanowe mają charakter
+ * odczytu.
+ */
+
 require_once __DIR__ . '/lib/prestashop.php';
 try {
     echo "[1/3] Checking currency, country and taxes...\n";
@@ -8,6 +21,8 @@ try {
     [$products] = ShopInit\selectProducts($argv, true);
     echo "[2/3] Checking active Polish tax rules...\n";
     $query = new DbQuery();
+    // Lista obejmuje aktywne, ogólne polskie reguły bez ograniczeń stanowych
+    // i pocztowych. Następnie stawki są porównywane z VAT użytym przez plany cen źródła.
     $query->select('g.id_tax_rules_group, g.name, t.rate')->from('tax_rules_group', 'g');
     $query->innerJoin('tax_rule', 'r', 'r.id_tax_rules_group = g.id_tax_rules_group');
     $query->innerJoin('tax', 't', 't.id_tax = r.id_tax');

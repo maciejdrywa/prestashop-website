@@ -1,13 +1,38 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test planu ilości, rozdziału wariantów, aktywacji i domyślnej kombinacji.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/stock-test.php
+ *
+ * Tworzy pomocnicze produkty i magazyn w transakcji, przy hookach wyłączonych w procesie. Kończy
+ * rollbackiem i kontrolą liczności tabel.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/stock.php';
 
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $condition Warunek asercji wymagany przez bieżący scenariusz.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
 function stockTest(bool $condition, string $message): void
 {
     if (!$condition) {
         throw new RuntimeException($message);
     }
 }
+/**
+ * Odczytuje liczności tabel produktów, wariantów i magazynu do kontroli rollbacku.
+ *
+ * @return array<string, int> Liczności tabel katalogu i magazynu.
+ */
 function stockTestCounts(): array
 {
     $result = [];
@@ -19,6 +44,8 @@ function stockTestCounts(): array
 }
 $started = false;
 try {
+    // Najpierw sprawdzamy niezmienność planu po odwróceniu katalogu i sumy rozdziału
+    // wariantów. Część integracyjna później obejmuje zapis i aktywację fixture.
     $catalog = ShopInit\readCatalog();
     $plan = ShopInit\catalogStockPlan($catalog);
     $reordered = array_reverse($catalog);
@@ -37,7 +64,7 @@ try {
     }
     $context = ShopInit\boot();
     $db = Db::getInstance();
-    // Core module hooks can commit transactions; disable them in this test only.
+    // Hooki mogą zatwierdzić transakcję. Wyłączamy je wyłącznie w procesie testowym.
     foreach (Module::getModulesInstalled() as $module) {
         Hook::disableHooksForModule((int) $module['id_module']);
     }

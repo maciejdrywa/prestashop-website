@@ -1,13 +1,34 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test masy źródłowej, reguł demonstracyjnych i pierwszeństwa kategorii.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/weights-test.php
+ *
+ * Czyta katalog i operuje na planach masy w pamięci.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/weights.php';
 
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $condition Warunek asercji wymagany przez bieżący scenariusz.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
 function weightCheck(bool $condition, string $message): void
 {
     if (!$condition) throw new RuntimeException($message);
 }
 
 try {
+    // Fixture wymusza rozpoznanie szczegółowej kategorii. Dalsze przypadki
+    // sprawdzają dodatnią wagę źródłową, brak lub zero oraz odrzucanie błędnych wartości.
     $fixture = ['product_id' => 'test', 'category_paths' => [['Akcesoria meblowe', 'UCHWYTY MEBLOWE']]];
     weightCheck(ShopInit\productWeightPlan($fixture)['weight'] === '0.100000', 'Specific category rule was not used.');
     weightCheck(ShopInit\productWeightPlan($fixture + ['weight' => 2.5])['weight'] === '2.500000', 'Source weight was overwritten.');
