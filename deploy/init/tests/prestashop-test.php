@@ -1,0 +1,177 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Test integracji zapisu katalogu i kombinacji z natywnymi klasami PrestaShop.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/prestashop-test.php
+ *
+ * Wymaga sklepu i tabel InnoDB. Tworzy rekordy o prywatnych referencjach w transakcji, wyłącza hooki w
+ * swoim procesie i sprawdza rollback.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
+require_once __DIR__ . '/../lib/products.php';
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $condition Warunek asercji wymagany przez bieżący scenariusz.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
+function verify(bool $condition, string $message): void
+{
+    if (!$condition) {
+        throw new RuntimeException($message);
+    }
+}
+/**
+ * Odczytuje liczności tabel objętych testem transakcyjnego importu.
+ *
+ * @return array<string, int> Liczności tabel objętych testem rollbacku.
+ */
+function counts(): array
+{
+    $result = [];
+    foreach (['product', 'product_shop', 'product_lang', 'category', 'category_lang', 'category_shop',
+        'category_product', 'category_group', 'attribute_group', 'attribute_group_lang',
+        'attribute_group_shop', 'attribute', 'attribute_lang', 'attribute_shop',
+        'product_attribute', 'product_attribute_shop', 'product_attribute_combination', 'stock_available'] as $table) {
+        $result[$table] = (int) Db::getInstance()->getValue('SELECT COUNT(*) FROM ' . _DB_PREFIX_ . $table, false);
+    }
+    return $result;
+}
+$started = false;
+try {
+    $context = ShopInit\boot();
+    $db = Db::getInstance();
+    // Wyszukiwanie fasetowe wykonuje w hookach TRUNCATE, które zatwierdza MySQL.
+    // Hooki wyłączamy wyłącznie w tym procesie testowym.
+    foreach (Module::getModulesInstalled() as $module) {
+        Hook::disableHooksForModule((int) $module['id_module']);
+    }
+    // Liczności oraz wymaganie InnoDB potwierdzają izolację fixture w transakcji.
+    // Wyłączenie hooków dotyczy wyłącznie bieżącego procesu testowego.
+    $before = counts();
+    foreach (array_keys($before) as $table) {
+        $engine = $db->getValue("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . pSQL(_DB_PREFIX_ . $table) . "'");
+        verify(strtoupper((string) $engine) === 'INNODB', 'Rollback test requires InnoDB: ' . $table);
+    }
+    $catalog = ShopInit\readCatalog();
+    $products = array_values(array_filter($catalog, fn (array $p): bool => in_array((int) $p['product_id'], [5, 119, 644, 463, 808, 826], true)));
+    // Odrębne referencje pozwalają testować po imporcie właściwego katalogu.
+    foreach ($products as &$source) {
+        $source['product_id'] = (string) (900000000 + (int) $source['product_id']);
+    }
+    unset($source);
+    foreach ($products as $source) {
+        verify(!$db->getValue('SELECT id_product FROM ' . _DB_PREFIX_ . "product WHERE reference = 'pandomu-" . (int) $source['product_id'] . "'"), 'Test source product already exists; use a fresh test shop.');
+    }
+    verify($db->execute('START TRANSACTION'), 'Cannot start test transaction');
+    $started = true;
+    $plan = ShopInit\categoryPlan($catalog, true);
+    $categories = ShopInit\importCategories($plan, $context);
+    verify($categories === ShopInit\importCategories($plan, $context), 'Category IDs changed on repeat');
+    $groups = ShopInit\attributePlan($catalog);
+    $attributes = ShopInit\importAttributes($groups, $context);
+    verify($attributes === ShopInit\importAttributes($groups, $context), 'Attribute IDs changed on repeat');
+    $bad = $products;
+    $bad[1]['description'] = '<script>alert(1)</script>';
+    $rejected = false;
+    try {
+        ShopInit\productPlans($bad, $context);
+    } catch (RuntimeException $error) {
+        $rejected = true;
+    }
+    verify($rejected, 'Unsafe description was accepted');
+    verify(counts()['product'] === $before['product'], 'Preflight created products');
+    $bad = $products;
+    $bad[1]['description_short'] = '<script>alert(1)</script>';
+    $rejected = false;
+    try {
+        ShopInit\productPlans($bad, $context);
+    } catch (RuntimeException $error) {
+        $rejected = true;
+    }
+    verify($rejected, 'Unsafe short description was accepted');
+    $products[0]['weight'] = null;
+    $products[1]['weight'] = 0;
+    $productPlans = ShopInit\productPlans($products, $context);
+    verify($productPlans[0]['weight_origin'] === 'demo' && $productPlans[1]['weight_origin'] === 'demo', 'Missing and zero weights were not planned as demonstration weights');
+    $productIds = ShopInit\importProducts($productPlans, $categories, $context);
+    verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Product IDs changed on repeat');
+    $firstSource = (string) $products[0]['product_id'];
+    $firstId = $productIds[$firstSource];
+    $saved = new Product($firstId);
+    $saved->active = true;
+    verify((bool) $saved->update(), 'Cannot prepare activation preservation fixture');
+    StockAvailable::setQuantity($firstId, 0, 7, (int) $context->shop->id);
+    $changed = $products[0];
+    $changed['name'] = 'Updated import fixture';
+    $changed['description'] = '<p>Updated description with Polish text: test.</p>';
+    $changed['description_short'] = '<p>Updated short summary.</p>';
+    $changed['weight'] = 2.5;
+    $changed['category_paths'] = [$catalog[1]['category_paths'][0], $catalog[2]['category_paths'][0]];
+    $changedPlans = ShopInit\productPlans([$changed], $context);
+    verify(ShopInit\importProducts($changedPlans, $categories, $context)[$firstSource] === $firstId, 'Updated product was duplicated');
+    $saved = new Product($firstId);
+    verify((bool) $saved->active, 'Product activation was reset');
+    verify((int) StockAvailable::getQuantityAvailableByProduct($firstId, 0, (int) $context->shop->id) === 7, 'Stock was overwritten');
+    $changed['description_short'] = '';
+    ShopInit\importProducts(ShopInit\productPlans([$changed], $context), $categories, $context);
+    $saved = new Product($firstId, false, (int) Configuration::get('PS_LANG_DEFAULT'), (int) $context->shop->id);
+    verify($saved->description_short === '', 'Old summary was not cleared for a full-only source');
+    ShopInit\importProducts($productPlans, $categories, $context);
+    $first = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
+    $weightFixtureId = reset($first)[0];
+    $weightFixture = new Combination($weightFixtureId, null, (int) $context->shop->id);
+    $weightFixture->weight = 3.5;
+    verify((bool) $weightFixture->update(), 'Cannot prepare old variant weight fixture');
+    verify($productIds === ShopInit\importProducts($productPlans, $categories, $context), 'Reimport after combinations duplicated products');
+    ShopInit\verifyUniformCombinationWeights($firstId, $context);
+    $weightFixture->weight = -0.05;
+    verify((bool) $weightFixture->update(), 'Cannot prepare negative variant weight fixture');
+    $legacyId = reset($first)[0];
+    verify($db->update('product_attribute', ['reference' => 'legacy-option-reference'], 'id_product_attribute = ' . $legacyId), 'Cannot prepare migration fixture');
+    $second = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
+    foreach ($productIds as $id) ShopInit\verifyUniformCombinationWeights($id, $context);
+    // Każdy wariant powinien dodawać do koszyka taką samą masę produktu.
+    foreach ($first[$firstSource] as $variantId) {
+        $cart = new Cart();
+        $cart->id_shop = (int) $context->shop->id;
+        $cart->id_shop_group = (int) $context->shop->id_shop_group;
+        $cart->id_currency = (int) Configuration::get('PS_CURRENCY_DEFAULT');
+        $cart->id_lang = (int) Configuration::get('PS_LANG_DEFAULT');
+        verify((bool) $cart->add(), 'Cannot create weight test cart');
+        $context->cart = $cart;
+        StockAvailable::setQuantity($firstId, $variantId, 3, (int) $context->shop->id);
+        verify($cart->updateQty(2, $firstId, $variantId) === true, 'Cannot add weight test variant');
+        verify(abs($cart->getTotalWeight() - 2 * (float) $productPlans[0]['weight']) < 0.000001, 'Cart weight differs between variants');
+        verify((bool) $cart->delete(), 'Cannot delete weight test cart');
+    }
+    verify($first === $second, 'Combination IDs changed on repeat/migration');
+    $expected = array_sum(array_map(fn (array $p): int => count($p['variants']), $products));
+    verify(array_sum(array_map('count', $first)) === $expected, 'Combination count mismatch');
+    verify(counts()['product_attribute'] === $before['product_attribute'] + $expected, 'Duplicate combinations were created');
+    foreach ($products as $source) {
+        foreach (ShopInit\pricePlan($source)['variants'] as $index => $variant) {
+            $id = $first[$source['product_id']][$index];
+            $query = new DbQuery();
+            $query->select('COUNT(*)')->from('product_attribute_combination')->where('id_product_attribute = ' . $id);
+            verify((int) $db->getValue($query, false) === count($variant['attributes']), 'Not all attribute groups saved');
+        }
+    }
+    verify($db->execute('ROLLBACK'), 'Rollback failed');
+    $started = false;
+    $after = counts();
+    verify($after === $before, 'Database counts differ after rollback: ' . json_encode(['before' => $before, 'after' => $after], JSON_THROW_ON_ERROR));
+    echo "OK: all catalog categories and attributes imported twice; {$expected} combinations, actual PrestaShop prices and legacy references verified. Test writes rolled back.\n";
+} catch (Throwable $error) {
+    if ($started) {
+        Db::getInstance()->execute('ROLLBACK');
+    }
+    fwrite(STDERR, 'TEST FAILED: ' . $error->getMessage() . PHP_EOL);
+    exit(1);
+}
