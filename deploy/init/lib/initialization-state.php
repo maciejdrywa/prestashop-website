@@ -16,6 +16,7 @@ use RuntimeException;
 
 require_once __DIR__ . '/initialization.php';
 require_once __DIR__ . '/cookies.php';
+require_once __DIR__ . '/theme.php';
 
 /**
  * Odczytuje dziennik zgodny z instalacją i odciskami wejścia.
@@ -97,6 +98,8 @@ function configurationPresent(string $script, \Context $context): bool
             return \Configuration::get('PS_SHOP_NAME') !== 'PrestaShop'
                 && trim((string) \Configuration::get('PS_SHOP_NAME')) !== ''
                 && !\Module::isEnabled('ps_imageslider') && !\Module::isEnabled('ps_banner');
+        case 'configure-theme.php':
+            return projectThemeActive($context);
         case 'configure-mail.php':
             if ((int) \Configuration::get('PS_MAIL_METHOD') !== 2
                 || (string) \Configuration::get('PS_MAIL_SERVER') === '') {
@@ -377,10 +380,11 @@ function resumeInitialization(\Context $context, array $summary): void
     saveInitializationState($path, $state);
     $stock = catalogStockPlan($products);
     $types = productImageTypes();
-    foreach (initializationStages() as $index => $stage) {
+    $stages = initializationStages();
+    foreach ($stages as $index => $stage) {
         unchangedInitializationSources($summary['source_hashes']);
         $script = $stage['script'];
-        echo PHP_EOL . '[WZNOWIENIE ' . ($index + 1) . '/17] ' . $stage['name'] . PHP_EOL;
+        echo PHP_EOL . '[WZNOWIENIE ' . ($index + 1) . '/' . count($stages) . '] ' . $stage['name'] . PHP_EOL;
         // Konfiguratory mają checkpointy etapów i kontrolę zasobów. Import katalogu
         // ma dodatkowo checkpointy per produkt, ograniczające zakres ponowienia po awarii.
         if (str_starts_with($script, 'configure-')) {
@@ -388,8 +392,10 @@ function resumeInitialization(\Context $context, array $summary): void
                 \Media::clearCache();
                 \Tools::clearSmartyCache();
             }
-            if (!configurationPresent($script, $context)) {
-                if (isset($state['stages'][$script])) {
+            // Nowy obraz może zmienić pliki motywu także po zakończeniu etapu.
+            $themeDeployment = $script === 'configure-theme.php';
+            if ($themeDeployment || !configurationPresent($script, $context)) {
+                if (!$themeDeployment && isset($state['stages'][$script])) {
                     throw new RuntimeException('Brakuje zapisanych powiązań etapu ' . $script . '. Sprawdź konfigurację ręcznie.');
                 }
                 if (runInitializationScript($stage) !== 0) {

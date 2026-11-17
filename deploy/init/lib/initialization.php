@@ -160,8 +160,10 @@ function initializationStages(): array
 {
     // Kolejność jest zależnością wykonania. Płatności poprzedzają statusy,
     // CMS poprzedza cookies i treści modułów, a kontrola katalogu i galerii poprzedza aktywację.
+    // Motyw wdrażamy po wyłączeniu modułów demonstracyjnych i przed generowaniem miniatur.
     return [
         ['name' => 'Nazwa sklepu, polskie dostawy i usunięcie demonstracji', 'script' => 'configure-storefront.php', 'args' => []],
+        ['name' => 'Motyw potomny PAN DOMU', 'script' => 'configure-theme.php', 'args' => []],
         ['name' => 'Polskie wiadomości i lokalny SMTP', 'script' => 'configure-mail.php', 'args' => []],
         ['name' => 'Przewoźnicy projektu i taryfy dostaw', 'script' => 'configure-carriers.php', 'args' => []],
         ['name' => 'Przelew tradycyjny i pobranie', 'script' => 'configure-payments.php', 'args' => []],
