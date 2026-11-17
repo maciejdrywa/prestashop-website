@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 
 def scrap_price(soup: BeautifulSoup) -> float:
+    """Odczytuje cenę brutto produktu ze źródła."""
     price_netto_tag = soup.find('meta', property='product:price:amount')
 
     if price_netto_tag and 'content' in price_netto_tag.attrs:

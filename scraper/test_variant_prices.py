@@ -13,6 +13,7 @@ from main_scraper import scrape_catalog
 
 
 def data(variant_id=101, selection=None, net="100", gross="123", product_id=5):
+    """Buduje kontrolowane dane produktu i wybranej kombinacji."""
     selection = selection or {"2": "1", "3": "10"}
     labels = {"1": "red", "2": "blue", "3": "green", "10": "small", "20": "large"}
     return {
@@ -28,11 +29,13 @@ def data(variant_id=101, selection=None, net="100", gross="123", product_id=5):
 
 
 def details(product_data):
+    """Osadza dane produktu w lokalnym HTML odpowiedzi."""
     encoded = html_module.escape(json.dumps(product_data), quote=True)
     return f'<div id="product-details" data-product="{encoded}"></div>'
 
 
 def controls(colors=("1", "2"), sizes=("10", "20")):
+    """Buduje formularz wyboru kolorów i rozmiarów dla testu kombinacji."""
     return '<div class="product-variants">' + ''.join(
         f'<select name="group[{group}]">' + ''.join(f'<option value="{value}">{value}</option>' for value in values) + '</select>'
         for group, values in (("2", colors), ("3", sizes))
@@ -40,11 +43,14 @@ def controls(colors=("1", "2"), sizes=("10", "20")):
 
 
 def source():
+    """Udostępnia bazowy model produktu używany w testach cen."""
     return SimpleNamespace(product_id="5", name="Product", price_netto=100, variants=[])
 
 
 class VariantPriceTests(unittest.TestCase):
+    """Sprawdza rzeczywiste kombinacje, modyfikatory netto i błędy odpowiedzi źródła."""
     def test_positive_negative_and_zero_net_modifiers(self):
+        """Sprawdza dodatnie, ujemne i zerowe modyfikatory netto."""
         for net, gross, expected in (("110", "135.3", 10), ("95", "116.85", -5), ("100", "123", 0)):
             with self.subTest(net=net):
                 variant = variant_from_data(data(net=net, gross=gross), "Product", "100")
@@ -53,10 +59,12 @@ class VariantPriceTests(unittest.TestCase):
                 self.assertEqual(variant.price_netto, float(net))
 
     def test_decimal_precision_is_preserved_to_six_places(self):
+        """Sprawdza zachowanie sześciu miejsc dziesiętnych modyfikatora."""
         variant = variant_from_data(data(net="48.780488", gross="60"), "Product", "48.772358")
         self.assertEqual(variant.price_modifier, 0.008130)
 
     def test_missing_or_invalid_prices_fail_instead_of_becoming_zero(self):
+        """Wymaga zgłoszenia brakujących i błędnych cen."""
         for value in (None, "", "NaN", "Infinity", "-1", True):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 decimal_price(value, "price")
@@ -66,17 +74,19 @@ class VariantPriceTests(unittest.TestCase):
             variant_from_data(invalid, "Product", 100)
 
     def test_real_combinations_with_nonadditive_prices_and_invalid_selection(self):
+        """Sprawdza rzeczywiste kombinacje z nieaddytywnymi cenami i błędnym wyborem."""
         initial = data()
         html = details(initial) + controls()
         responses = {
             ("1", "20"): data(102, {"2": "1", "3": "20"}, "110", "135.3"),
             ("2", "10"): data(103, {"2": "2", "3": "10"}, "95", "116.85"),
-            # Source substitutes its default for a nonexistent blue/large pair.
+            # Źródło zastępuje nieistniejący wybór niebieskiego i dużego wariantem domyślnym.
             ("2", "20"): initial,
         }
         calls = []
 
         def refresh(selection):
+            """Symuluje odpowiedź kontrolera produktu dla podanego wyboru atrybutów."""
             calls.append(selection)
             return {"product_details": details(responses[(selection["2"], selection["3"])]), "product_variants": controls()}
 
@@ -87,10 +97,12 @@ class VariantPriceTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
 
     def test_newly_exposed_options_are_also_checked(self):
+        """Sprawdza odkrywanie opcji ujawnionych przez wcześniejszy wybór."""
         initial = data(selection={"2": "1", "3": "10"})
         html = details(initial) + controls(sizes=("10",))
 
         def refresh(selection):
+            """Symuluje odpowiedź kontrolera produktu dla podanego wyboru atrybutów."""
             variant = data(100 + int(selection["2"]), selection)
             return {"product_details": details(variant), "product_variants": controls(colors=("1", "2", "3"), sizes=("10",))}
 
@@ -99,13 +111,15 @@ class VariantPriceTests(unittest.TestCase):
         self.assertIn("green", [variant.attributes["Color"] for variant in variants])
 
     def test_old_default_combination_with_different_groups_is_not_a_form_choice(self):
-        # Regression for source product 631: URL selects an obsolete size,
-        # whereas the current form exposes only color choices.
+        # Regresja produktu 631 dotyczy adresu wskazującego nieaktualny rozmiar,
+        # gdy aktualny formularz udostępnia wybór kolorów.
+        """Sprawdza obsługę starej kombinacji z grupami różnymi od aktualnego formularza."""
         initial = data(999, {"3": "10"})
         form = '<div class="product-variants"><select name="group[2]"><option value="1">red</option><option value="2">blue</option></select></div>'
         calls = []
 
         def refresh(selection):
+            """Symuluje odpowiedź kontrolera produktu dla podanego wyboru atrybutów."""
             calls.append(selection)
             return {"product_details": details(data(100 + int(selection["2"]), selection, "110", "135.3")), "product_variants": form}
 
@@ -117,6 +131,7 @@ class VariantPriceTests(unittest.TestCase):
         self.assertNotIn("999", [v.variant_id for v in variants])
 
     def test_fixed_attributes_outside_form_are_preserved(self):
+        """Sprawdza zachowanie stałych atrybutów niewidocznych w formularzu."""
         initial = data()
         form = '<div class="product-variants"><select name="group[2]"><option value="1">red</option><option value="2">blue</option></select></div>'
         variants = collect_variants(
@@ -127,12 +142,14 @@ class VariantPriceTests(unittest.TestCase):
         self.assertTrue(all(v.attributes["Size"] == "small" for v in variants))
 
     def test_wrong_product_and_missing_response_prices_are_errors(self):
+        """Wymaga odrzucenia błędnego ID produktu i brakujących cen odpowiedzi."""
         html = details(data()) + controls(colors=("1",), sizes=("10", "20"))
         for response_data in (data(102, product_id=99), data(102, {"2": "1", "3": "20"}, net=None)):
             with self.subTest(response=response_data), self.assertRaises(ValueError):
                 collect_variants(html, source(), lambda selection: {"product_details": details(response_data)})
 
     def test_requests_target_product_controller_never_cart(self):
+        """Sprawdza kierowanie odświeżenia do kontrolera produktu."""
         initial = data()
         html = details(initial) + controls(colors=("1",), sizes=("10", "20"))
         html += '<form id="add-to-cart-or-refresh" action="https://pandomu.com.pl/koszyk"><input type="hidden" name="add" value="1"></form>'
@@ -140,6 +157,7 @@ class VariantPriceTests(unittest.TestCase):
         calls = []
 
         def post(endpoint, **kwargs):
+            """Przechwytuje żądanie odświeżenia i sprawdza jego adres oraz argumenty."""
             calls.append((endpoint, kwargs))
             return SimpleNamespace(ok=True, json=lambda: {"product_details": details(returned)})
 
@@ -155,6 +173,7 @@ class VariantPriceTests(unittest.TestCase):
         self.assertNotIn("add", calls[0][1]["form"])
 
     def test_legacy_breadcrumbs_are_removed(self):
+        """Sprawdza migrację starego pola breadcrumbs bez utraty przypisań."""
         assigned = assign_categories(
             {"product_id": "5", "name": "Product", "breadcrumbs": ["Home", "Old", "Product"], "source_breadcrumbs": ["Home", "Product"]},
             {"category_paths": [["Root", "Child"]], "category_source_urls": ["https://pandomu.com.pl/11-child"]},
@@ -163,16 +182,21 @@ class VariantPriceTests(unittest.TestCase):
         self.assertEqual(assigned["breadcrumbs"], ["Strona główna", "Root", "Child", "Product"])
 
     def test_old_zero_modifiers_are_refreshed_without_refresh_flag(self):
+        """Sprawdza automatyczne odświeżenie nieweryfikowanych zerowych modyfikatorów."""
         entry = {"product_url": "https://pandomu.com.pl/5-item.html", "category_paths": [["Root"]], "category_source_urls": ["https://pandomu.com.pl/10-root"]}
 
         class FakeCrawler:
+            """Udostępnia deterministyczne odpowiedzi crawlera dla testu wznowienia."""
             def discover_catalog(self):
+                """Zwraca kontrolowany katalog albo błąd właściwy dla badanego przypadku."""
                 return {"categories": [], "products": {"5": entry}}
 
             def fetch_page(self, url):
+                """Udostępnia lokalną odpowiedź strony albo wykrywa nieoczekiwane pobranie."""
                 return "html"
 
             def fetch_variants(self, html, parsed):
+                """Zwraca kontrolowane warianty albo symuluje błąd ich odświeżenia."""
                 return [variant_from_data(data(net="110", gross="135.3"), "Product", 100)]
 
         old = {"product_id": "5", "name": "Keep name", "description": "Keep description", "description_short": "", "breadcrumbs": [], "source_breadcrumbs": [], "variants": [{"price_modifier": 0}], "images": ["image"], "price_netto": 90}
@@ -189,16 +213,21 @@ class VariantPriceTests(unittest.TestCase):
             self.assertNotIn("source_breadcrumbs", current)
 
     def test_failed_variant_request_preserves_old_prices_and_reports_failure(self):
+        """Sprawdza zachowanie wcześniejszych cen i raport błędu żądania wariantu."""
         entry = {"product_url": "https://pandomu.com.pl/5-item.html", "category_paths": [["Root"]], "category_source_urls": ["https://pandomu.com.pl/10-root"]}
 
         class FakeCrawler:
+            """Udostępnia deterministyczne odpowiedzi crawlera dla testu wznowienia."""
             def discover_catalog(self):
+                """Zwraca kontrolowany katalog albo błąd właściwy dla badanego przypadku."""
                 return {"categories": [], "products": {"5": entry}}
 
             def fetch_page(self, url):
+                """Udostępnia lokalną odpowiedź strony albo wykrywa nieoczekiwane pobranie."""
                 return "html"
 
             def fetch_variants(self, html, parsed):
+                """Zwraca kontrolowane warianty albo symuluje błąd ich odświeżenia."""
                 raise RuntimeError("HTTP 503")
 
         previous = {"product_id": "5", "name": "Product", "breadcrumbs": [], "price_netto": 90, "variants": [{"price_modifier": 0}], "images": ["image"]}

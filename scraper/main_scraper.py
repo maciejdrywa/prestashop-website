@@ -1,4 +1,4 @@
-"""Scrape the complete reachable category tree and resume products by source ID."""
+"""Pobiera pełny katalog i wznawia zapis produktów według źródłowego ID."""
 
 import argparse
 import logging
@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from bs4 import BeautifulSoup
 
-from Scrapping_products.store_crawler import store_crawler
+from Scrapping_products.store_crawler import StoreCrawler
 from Scrapping_products.parse_product import parse_product
 from catalog_files import assign_categories, read_products, save_json
 from scraper_elements.scrap_images import scrap_cover_image
@@ -17,20 +17,81 @@ from scraper_elements.scrap_description import scrap_descriptions
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "scraper-results"
 RESULTS_FILE = RESULTS_DIR / "products.json"
 
-# Keep the original public helper names for callers.
+# Zachowanie dotychczasowych nazw publicznych funkcji pomocniczych.
 load_existing_products = read_products
 save_products = save_json
 
 
 def needs_variant_refresh(product: dict) -> bool:
-    """Legacy exports contain option IDs and unverified zero modifiers."""
+    """Rozpoznaje starszy eksport wariantów bez zweryfikowanych cen netto lub brutto."""
     return any(
         variant.get("price_netto") is None or variant.get("price_brutto") is None
         for variant in product.get("variants", [])
     )
 
 
+def catalog_report(catalog, saved, discovered, failed, product_errors, fetched, reused):
+    """Zestawia kompletność pobierania, galerii, okładek, opisów i cen w raporcie."""
+    undiscovered = sorted(saved.keys() - discovered.keys())
+    without_images = sorted(
+        product_id for product_id in discovered.keys() & saved.keys()
+        if not saved[product_id].get("images")
+    )
+    unverified_prices = sorted(
+        product_id for product_id in discovered.keys() & saved.keys()
+        if needs_variant_refresh(saved[product_id])
+    )
+    unverified_covers = sorted(
+        product_id for product_id in discovered.keys() & saved.keys()
+        if len(saved[product_id].get("images", [])) > 1
+        and saved[product_id].get("cover_image") not in saved[product_id]["images"]
+    )
+    unverified_descriptions = sorted(
+        product_id for product_id in discovered.keys() & saved.keys()
+        if "description" in saved[product_id] and "description_short" not in saved[product_id]
+    )
+    return {
+        "complete": not failed and not undiscovered,
+        "source_images_complete": not without_images,
+        "source_covers_complete": not unverified_covers,
+        "source_descriptions_complete": not unverified_descriptions,
+        "products_with_unverified_descriptions": unverified_descriptions,
+        "products_with_unverified_covers": unverified_covers,
+        "variant_prices_complete": not failed and not unverified_prices,
+        "categories": len(catalog["categories"]),
+        "discovered_products": len(discovered),
+        "fetched_products": fetched,
+        "reused_products": reused,
+        "failed_product_ids": failed,
+        "product_errors": product_errors,
+        "previous_products_not_discovered": undiscovered,
+        "products_without_images": without_images,
+        "products_with_unverified_variant_prices": unverified_prices,
+    }
+
+
+def fetch_missing_metadata(crawler, entry, previous, product_id, missing_cover, missing_descriptions):
+    """Uzupełnia brakującą okładkę lub pola opisów po potwierdzeniu źródłowego ID."""
+    html = crawler.fetch_page(entry["product_url"])
+    soup = BeautifulSoup(html or "", "html.parser")
+    if str(scrap_id(soup)) != str(product_id):
+        raise ValueError("Niepoprawne ID produktu przy odswiezaniu okladki.")
+    metadata = {}
+    if missing_cover:
+        metadata["cover_image"] = scrap_cover_image(soup, previous["images"])
+    if missing_descriptions:
+        metadata.update(scrap_descriptions(soup))
+    return metadata
+
+
 def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh_variants: bool = False) -> dict:
+    """Odkrywa katalog i wznawia atomowy zapis w results_dir po źródłowym ID.
+
+    Crawler dostarcza strony, drzewo i zweryfikowane kombinacje. Opcja refresh
+    odświeża szczegóły, a refresh_variants ceny kombinacji wraz z ceną bazową.
+    Zwraca raport kompletności. RuntimeError oznacza niepełne pobieranie,
+    po którym raport i wcześniej poprawnie zapisane rekordy pozostają na dysku.
+    """
     results_file = results_dir / "products.json"
     saved = {str(product["product_id"]): product for product in read_products(results_file)}
     for product in saved.values():
@@ -54,7 +115,7 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
         "discovered_products": len(discovered),
     })
 
-    # Update memberships even when existing product details do not need fetching.
+    # Przypisania są aktualizowane także bez ponownego pobierania szczegółów produktu.
     for product_id in saved.keys() & discovered.keys():
         saved[product_id] = assign_categories(saved[product_id], discovered[product_id])
     if saved:
@@ -76,15 +137,7 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
             missing_cover = len(previous.get("images", [])) > 1 and previous.get("cover_image") not in previous["images"]
             if missing_cover or missing_descriptions:
                 try:
-                    html = crawler.fetch_page(entry["product_url"])
-                    soup = BeautifulSoup(html or "", "html.parser")
-                    if str(scrap_id(soup)) != str(product_id):
-                        raise ValueError("Niepoprawne ID produktu przy odswiezaniu okladki.")
-                    metadata = {}
-                    if missing_cover:
-                        metadata["cover_image"] = scrap_cover_image(soup, previous["images"])
-                    if missing_descriptions:
-                        metadata.update(scrap_descriptions(soup))
+                    metadata = fetch_missing_metadata(crawler, entry, previous, product_id, missing_cover, missing_descriptions)
                     saved[product_id] = {**previous, **metadata}
                     fetched += 1
                     save_json(results_file, list(saved.values()))
@@ -118,7 +171,7 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
             product_errors[product_id] = failure_reason or "Źródło zwróciło inne ID produktu."
             continue
         if previous is not None and not refresh and refresh_prices:
-            # Repricing must not combine fresh modifiers with a stale base price.
+            # Aktualizacja ceny bazowej i modyfikatorów musi pochodzić z tego samego pobrania.
             updated = {
                 **previous,
                 "price_netto": parsed.price_netto,
@@ -135,42 +188,8 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
         fetched += 1
         save_json(results_file, list(saved.values()))
 
-    undiscovered = sorted(saved.keys() - discovered.keys())
-    without_images = sorted(
-        product_id for product_id in discovered.keys() & saved.keys()
-        if not saved[product_id].get("images")
-    )
-    unverified_prices = sorted(
-        product_id for product_id in discovered.keys() & saved.keys()
-        if needs_variant_refresh(saved[product_id])
-    )
-    unverified_covers = sorted(
-        product_id for product_id in discovered.keys() & saved.keys()
-        if len(saved[product_id].get("images", [])) > 1
-        and saved[product_id].get("cover_image") not in saved[product_id]["images"]
-    )
-    unverified_descriptions = sorted(
-        product_id for product_id in discovered.keys() & saved.keys()
-        if "description" in saved[product_id] and "description_short" not in saved[product_id]
-    )
-    report = {
-        "complete": not failed and not undiscovered,
-        "source_images_complete": not without_images,
-        "source_covers_complete": not unverified_covers,
-        "source_descriptions_complete": not unverified_descriptions,
-        "products_with_unverified_descriptions": unverified_descriptions,
-        "products_with_unverified_covers": unverified_covers,
-        "variant_prices_complete": not failed and not unverified_prices,
-        "categories": len(catalog["categories"]),
-        "discovered_products": len(discovered),
-        "fetched_products": fetched,
-        "reused_products": reused,
-        "failed_product_ids": failed,
-        "product_errors": product_errors,
-        "previous_products_not_discovered": undiscovered,
-        "products_without_images": without_images,
-        "products_with_unverified_variant_prices": unverified_prices,
-    }
+    report = catalog_report(catalog, saved, discovered, failed, product_errors, fetched, reused)
+    without_images = report["products_without_images"]
     save_json(results_dir / "scrape-report.json", report)
     logging.info("Podsumowanie: %s", report)
     if without_images:
@@ -188,13 +207,14 @@ def scrape_catalog(crawler, results_dir: Path, *, refresh: bool = False, refresh
 
 
 def main() -> int:
+    """Obsługuje punkt wejścia narzędzia i zwraca kod zakończenia procesu."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refresh", action="store_true", help="Pobierz ponownie również szczegóły zapisanych produktów.")
     parser.add_argument("--refresh-variants", action="store_true", help="Ponownie zweryfikuj ceny wszystkich zapisanych produktów z wariantami.")
     parser.add_argument("--headless", action="store_true", help="Uruchom bez widocznego okna przeglądarki.")
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR)
     args = parser.parse_args()
-    crawler = store_crawler(
+    crawler = StoreCrawler(
         cookies=os.environ.get("SCRAPER_CF_CLEARANCE", ""),
         headless=args.headless,
     )

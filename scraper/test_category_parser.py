@@ -1,7 +1,9 @@
+import unittest
 from Scrapping_products.parse_category import parse_category
 
 
 def test_parse_category_offline():
+    """Sprawdza produkty i odnośnik paginacji z lokalnego HTML kategorii."""
     fake_category_html = """
     <html>
         <body>
@@ -39,3 +41,11 @@ def test_parse_category_offline():
     assert category_data.next_page_url == "https://pandomu.com.pl/klamki?page=2", "Nie wykryto poprawnego linku do następnej strony!"
 
     print("Sukces! Parser kategorii działa poprawnie.")
+
+def load_tests(loader, tests, pattern):
+    """Dołącza dotychczasowe funkcje fixture do standardowego odkrywania unittest."""
+    return unittest.TestSuite(unittest.FunctionTestCase(case) for case in [test_parse_category_offline])
+
+
+if __name__ == "__main__":
+    test_parse_category_offline()

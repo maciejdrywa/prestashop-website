@@ -1,4 +1,4 @@
-"""Migrate only short/full descriptions in an existing source catalog."""
+"""Odświeża krótkie i pełne opisy w istniejącym katalogu źródłowym."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -11,10 +11,12 @@ from scraper_elements.scrap_description import scrap_descriptions
 
 
 def fetch_descriptions(product):
+    """Pobiera dwa pola opisu z potwierdzonej strony produktu."""
     return scrap_descriptions(fetch_source_soup(product))
 
 
 def refresh_descriptions(products, fetch=fetch_descriptions, *, refresh=False):
+    """Odświeża wyłącznie opisy produktów i zwraca błędy bez utraty wcześniejszych danych."""
     pending = [p for p in products if refresh or "description_short" not in p]
     errors = {}
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -34,6 +36,7 @@ def refresh_descriptions(products, fetch=fetch_descriptions, *, refresh=False):
 
 
 def main():
+    """Obsługuje punkt wejścia narzędzia i zwraca kod zakończenia procesu."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path, default=Path(__file__).resolve().parents[1] / "scraper-results")
     parser.add_argument("--product-id")

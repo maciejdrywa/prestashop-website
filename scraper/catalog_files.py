@@ -1,4 +1,4 @@
-"""Shared catalog persistence and category assignment for resumed scraping."""
+"""Wspólny zapis katalogu i przypisania kategorii podczas wznowienia."""
 
 import json
 from pathlib import Path
@@ -6,6 +6,7 @@ import tempfile
 
 
 def read_products(path: Path) -> list[dict]:
+    """Wczytuje istniejący eksport UTF-8. Brak pliku oznacza pusty katalog."""
     if not path.exists():
         return []
     with path.open(encoding="utf-8") as stream:
@@ -19,6 +20,7 @@ def read_products(path: Path) -> list[dict]:
 
 
 def save_json(path: Path, data) -> None:
+    """Zapisuje JSON atomowo przez plik tymczasowy, zachowując polskie znaki."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
         temporary = Path(stream.name)
@@ -36,7 +38,7 @@ def save_json(path: Path, data) -> None:
 
 
 def assign_categories(product: dict, discovered: dict) -> dict:
-    """Expose one primary breadcrumb trail and all category memberships."""
+    """Aktualizuje pełne ścieżki kategorii i adresy źródeł, migrując starsze breadcrumbs."""
     paths = discovered["category_paths"]
     if not paths:
         raise ValueError(f"Produkt {product['product_id']} nie ma przypisania kategorii.")
@@ -44,7 +46,7 @@ def assign_categories(product: dict, discovered: dict) -> dict:
     preferred = original[1:-1] if len(original) >= 3 else None
     primary = preferred if preferred in paths else paths[0]
     cleaned = dict(product)
-    # Read the legacy field above for migration, but never write it again.
+    # Starsze pole służy do migracji wejścia i jest pomijane w nowym eksporcie.
     cleaned.pop("source_breadcrumbs", None)
     return {
         **cleaned,

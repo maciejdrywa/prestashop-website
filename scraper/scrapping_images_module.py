@@ -20,7 +20,8 @@ SAMPLES_DIR = BASE_DIR / 'scraper-results' / 'samples'
 ZIP_FILE = BASE_DIR / 'scraper-results' / 'product_images.zip'
 
 
-def get_filename(url): # wyciagamy nazwe, jak sie da to bardziej unikalna, jak nie to nie, ale zwykle powinno sie dac
+def get_filename(url):
+    """Tworzy nazwę lokalnego JPEG z końcowych segmentów źródłowego URL."""
     parts = urlsplit(url).path.rstrip('/').split('/')
     if len(parts) >= 2:
         return str(Path(f"{parts[-2]}_{parts[-1]}").with_suffix(".jpg"))
@@ -28,6 +29,7 @@ def get_filename(url): # wyciagamy nazwe, jak sie da to bardziej unikalna, jak n
 
 
 def save_sample(source: Path, samples_dir: Path | None = None):
+    """Kopiuje poprawny JPEG do próbek, przestrzegając limitu dwudziestu zdjęć."""
     samples_dir = SAMPLES_DIR if samples_dir is None else samples_dir
     target = samples_dir / source.name
     if target.exists() and image_meets_requirements(target):
@@ -35,11 +37,51 @@ def save_sample(source: Path, samples_dir: Path | None = None):
     count = sum(1 for path in samples_dir.iterdir()
                 if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".webp"})
     if target.exists() or count < 20:
-        # Copy the validated JPEG without a second lossy compression.
+        # Kopia poprawnego JPEG zachowuje jakość bez kolejnej stratnej kompresji.
         shutil.copyfile(source, target)
 
 
+def download_image(page, img_url) -> bool:
+    """Weryfikuje plik lokalny albo pobiera i normalizuje pojedyncze zdjęcie. Błąd zwraca jako False."""
+    filename = get_filename(img_url)
+    target_path = IMAGES_DIR / filename
+
+    if target_path.exists():
+        if image_meets_requirements(target_path) or process_and_save_images(target_path.read_bytes(), target_path):
+            save_sample(target_path)
+            logging.info(f"Poprawny plik lokalny: {filename}")
+            return True
+        logging.warning("Ponownie pobieram niepoprawny plik: %s", filename)
+
+    logging.info(f"Pobieram {filename}")
+
+    try:
+        response = page.goto(img_url, wait_until="load", timeout=15000)
+        if response and response.status == 200:
+            image_bytes = response.body()
+            save = process_and_save_images(image_bytes, target_path)
+
+            if save:
+                save_sample(target_path)
+            else:
+                return False
+
+        else:
+            logging.error(f"Nie udalo sie pobrac {filename}")
+            return False
+
+    except Exception as e:
+        logging.error("Nie udalo sie pobrac %s: %s", filename, e)
+        return False
+    finally:
+        # Przerwa ogranicza żądania źródła. Poprawny cache omija ten blok.
+        time.sleep(1)
+
+    return True
+
+
 def main():
+    """Obsługuje punkt wejścia narzędzia i zwraca kod zakończenia procesu."""
     if not RESULTS_FILE.exists():
         logging.error("Nie ma pliku z produktami")
         return 1
@@ -48,13 +90,8 @@ def main():
         products = json.load(f)
 
 
-    # petla pobierania urlow zdjec
-
-    image_urls = []
-    for product in products:
-        for url in product.get("images", []):
-            if url not in image_urls:
-                image_urls.append(url)
+    # Kolejność pierwszego wystąpienia jest zachowana podczas deduplikacji.
+    image_urls = list(dict.fromkeys(url for product in products for url in product.get("images", [])))
 
     logging.info(f"Petla Urlow zdjec skonczona. Znaleziono {len(image_urls)} dla {len(products)} produktow")
 
@@ -68,7 +105,7 @@ def main():
     failures = []
 
 
-    # Cookiesy do uzupelnienia inaczej nie bedzie dzialac
+    # Dotychczasowa konfiguracja sesji narzędzia pobierającego zdjęcia.
 
     cookies = ""
 
@@ -89,38 +126,8 @@ def main():
         page = context.pages[0] if context.pages else context.new_page()
 
         for img_url in image_urls:
-            filename = get_filename(img_url)
-            target_dir = IMAGES_DIR / filename
-
-            if target_dir.exists():
-                if image_meets_requirements(target_dir) or process_and_save_images(target_dir.read_bytes(), target_dir):
-                    save_sample(target_dir)
-                    logging.info(f"Poprawny plik lokalny: {filename}")
-                    continue
-                logging.warning("Ponownie pobieram niepoprawny plik: %s", filename)
-
-            logging.info(f"Pobieram {filename}")
-
-            try:
-                response = page.goto(img_url, wait_until="load", timeout=15000)
-                if response and response.status == 200:
-                    image_bytes = response.body()
-                    save = process_and_save_images(image_bytes, target_dir)
-
-                    if save:
-                        save_sample(target_dir)
-                    else:
-                        failures.append(img_url)
-
-                else:
-                    logging.error(f"Nie udalo sie pobrac {filename}")
-                    failures.append(img_url)
-
-            except Exception as e:
-                logging.error("Nie udalo sie pobrac %s: %s", filename, e)
+            if download_image(page, img_url) is False:
                 failures.append(img_url)
-
-            time.sleep(1)
 
         context.close()
 
