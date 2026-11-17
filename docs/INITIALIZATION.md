@@ -15,9 +15,10 @@ Zalecana komenda startowa z [instrukcji wdrożenia](DEPLOYMENT.md) korzysta z `-
 | 3–6 | Poczta, przewoźnicy, płatności, statusy i faktury |
 | 7 | Kategorie i produkty wraz z opisami, cenami, VAT i wagą |
 | 8–11 | Menu, strony i stopka, cookies, polskie treści modułów |
-| 12–13 | Słownik atrybutów i kombinacje z modyfikatorami netto |
-| 14–16 | Galerie, okładki, miniatury i kontrola katalogu |
-| 17–18 | Początkowe ilości, aktywacja i kontrola magazynu |
+| 12 | Włączenie Webservice API i uprawnienia klucza Least Privilege |
+| 13–14 | Słownik atrybutów i kombinacje z modyfikatorami netto |
+| 15–17 | Galerie, okładki, miniatury i kontrola katalogu |
+| 18–19 | Początkowe ilości, aktywacja i kontrola magazynu |
 
 Nowe produkty są nieaktywne do zakończenia kontroli danych i galerii. Produkt bez zdjęć źródłowych jest jawnie zgłaszany. Obecnie dotyczy to ID 539 i wymaga potwierdzonego wyjątku przy odbiorze.
 

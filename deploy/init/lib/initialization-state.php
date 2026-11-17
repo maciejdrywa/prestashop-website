@@ -162,6 +162,20 @@ function configurationPresent(string $script, \Context $context): bool
                 }
             }
             return true;
+         case 'configure-webservice.php':
+            $enabled = (int) \Configuration::get('PS_WEBSERVICE') === 1;
+            if (!$enabled) {
+                return false;
+            }
+            $key = getenv('PRESTASHOP_API_KEY') ?: '';
+            if ($key !== '') {
+                return (bool) \Db::getInstance()->getValue(
+                    'SELECT 1 FROM ' . _DB_PREFIX_ . 'webservice_account WHERE `key` = \'' . pSQL($key) . '\' AND active = 1'
+                );
+            }
+            return (bool) \Db::getInstance()->getValue(
+                'SELECT 1 FROM ' . _DB_PREFIX_ . 'webservice_account WHERE active = 1'
+            );
     }
     throw new RuntimeException('Nieznany etap konfiguracji ' . $script);
 }

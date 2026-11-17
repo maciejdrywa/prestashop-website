@@ -173,6 +173,7 @@ function initializationStages(): array
         ['name' => 'Polskie strony informacyjne i stopka', 'script' => 'configure-content.php', 'args' => []],
         ['name' => 'Informacja o cookies', 'script' => 'configure-cookies.php', 'args' => []],
         ['name' => 'Polskie treści modułów', 'script' => 'configure-module-texts.php', 'args' => []],
+        ['name' => 'Webservice API i uprawnienia klucza', 'script' => 'configure-webservice.php', 'args' => []],
         ['name' => 'Słownik atrybutów', 'script' => 'import-attributes.php', 'args' => ['--all']],
         ['name' => 'Kombinacje produktów i ceny', 'script' => 'import-combinations.php', 'args' => ['--all']],
         ['name' => 'Galerie, okładki i miniatury', 'script' => 'import-images.php', 'args' => ['--all']],

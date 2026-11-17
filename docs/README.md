@@ -6,6 +6,7 @@
 | [Wdrożenie](DEPLOYMENT.md) | Wymagania, `.env`, Compose, HTTPS i platformy |
 | [Inicjalizacja](INITIALIZATION.md) | Etapy, importery, dziennik i wznowienie |
 | [Scraper](SCRAPER.md) | CLI, format danych, obrazy i testy Pythona |
+| [Webservice API](WEBSERVICE.md) | Uprawnienia Least Privilege, zmienne środowiskowe i klient Python |
 | [Konfiguracja](CONFIGURATION.md) | Sprzedaż, statusy, faktury, poczta i treści |
 | [Rozwiązywanie problemów](TROUBLESHOOTING.md) | Diagnoza uruchomienia i importu |
 | [Audyt](AUDIT.md) | Punkt wyjścia, usunięcia i weryfikacja zmian |

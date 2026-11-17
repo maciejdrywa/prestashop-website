@@ -58,6 +58,8 @@ services:
       DB_PASSWD: ${DB_PASSWORD:?Uzupełnij DB_PASSWORD}
       DB_PREFIX: ps_
 
+
+
       # Natywny entrypoint obrazu instaluje sklep na pustej instalacji. Dane konta,
       # język i kraj są wartościami startowymi, a konfigurację domenową wykonuje init/.
       PS_INSTALL_AUTO: "1"
@@ -71,6 +73,7 @@ services:
 
       ADMIN_MAIL: ${ADMIN_EMAIL:?Uzupełnij ADMIN_EMAIL}
       ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
+      PRESTASHOP_API_KEY: ${PRESTASHOP_API_KEY:?Uzupełnij PRESTASHOP_API_KEY}
 
     volumes:
       # Ten wolumen jest współdzielony z bootstrapem i przechowuje również
