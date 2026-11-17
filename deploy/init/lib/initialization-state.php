@@ -159,6 +159,20 @@ function configurationPresent(string $script, \Context $context): bool
                 }
             }
             return true;
+         case 'configure-webservice.php':
+            $enabled = (int) \Configuration::get('PS_WEBSERVICE') === 1;
+            if (!$enabled) {
+                return false;
+            }
+            $key = getenv('PRESTASHOP_API_KEY') ?: '';
+            if ($key !== '') {
+                return (bool) \Db::getInstance()->getValue(
+                    'SELECT 1 FROM ' . _DB_PREFIX_ . 'webservice_account WHERE `key` = \'' . pSQL($key) . '\' AND active = 1'
+                );
+            }
+            return (bool) \Db::getInstance()->getValue(
+                'SELECT 1 FROM ' . _DB_PREFIX_ . 'webservice_account WHERE active = 1'
+            );
     }
     throw new RuntimeException('Nieznany etap konfiguracji ' . $script);
 }
@@ -380,7 +394,8 @@ function resumeInitialization(\Context $context, array $summary): void
     foreach (initializationStages() as $index => $stage) {
         unchangedInitializationSources($summary['source_hashes']);
         $script = $stage['script'];
-        echo PHP_EOL . '[WZNOWIENIE ' . ($index + 1) . '/17] ' . $stage['name'] . PHP_EOL;
+        $stages = initializationStages();
+        echo PHP_EOL . '[WZNOWIENIE ' . ($index + 1) . '/' . count($stages) . '] ' . $stage['name'] . PHP_EOL;
         // Konfiguratory mają checkpointy etapów i kontrolę zasobów. Import katalogu
         // ma dodatkowo checkpointy per produkt, ograniczające zakres ponowienia po awarii.
         if (str_starts_with($script, 'configure-')) {
