@@ -16,11 +16,25 @@ Polecenie przygotowuje certyfikat, uruchamia usługi, instaluje pusty sklep i wz
 
 Sklep jest dostępny pod `https://localhost`, panel pod `https://localhost/admin-dev/`, a poczta pod `http://localhost:8025`. Dane administratora określa `.env` podczas pierwszej instalacji. Lokalny certyfikat wymaga dodania do zaufanych zgodnie z instrukcją systemu.
 
+### Webservice API
+
+Dostęp do REST API PrestaShop na potrzeby automatycznego importu danych jest konfigurowany automatycznie podczas inicjalizacji. Parametry połączenia określa `.env`:
+- `PRESTASHOP_API_URL` — adres API (domyślnie `https://localhost/api`),
+- `PRESTASHOP_API_KEY` — 32-znakowy klucz alfanumeryczny z uprawnieniami *Least Privilege* (zasoby katalogu, bez dostępu do zamówień i klientów),
+- `PRESTASHOP_API_VERIFY_SSL` — weryfikacja certyfikatu TLS (`false` dla środowiska lokalnego).
+
+Weryfikację poprawności połączenia i uprawnień wykonuje:
+
+```sh
+python3 scraper/test_api_client.py
+```
+
 ## Dokumentacja
 
 - Przygotowanie `.env`, certyfikat i uruchamianie ręczne opisuje [wdrożenie](docs/DEPLOYMENT.md).
 - Kolejność etapów, wznowienie i jawne aktualizacje opisuje [inicjalizacja](docs/INITIALIZATION.md).
 - Pobieranie katalogu i zdjęć opisuje [scraper](docs/SCRAPER.md).
+- Konfigurację i uprawnienia Webservice API opisuje [API](docs/WEBSERVICE.md).
 - Reguły sprzedaży, treści i faktury opisuje [konfiguracja](docs/CONFIGURATION.md).
 - Pozostałe dokumenty i testy zbiera [indeks dokumentacji](docs/README.md).
 
