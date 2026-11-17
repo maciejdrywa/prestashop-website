@@ -1,12 +1,37 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test integracji zapisu katalogu i kombinacji z natywnymi klasami PrestaShop.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/prestashop-test.php
+ *
+ * Wymaga sklepu i tabel InnoDB. Tworzy rekordy o prywatnych referencjach w transakcji, wyłącza hooki w
+ * swoim procesie i sprawdza rollback.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/products.php';
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $condition Warunek asercji wymagany przez bieżący scenariusz.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
 function verify(bool $condition, string $message): void
 {
     if (!$condition) {
         throw new RuntimeException($message);
     }
 }
+/**
+ * Odczytuje liczności tabel objętych testem transakcyjnego importu.
+ *
+ * @return array<string, int> Liczności tabel objętych testem rollbacku.
+ */
 function counts(): array
 {
     $result = [];
@@ -22,11 +47,13 @@ $started = false;
 try {
     $context = ShopInit\boot();
     $db = Db::getInstance();
-    // Faceted search runs TRUNCATE from hooks, which implicitly commits MySQL
-    // transactions. Disable module hooks in this test process only.
+    // Wyszukiwanie fasetowe wykonuje w hookach TRUNCATE, które zatwierdza MySQL.
+    // Hooki wyłączamy wyłącznie w tym procesie testowym.
     foreach (Module::getModulesInstalled() as $module) {
         Hook::disableHooksForModule((int) $module['id_module']);
     }
+    // Liczności oraz wymaganie InnoDB potwierdzają izolację fixture w transakcji.
+    // Wyłączenie hooków dotyczy wyłącznie bieżącego procesu testowego.
     $before = counts();
     foreach (array_keys($before) as $table) {
         $engine = $db->getValue("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . pSQL(_DB_PREFIX_ . $table) . "'");
@@ -34,7 +61,7 @@ try {
     }
     $catalog = ShopInit\readCatalog();
     $products = array_values(array_filter($catalog, fn (array $p): bool => in_array((int) $p['product_id'], [5, 119, 644, 463, 808, 826], true)));
-    // Private references allow the test to run after the real catalog import.
+    // Odrębne referencje pozwalają testować po imporcie właściwego katalogu.
     foreach ($products as &$source) {
         $source['product_id'] = (string) (900000000 + (int) $source['product_id']);
     }
@@ -110,7 +137,7 @@ try {
     verify($db->update('product_attribute', ['reference' => 'legacy-option-reference'], 'id_product_attribute = ' . $legacyId), 'Cannot prepare migration fixture');
     $second = ShopInit\importCombinations(ShopInit\combinationPlan($products, $context), $context);
     foreach ($productIds as $id) ShopInit\verifyUniformCombinationWeights($id, $context);
-    // Every variant must contribute exactly the same product weight to a cart.
+    // Każdy wariant powinien dodawać do koszyka taką samą masę produktu.
     foreach ($first[$firstSource] as $variantId) {
         $cart = new Cart();
         $cart->id_shop = (int) $context->shop->id;

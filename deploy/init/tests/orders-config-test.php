@@ -1,11 +1,25 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test zapisanej konfiguracji statusów, faktur i szablonu potwierdzenia płatności.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/orders-config-test.php
+ *
+ * Wymaga skonfigurowanego sklepu. Odczytuje bazę i pliki, a --fresh dodatkowo wymaga braku importowanego
+ * katalogu.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/orders.php';
 try {
     $options = array_slice($argv, 1);
     if ($options !== [] && $options !== ['--fresh']) throw new RuntimeException('Usage: php orders-config-test.php [--fresh]');
     $context = ShopInit\boot();
     $langId = (int) Configuration::get('PS_LANG_DEFAULT');
+    // Porównujemy definicje statusów i ustawienia wystawcy z bieżącą bazą.
+    // Ten scenariusz nie wykonuje przejścia statusu konkretnego zamówienia.
     foreach (ShopInit\orderStatusPlan() as $entry) {
         $state = new OrderState($entry['id'], $langId);
         foreach (['paid', 'invoice', 'pdf_invoice', 'logable'] as $flag) {
@@ -24,8 +38,8 @@ try {
     $body = file_get_contents(_PS_MAIL_DIR_ . 'pl/payment.txt');
     if (!str_contains($body, 'została pomyślnie przetworzona')) throw new RuntimeException('Polish payment-accepted email missing.');
     if ($options === ['--fresh']) {
-        // PrestaShop may install sample orders/invoices of its own. Fresh means
-        // separate empty volumes before installation, not deleting installer history.
+        // Instalator może utworzyć własne przykładowe zamówienia i faktury.
+        // Świeża próba korzysta z odrębnych wolumenów przygotowanych przed instalacją.
         $imports = (int) Db::getInstance()->getValue('SELECT COUNT(*) FROM ' . _DB_PREFIX_ . "product WHERE reference LIKE 'pandomu-%' OR reference LIKE 'invoice-qa-%'", false);
         if ($imports !== 0) throw new RuntimeException('Fresh test expected no imported catalog or invoice-test fixtures.');
     }

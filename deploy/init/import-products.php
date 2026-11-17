@@ -1,5 +1,19 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Import produktów z opisami, cenami, VAT, masą i kategoriami.
+ *
+ * Wywołanie jako www-data w kontenerze shop
+ * php /opt/shop/init/import-products.php [ID|--all] [--dry-run]
+ *
+ * Wymaga działającego kontekstu PL/PLN, reguł VAT i aktualnego products.json. Domyślny produkt źródłowy ma
+ * ID 5.
+ *
+ * Oddzielne transakcje obejmują kategorie i produkty. Nowe produkty powstają nieaktywne, a kolejne etapy
+ * przygotowują warianty, zdjęcia i magazyn.
+ */
+
 require_once __DIR__ . '/lib/products.php';
 try {
     echo "[1/4] Reading and validating source products...\n";
@@ -22,6 +36,8 @@ try {
         exit(0);
     }
     echo "[3/4] Preparing category tree...\n";
+    // Kategorie są zatwierdzane osobno przed produktami. Jeśli późniejszy zapis
+    // produktu zakończy się błędem, wcześniejsze kategorie mogą już istnieć przy ponowieniu.
     $categories = ShopInit\transaction(fn () => ShopInit\importCategories($categoryPlan, $context));
     echo "[4/4] Saving product data and checking PrestaShop prices...\n";
     $ids = ShopInit\transaction(fn () => ShopInit\importProducts($plans, $categories, $context));

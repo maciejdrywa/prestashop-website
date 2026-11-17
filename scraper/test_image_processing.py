@@ -17,19 +17,23 @@ from scrapping_images.process_and_save_images import (
 
 
 def image_bytes(image, format="PNG", **options):
+    """Koduje testowy obraz w pamięci we wskazanym formacie."""
     buffer = io.BytesIO()
     image.save(buffer, format=format, **options)
     return buffer.getvalue()
 
 
 class ImageProcessingTests(unittest.TestCase):
+    """Sprawdza normalizację JPEG, limity i bezpieczny zapis zdjęć."""
     def setUp(self):
+        """Przygotowuje izolowany katalog tymczasowy i jego sprzątanie."""
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.folder = Path(self.temporary.name)
         self.target = self.folder / "image.jpg"
 
     def process(self, source):
+        """Przetwarza obraz testowy i wymaga poprawnego pliku wyjściowego."""
         self.assertTrue(process_and_save_images(source, self.target))
         self.assertTrue(image_meets_requirements(self.target))
         self.assertLessEqual(self.target.stat().st_size, MAX_IMAGE_BYTES)
@@ -39,15 +43,19 @@ class ImageProcessingTests(unittest.TestCase):
             return image.size
 
     def test_small_photo_is_upscaled_with_aspect_ratio(self):
+        """Sprawdza powiększenie małego obrazu z zachowaniem proporcji."""
         self.assertEqual(self.process(image_bytes(Image.new("RGB", (400, 300)))), (800, 600))
 
     def test_large_photo_is_downscaled(self):
+        """Sprawdza zmniejszenie zbyt dużego obrazu."""
         self.assertEqual(self.process(image_bytes(Image.new("RGB", (2400, 1800)))), (1600, 1200))
 
     def test_compliant_photo_keeps_its_dimensions(self):
+        """Sprawdza zachowanie wymiarów zgodnego obrazu."""
         self.assertEqual(self.process(image_bytes(Image.new("RGB", (840, 840)))), (840, 840))
 
     def test_noise_cannot_bypass_byte_limit_at_low_quality(self):
+        """Sprawdza limit bajtów dla trudnego do kompresji obrazu."""
         noise = Image.frombytes("RGB", (1600, 1600), random.Random(42).randbytes(1600 * 1600 * 3))
         width, height = self.process(image_bytes(noise))
         self.assertEqual(width, height)
@@ -55,17 +63,20 @@ class ImageProcessingTests(unittest.TestCase):
         self.assertGreaterEqual(width, 800)
 
     def test_transparency_uses_white_background(self):
+        """Sprawdza białe tło przezroczystego obrazu."""
         self.process(image_bytes(Image.new("RGBA", (800, 800), (0, 0, 0, 0))))
         with Image.open(self.target) as image:
             self.assertEqual(image.getpixel((0, 0)), (255, 255, 255))
 
     def test_exif_orientation_is_applied_before_resizing(self):
+        """Sprawdza uwzględnienie orientacji EXIF przed skalowaniem."""
         image = Image.new("RGB", (2400, 1200))
         exif = Image.Exif()
         exif[274] = 6
         self.assertEqual(self.process(image_bytes(image, "JPEG", exif=exif)), (800, 1600))
 
     def test_bad_input_preserves_old_file_and_cleans_temporary_files(self):
+        """Sprawdza zachowanie starego pliku i sprzątanie po błędzie wejścia."""
         self.process(image_bytes(Image.new("RGB", (800, 800))))
         before = self.target.read_bytes()
         with self.assertLogs(level="ERROR"):
@@ -74,6 +85,7 @@ class ImageProcessingTests(unittest.TestCase):
         self.assertEqual(list(self.folder.glob("*.tmp")), [])
 
     def test_validator_rejects_small_oversized_and_corrupt_files(self):
+        """Sprawdza odrzucanie zbyt małych, dużych i uszkodzonych obrazów."""
         self.target.write_bytes(image_bytes(Image.new("RGB", (400, 300)), "JPEG"))
         self.assertFalse(image_meets_requirements(self.target))
         self.target.write_bytes(b"x" * (MAX_IMAGE_BYTES + 1))
@@ -82,6 +94,7 @@ class ImageProcessingTests(unittest.TestCase):
         self.assertFalse(image_meets_requirements(self.target))
 
     def test_samples_are_capped_at_twenty_and_invalid_sample_is_replaced(self):
+        """Sprawdza limit próbek i naprawę niepoprawnego przykładu."""
         self.process(image_bytes(Image.new("RGB", (800, 800))))
         samples = self.folder / "samples"
         samples.mkdir()
@@ -97,9 +110,11 @@ class ImageProcessingTests(unittest.TestCase):
         self.assertEqual((samples / "0.jpg").read_bytes(), source.read_bytes())
 
     def test_jpeg_filename_ignores_source_extension_and_query(self):
+        """Sprawdza nazwę JPEG niezależną od rozszerzenia i parametrów źródła."""
         self.assertEqual(downloader.get_filename("https://example.test/123/photo.webp?size=2"), "123_photo.jpg")
 
     def test_resume_repairs_cached_photo_before_skipping_download(self):
+        """Sprawdza naprawę lokalnego zdjęcia przed pominięciem pobrania."""
         images = self.folder / "images"
         samples = self.folder / "samples"
         images.mkdir()
@@ -110,15 +125,18 @@ class ImageProcessingTests(unittest.TestCase):
         results.write_text(json.dumps([{"images": [source_url]}]), encoding="utf-8")
         with patch.multiple(downloader, RESULTS_FILE=results, IMAGES_DIR=images, SAMPLES_DIR=samples), \
                 patch.object(downloader, "sync_playwright") as browser, \
-                patch.object(downloader, "create_zip_archive") as archive:
+                patch.object(downloader, "create_zip_archive") as archive, \
+                patch.object(downloader.time, "sleep") as sleep:
             self.assertEqual(downloader.main(), 0)
             context = browser.return_value.__enter__.return_value.chromium.launch_persistent_context.return_value
             context.pages[0].goto.assert_not_called()
             archive.assert_called_once()
+            sleep.assert_not_called()
         self.assertTrue(image_meets_requirements(cached))
         self.assertTrue(image_meets_requirements(samples / cached.name))
 
     def test_failed_processing_prevents_successful_archive(self):
+        """Sprawdza zatrzymanie pakowania po błędzie przetwarzania."""
         results = self.folder / "products.json"
         results.write_text(json.dumps([{"images": ["https://example.test/1/bad.jpg"]}]), encoding="utf-8")
         with patch.multiple(downloader, RESULTS_FILE=results, IMAGES_DIR=self.folder / "images", SAMPLES_DIR=self.folder / "samples"), \

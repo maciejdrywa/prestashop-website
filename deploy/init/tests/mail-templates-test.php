@@ -1,7 +1,25 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test natywnego generatora szablonów i polskich wiadomości w lokalnym Mailpit.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/mail-templates-test.php
+ *
+ * Generuje porównawcze pliki tymczasowe i wysyła cztery kontrolowane wiadomości. finally usuwa katalog
+ * porównawczy, a wiadomości pozostają w Mailpit.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/mail-templates.php';
 
+/**
+ * Zwraca zbiór tokenów szablonu e-mail do porównania z generatorem sklepu.
+ *
+ * @param string $contents Treść szablonu e-mail z tokenami podstawianymi przez PrestaShop.
+ * @return array Zbiór tokenów wiadomości używany do porównania z natywnym generatorem.
+ */
 function mailTestPlaceholders(string $contents): array
 {
     preg_match_all('/\{[a-z][a-z0-9_]*\}/i', $contents, $matches);
@@ -23,8 +41,8 @@ try {
         'bankwire'=>'Oczekuje na płatność', 'order_conf'=>'Szczegóły zamówienia',
         'payment'=>'została pomyślnie przetworzona'];
 
-    // Catch the old regression: only four files were deployed and their contents
-    // were rewritten. Compare every generated core/module layout byte for byte.
+    // Regresja dotyczyła wdrożenia tylko czterech ręcznie zmienionych plików.
+    // Porównujemy bajtowo wszystkie szablony wygenerowane przez sklep i moduły.
     $expectedDirectory = sys_get_temp_dir() . '/native-mail-qa-' . bin2hex(random_bytes(8));
     if (!mkdir($expectedDirectory, 0775)) throw new RuntimeException('Cannot create native mail comparison directory.');
     $process = proc_open([PHP_BINARY, _PS_ROOT_DIR_.'/bin/console', 'prestashop:mail:generate',
@@ -97,6 +115,8 @@ try {
         usleep(200000);
     }
     if(count($messages)!==count($subjects)) throw new RuntimeException('Mailpit did not capture the expected test messages.');
+    // Dopasowanie po odbiorcy fixture oddziela wiadomości testowe od pozostałej
+    // poczty Mailpit. Asercje sprawdzają tematy, tekst i podstawione dane wiadomości.
     $matched=[];
     foreach($messages as $summary) {
         $mail=$api('/api/v1/message/'.$summary['ID']);
@@ -114,7 +134,7 @@ try {
             }
             if(mailTestPlaceholders($body)!==[]) throw new RuntimeException('Unresolved placeholders in received '.$template.' '.$format);
             if($template!=='account' && !str_contains($visible,$orderName)) throw new RuntimeException('Order reference missing from received email.');
-            // Native payment.txt confirms the reference but does not include an amount.
+            // Natywny payment.txt potwierdza referencję, a pole kwoty jest w innych szablonach.
             if(in_array($template,['bankwire','order_conf'],true) && !str_contains($visible,'59,99 zł')) throw new RuntimeException('Order total missing from received email.');
             if($template==='order_conf' && (!str_contains($visible,'Zamek — kolor złoty') || !str_contains($visible,'Dostawa kurierska'))) throw new RuntimeException('Order product/delivery data was lost.');
         }

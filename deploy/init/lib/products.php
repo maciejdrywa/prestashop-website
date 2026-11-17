@@ -1,5 +1,16 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Planowanie, zapis i ścisła kontrola produktów wraz z przypisaniami kategorii.
+ *
+ * Używana przez import-products.php, check-products.php i inicjalizator, po przygotowaniu kontekstu PL/PLN
+ * i VAT.
+ *
+ * Wymaga source.php, prestashop.php i weights.php. Zapis przez Product obejmuje opisy, ceny, VAT, masę oraz
+ * powiązania sklepu.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
@@ -7,6 +18,14 @@ use RuntimeException;
 require_once __DIR__ . '/prestashop.php';
 require_once __DIR__ . '/weights.php';
 
+/**
+ * Wyszukuje unikalny produkt po referencji i potwierdza przynależność do sklepu.
+ *
+ * @param string $reference Trwała referencja produktu w formacie pandomu-ID.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int|null ID produktu o podanej referencji albo null.
+ * @throws \RuntimeException Przy wieloznacznej referencji lub powiązaniu znalezionego produktu z innym sklepem.
+ */
 function productId(string $reference, \Context $context): ?int
 {
     $query = new \DbQuery();
@@ -24,10 +43,23 @@ function productId(string $reference, \Context $context): ?int
     return $id;
 }
 
+/**
+ * Wybiera aktywną, jednoznaczną polską regułę podatkową dla podanej stawki VAT.
+ *
+ * Zapytanie wyklucza regionalne, pocztowe i nakładające się reguły polskiego VAT. Przy kilku równoważnych
+ * grupach wybierana jest pierwsza według ID, a brak pasującej reguły przerywa planowanie.
+ *
+ * @param string $vat Stawka VAT w procentach, np. 23.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return int ID pierwszej pasującej grupy z pojedynczą ogólną regułą dla Polski.
+ * @throws \RuntimeException Gdy brak ogólnej aktywnej grupy podatkowej spełniającej warunki dla podanej stawki VAT.
+ */
 function taxGroup(string $vat, \Context $context): int
 {
     $country = (int) \Country::getByIso('PL');
     $query = new \DbQuery();
+    // Reguła musi należeć do sklepu i obejmować Polskę ogólnie, bez wyjątków
+    // stanowych, kodów pocztowych i złożonego sposobu naliczania VAT.
     $query->select('g.id_tax_rules_group')->from('tax_rules_group', 'g');
     $query->innerJoin('tax_rule', 'r', 'r.id_tax_rules_group = g.id_tax_rules_group');
     $query->innerJoin('tax', 't', 't.id_tax = r.id_tax');
@@ -37,7 +69,7 @@ function taxGroup(string $vat, \Context $context): int
     $query->where('r.id_country = ' . $country);
     $query->where('r.id_state = 0 AND r.zipcode_from = 0 AND r.zipcode_to = 0 AND r.behavior = 0');
     $query->where("t.rate = '" . \pSQL($vat) . "'");
-    // Exclude groups with overlapping or compound Polish rules.
+    // Pomijamy grupy z nakładającymi się lub złożonymi polskimi regułami podatku.
     $query->where('(SELECT COUNT(*) FROM ' . _DB_PREFIX_ . 'tax_rule r2 WHERE r2.id_tax_rules_group = g.id_tax_rules_group AND r2.id_country = ' . $country . ') = 1');
     $query->orderBy('g.id_tax_rules_group');
     $rows = \Db::getInstance()->executeS($query);
@@ -47,6 +79,18 @@ function taxGroup(string $vat, \Context $context): int
     return (int) $rows[0]['id_tax_rules_group'];
 }
 
+/**
+ * Waliduje źródło i przygotowuje plany cen, opisów, masy oraz przypisań kategorii.
+ *
+ * Łączy walidację ograniczeń pól PrestaShop, ewentualne oczyszczenie HTML i plany ceny oraz masy.
+ * Preferowaną kategorię bierze z breadcrumbs, a przy braku zgodności wybiera najgłębszą ścieżkę z
+ * deterministycznym rozstrzygnięciem remisów.
+ *
+ * @param array $products Lista zweryfikowanych rekordów źródłowych products.json.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return list<array> Pola docelowe produktu, price, paths, primary oraz metadane weight_origin i html_normalized.
+ * @throws \RuntimeException Przy błędnych polach, zależnościach waluty i podatku lub konflikcie źródłowych i zapisanych wariantów.
+ */
 function productPlans(array $products, \Context $context): array
 {
     priceContext($context);
@@ -73,6 +117,8 @@ function productPlans(array $products, \Context $context): array
             || mb_strlen($description) > \Product::$definition['fields']['description']['size']) {
             throw new RuntimeException("Missing or invalid HTML description: {$sourceId}");
         }
+        // Normalizacja odpowiada sposobowi przechowywania HTML przez sklep. Plan
+        // zapamiętuje zmianę, aby późniejsza kontrola porównywała tę samą reprezentację.
         if (\Configuration::get('PS_USE_HTMLPURIFIER')) {
             $description = \Tools::purifyHTML($description);
             $shortDescription = \Tools::purifyHTML($shortDescription);
@@ -82,6 +128,8 @@ function productPlans(array $products, \Context $context): array
         $taxes[$price['vat']] ??= taxGroup($price['vat'], $context);
         $paths = $source['category_paths'];
         $primary = array_slice($source['breadcrumbs'] ?? [], 1, -1);
+        // Breadcrumbs może wskazywać nieaktualną gałąź. Zapasowy wybór najgłębszej
+        // ścieżki i nazwy daje powtarzalną kategorię domyślną przy wielu przypisaniach.
         if (!in_array($primary, $paths, true)) {
             $sorted = $paths;
             usort($sorted, fn (array $a, array $b): int => count($b) <=> count($a) ?: strcmp(implode(' > ', $a), implode(' > ', $b)));
@@ -112,11 +160,19 @@ function productPlans(array $products, \Context $context): array
     return $plans;
 }
 
+/**
+ * Rozwiązuje wszystkie liście i ich przodków na uporządkowany zbiór ID kategorii.
+ *
+ * @param array $plan Plan pojedynczego produktu zawierający listę paths.
+ * @param array $categories Mapa pełnych ścieżek JSON na zapisane ID kategorii.
+ * @return list<int> Unikalne ID kategorii uporządkowane numerycznie.
+ * @throws \RuntimeException Gdy którejś wymaganej ścieżki lub jej przodka brakuje w mapie kategorii.
+ */
 function productCategoryIds(array $plan, array $categories): array
 {
     $ids = [];
-    // Assign every source leaf and its ancestors, so browsing a parent includes
-    // its branch without relying on theme-specific descendant aggregation.
+    // Przypisujemy źródłowy liść i jego przodków, aby lista rodzica obejmowała
+    // całą gałąź niezależnie od sposobu agregacji w motywie.
     foreach ($plan['paths'] as $path) {
         for ($length = 1; $length <= count($path); $length++) {
             $key = json_encode(array_slice($path, 0, $length), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
@@ -131,6 +187,20 @@ function productCategoryIds(array $plan, array $categories): array
     return $ids;
 }
 
+/**
+ * Porównuje zapisane pola, tłumaczenia, przypisania, wagę i cenę brutto z planem importu.
+ *
+ * To porównanie ze źródłowym planem obejmuje także wszystkie języki, dokładny zbiór przypisań i cenę
+ * brutto. Ręczna edycja produktu może spowodować rozbieżność. Wznowienie ma odrębne kontrole akceptujące
+ * edytowalne pola.
+ *
+ * @param array $plan Plan z productPlans, używany do ścisłego porównania ze źródłem.
+ * @param int $id ID sprawdzanego rekordu w PrestaShop.
+ * @param array $categories Mapa pełnych ścieżek JSON na zapisane ID kategorii.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Przy rozbieżności pól, tłumaczeń, przypisań kategorii, masy lub brutto względem planu.
+ */
 function verifyProduct(array $plan, int $id, array $categories, \Context $context): void
 {
     $saved = new \Product($id, false, null, (int) $context->shop->id);
@@ -153,6 +223,8 @@ function verifyProduct(array $plan, int $id, array $categories, \Context $contex
         }
     }
     $query = new \DbQuery();
+    // Kontrola obejmuje dokładny zbiór przypisań, także przodków liści.
+    // Osobno sprawdzana jest kategoria domyślna używana m.in. w adresie produktu.
     $query->select('id_category')->from('category_product')->where('id_product = ' . $id)->orderBy('id_category');
     $rows = \Db::getInstance()->executeS($query, true, false);
     $actual = $rows === false ? [] : array_map(fn (array $r): int => (int) $r['id_category'], $rows);
@@ -165,12 +237,24 @@ function verifyProduct(array $plan, int $id, array $categories, \Context $contex
     }
 }
 
+/**
+ * Zapisuje produkty i sprawdza ich zgodność z planem źródłowym.
+ *
+ * Aktualizuje nazwy, dwa opisy, cenę, VAT, masę i przypisania istniejących produktów. Nowe produkty
+ * zapisuje jako nieaktywne. Zeruje wpływ masy kombinacji i sprawdza zapis. Transakcję zapewnia wywołujący.
+ *
+ * @param array $plans Zweryfikowane plany produktów z productPlans.
+ * @param array $categories Mapa pełnych ścieżek JSON na zapisane ID kategorii.
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array<string, int> Mapa źródłowych ID na zapisane ID produktów.
+ * @throws \RuntimeException Przy błędzie zapisu produktu i kategorii lub niezgodnym wyniku weryfikacji.
+ */
 function importProducts(array $plans, array $categories, \Context $context): array
 {
     $ids = [];
     $created = $updated = 0;
     foreach ($plans as $index => $plan) {
-        // Resolve again to allow reuse of a plan in the same process.
+        // Ponowne wyszukanie umożliwia użycie planu więcej niż raz w jednym procesie.
         $id = productId($plan['reference'], $context);
         $product = $id === null ? new \Product() : new \Product($id, false, null, (int) $context->shop->id);
         if ($id === null) {
@@ -182,6 +266,8 @@ function importProducts(array $plans, array $categories, \Context $context): arr
             $product->minimal_quantity = 1;
             $product->condition = 'new';
         }
+        // Obiekt zapisuje dane przez natywne modele i hooki. Aktywność jest ustawiana
+        // na false tylko przy tworzeniu, a końcowe udostępnienie realizuje etap magazynu.
         $product->reference = $plan['reference'];
         $product->state = \Product::STATE_SAVED;
         $product->product_type = $plan['type'];

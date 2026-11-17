@@ -1,7 +1,14 @@
-# Dokumentacja
+# Dokumentacja projektu
 
-Katalog zawiera dodatkową dokumentację projektu, dziennik wykorzystania AI w AI_LOG.md oraz decyzje architektoniczne w adr/.
+| Dokument | Zakres |
+|---|---|
+| [Architektura](ARCHITECTURE.md) | Komponenty, zależności i przepływ danych |
+| [Wdrożenie](DEPLOYMENT.md) | Wymagania, `.env`, Compose, HTTPS i platformy |
+| [Inicjalizacja](INITIALIZATION.md) | Etapy, importery, dziennik i wznowienie |
+| [Scraper](SCRAPER.md) | CLI, format danych, obrazy i testy Pythona |
+| [Konfiguracja](CONFIGURATION.md) | Sprzedaż, statusy, faktury, poczta i treści |
+| [Rozwiązywanie problemów](TROUBLESHOOTING.md) | Diagnoza uruchomienia i importu |
+| [Audyt](AUDIT.md) | Punkt wyjścia, usunięcia i weryfikacja zmian |
+| [Dziennik AI](AI_LOG.md) | Dotychczasowa historia użycia AI |
 
-Wpisy do dziennika AI dodajemy w tym samym PR co zmiany wspomagane AI. Dokumentujemy otrzymane wyniki, wykryte błędy i sposób weryfikacji.
-
-Zapisujemy tutaj również wyniki kontroli wymagań i pomiarów oraz instrukcje uzupełniające główny README projektu.
+Polecenia uruchamiamy z głównego katalogu repozytorium. Testy jednostkowe i integracyjne opisuje [katalog testów](../tests/README.md).

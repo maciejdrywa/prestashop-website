@@ -1,4 +1,4 @@
-"""Traverse category trees and retain product membership evidence."""
+"""Przechodzi drzewo kategorii i zachowuje źródła przypisań produktów."""
 
 from collections import deque
 import logging
@@ -10,6 +10,7 @@ from parser_classes.category_page import CategoryLink
 
 
 def product_id_from_url(url: str) -> str:
+    """Wyodrębnia źródłowe ID z adresu produktu i odrzuca nierozpoznany adres."""
     match = re.search(r"/(\d+)(?:-[^/]*)?\.html$", urlsplit(url).path)
     if match is None:
         raise ValueError(f"Nie można odczytać ID produktu z {url}")
@@ -17,7 +18,7 @@ def product_id_from_url(url: str) -> str:
 
 
 def scan_category(fetch_page, category_url: str) -> dict:
-    """Scan all pages of one category, failing instead of returning partial data."""
+    """Przechodzi paginację jednej kategorii, kontrolując cykle i kompletność listy produktów."""
     products = {}
     children = {}
     visited = set()
@@ -56,12 +57,13 @@ def scan_category(fetch_page, category_url: str) -> dict:
 
 
 def discover_catalog(fetch_page, base_url: str = "https://pandomu.com.pl/") -> dict:
+    """Przechodzi pełne drzewo źródła i zwraca kategorie oraz przypisania produktów."""
     html = fetch_page(base_url)
     if not html:
         raise RuntimeError("Nie udało się pobrać strony głównej.")
     menu_paths = parse_navigation(html, base_url)
 
-    # Keep the existing source collection even if it is absent from the main menu.
+    # Zachowujemy źródłową kolekcję również wtedy, gdy brak jej w głównym menu.
     recommended = CategoryLink(name="Produkty polecane", url=base_url.rstrip("/") + "/81-produkty-polecane")
     if not any(path[-1].url == recommended.url for path in menu_paths):
         menu_paths.append([recommended])
@@ -121,8 +123,8 @@ def discover_catalog(fetch_page, base_url: str = "https://pandomu.com.pl/") -> d
             queue.append([*path, child])
 
     for entry in products.values():
-        # Parent listings include descendant products. Keep the most specific
-        # observed branches, not a separate redundant assignment to each parent.
+        # Listy rodziców obejmują produkty potomków. Zachowujemy najgłębsze
+        # zaobserwowane gałęzie, a importer dodaje powiązania z ich przodkami.
         memberships = entry["memberships"]
         specific = [
             membership for membership in memberships

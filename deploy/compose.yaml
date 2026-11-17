@@ -1,9 +1,18 @@
+# Bazowy zestaw usług lokalnego sklepu, używany samodzielnie lub z overlayem bootstrapu.
+# Uruchomienie usług z katalogu repozytorium
+# docker compose --env-file .env -f deploy/compose.yaml up -d --build
+# Zmienne pochodzą z lokalnego .env, a ścieżki bind mountów są względem tego pliku.
+# MariaDB i pliki PrestaShop mają odrębne trwałe wolumeny. Import i konfigurację
+# uruchamia init-shop.php, a ich automatyczne wykonanie dodaje compose.bootstrap.yaml.
 services:
+  # Dane MariaDB są trwałe w odrębnym wolumenie.
   db:
     image: mariadb:10.11.14
     platform: linux/amd64
     restart: unless-stopped
 
+    # Te wartości inicjalizują pusty katalog danych. Zmiana .env przy istniejącym
+    # wolumenie nie rekonfiguruje automatycznie kont i haseł zapisanych w MariaDB.
     environment:
       MARIADB_DATABASE: ${DB_NAME:?Uzupełnij DB_NAME}
       MARIADB_USER: ${DB_USER:?Uzupełnij DB_USER}
@@ -16,6 +25,8 @@ services:
     networks:
       - shop_network
 
+    # Gotowość oznacza połączenie i zainicjalizowany InnoDB. Od tego warunku
+    # zależy start instalatora, aby początek pracy nie wyprzedził gotowości bazy.
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -23,6 +34,7 @@ services:
       retries: 30
       start_period: 60s
 
+  # Instalator pracuje tylko na pustej bazie, PS_ERASE_DB pozostaje wyłączone.
   shop:
     image: prestashop-website:8.2.8
     platform: linux/amd64
@@ -46,6 +58,8 @@ services:
       DB_PASSWD: ${DB_PASSWORD:?Uzupełnij DB_PASSWORD}
       DB_PREFIX: ps_
 
+      # Natywny entrypoint obrazu instaluje sklep na pustej instalacji. Dane konta,
+      # język i kraj są wartościami startowymi, a konfigurację domenową wykonuje init/.
       PS_INSTALL_AUTO: "1"
       PS_ERASE_DB: "0"
       PS_DOMAIN: ${PS_DOMAIN:?Uzupełnij PS_DOMAIN}
@@ -59,13 +73,17 @@ services:
       ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
 
     volumes:
+      # Ten wolumen jest współdzielony z bootstrapem i przechowuje również
+      # galerie, wygenerowaną pocztę i var/import/initialization-state.json.
       - shop_data:/var/www/html
       - ./init:/opt/shop/init:ro
+      # Import czyta źródła, galerie zapisuje w shop_data.
       - ../scraper-results:/opt/shop/scraper-results:ro
 
     networks:
       - shop_network
 
+  # Lokalna skrzynka testowa przechwytuje wiadomości SMTP.
   mailpit:
     image: axllent/mailpit:v1.33
     restart: unless-stopped
@@ -76,6 +94,7 @@ services:
     networks:
       - shop_network
 
+  # Porty są dostępne na interfejsie lokalnym hosta.
   nginx:
     image: nginx:stable-alpine
     restart: unless-stopped
@@ -88,6 +107,8 @@ services:
       - "127.0.0.1:443:443"
 
     volumes:
+      # Proxy odczytuje konfigurację i parę TLS z hosta. Wariant bazowy wymaga
+      # istniejącego katalogu certyfikatów, a jego przygotowanie automatyzuje overlay.
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - type: bind
         source: ${TLS_CERT_DIR:?Uzupełnij TLS_CERT_DIR}
@@ -103,6 +124,8 @@ volumes:
   db_data:
   shop_data:
 
+# Nazwy usług są DNS-em wewnątrz projektu. Baza i SMTP nie wymagają publikacji
+# portów na hoście, a interfejsy użytkownika są wystawione na 127.0.0.1.
 networks:
   shop_network:
     driver: bridge

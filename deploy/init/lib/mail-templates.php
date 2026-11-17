@@ -1,11 +1,32 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Generowanie polskich wiadomości przez natywny silnik motywów poczty.
+ *
+ * Używana przez configure-mail.php po boot(), z wybranym motywem PrestaShop i polskim językiem domyślnym.
+ *
+ * Podproces bin/console zapisuje HTML/TXT w mails/pl, katalogach modułów i istniejących nadpisaniach
+ * motywu. Funkcja sprawdza wynik i czyści cache Smarty.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
 
 require_once __DIR__ . '/prestashop.php';
 
+/**
+ * Generuje pełny polski motyw e-maili natywnym poleceniem PrestaShop, sprawdzając wynik.
+ *
+ * Uruchamia natywny generator z aktualnym motywem, polskim locale i --overwrite=1. Obejmuje katalog główny,
+ * moduły oraz istniejące nadpisania motywu i rodzica. Weryfikuje osiem plików czterech kluczowych
+ * wiadomości w obu formatach.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Przy braku motywu, błędzie procesu generatora lub niekompletnych wymaganych plikach e-mail.
+ */
 function configurePolishMailTemplates(\Context $context): void
 {
     $language = new \Language((int) \Configuration::get('PS_LANG_DEFAULT'));
@@ -16,15 +37,15 @@ function configurePolishMailTemplates(\Context $context): void
         throw new RuntimeException('Configured mail theme is unavailable: ' . $theme);
     }
 
-    // Same command handler as the back-office Generate emails action, with
-    // Polish selected, the configured mail theme and replacement enabled.
+    // Używamy tego samego mechanizmu co akcja „Generuj e-maile” w panelu,
+    // z językiem polskim, skonfigurowanym motywem i zastępowaniem szablonów.
     $destinations = [['core' => _PS_MAIL_DIR_, 'modules' => _PS_MODULE_DIR_]];
     $themeFolders = [_PS_THEME_DIR_];
     $parent = $context->shop->theme->get('parent');
     if ($parent) $themeFolders[] = _PS_ROOT_DIR_ . '/themes/' . $parent . '/';
     foreach (array_unique($themeFolders) as $folder) {
-        // Mail::Send gives existing theme mail overrides precedence over core.
-        // Regenerate those with the native engine as well so they cannot mask it.
+        // Mail::Send nadaje szablonom motywu pierwszeństwo przed katalogiem głównym.
+        // Istniejące nadpisania również regenerujemy natywnym mechanizmem sklepu.
         if (is_dir($folder . 'mails/pl')) {
             $destinations[] = ['core' => $folder . 'mails/', 'modules' => $folder . 'modules/'];
         }
@@ -38,6 +59,8 @@ function configurePolishMailTemplates(\Context $context): void
         }
         echo '[MAIL ' . ($index + 1) . '/' . count($destinations) . '] Generating complete native '
             . $theme . ' theme for ' . $language->locale . ' into ' . $destination['core'] . PHP_EOL;
+        // Argumenty tablicowe omijają interpretację powłoki. Generator odpowiada
+        // natywnej akcji panelu i nadpisuje pliki w wyznaczonym katalogu docelowym.
         $process = proc_open([
             PHP_BINARY, _PS_ROOT_DIR_ . '/bin/console', 'prestashop:mail:generate', $theme, $language->locale,
             $destination['core'], $destination['modules'], '--overwrite=1', '--no-interaction', '--env=prod',
@@ -46,6 +69,8 @@ function configurePolishMailTemplates(\Context $context): void
         fclose($pipes[0]);
         if (proc_close($process) !== 0) throw new RuntimeException('Native Polish mail generation failed.');
 
+        // Sprawdzamy krytyczne wiadomości obu formatów po zakończeniu generatora.
+        // Zakres generacji obejmuje pełny motyw, a ta pętla stanowi kontrolę kluczowych rezultatów.
         foreach (['account', 'bankwire', 'order_conf', 'payment'] as $template) {
             foreach (['html', 'txt'] as $extension) {
                 $file = $destination['core'] . 'pl/' . $template . '.' . $extension;

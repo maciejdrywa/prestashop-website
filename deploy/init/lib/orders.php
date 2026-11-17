@@ -1,12 +1,30 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Definicje statusów płatności i ustawienia demonstracyjnych faktur VAT.
+ *
+ * Wywoływana przez configure-orders.php po przygotowaniu natywnych modułów płatności i ich statusów.
+ *
+ * Aktualizuje OrderState i Configuration. Zdarzenia konkretnych zamówień, płatności i wystawienia faktury
+ * obsługuje natywny proces zamówienia.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
 
 require_once __DIR__ . '/content.php';
 
-/** Native payment controllers read these settings; never hard-code installer IDs. */
+/**
+ * Odczytuje identyfikatory statusów płatności i sprawdza ich dostępność oraz rozłączność.
+ *
+ * Statusy pochodzą z konfiguracji utworzonej przez natywne moduły płatności. Pobranie korzysta z wartości
+ * globalnej. Każdy status musi istnieć, być nieusunięty i mieć inne ID.
+ *
+ * @return array<string, array> ID statusów i docelowe nazwy, flagi paid, email oraz szablony wiadomości.
+ * @throws \RuntimeException Przy brakującym, usuniętym lub powielonym ID statusu płatności.
+ */
 function orderStatusPlan(): array
 {
     $plan = [
@@ -16,7 +34,7 @@ function orderStatusPlan(): array
     ];
     $ids = [];
     foreach ($plan as $setting => &$entry) {
-        // COD reads the global setting in its native controller, rather than a shop override.
+        // Natywny kontroler pobrania odczytuje globalną wartość konfiguracji statusu.
         $id = (int) ($setting === 'PS_OS_COD_VALIDATION' ? \Configuration::getGlobalValue($setting) : \Configuration::get($setting));
         $state = new \OrderState($id);
         if (!$id || !\Validate::isLoadedObject($state) || $state->deleted || in_array($id, $ids, true)) {
@@ -29,6 +47,15 @@ function orderStatusPlan(): array
     return $plan;
 }
 
+/**
+ * Zwraca demonstracyjne dane wystawcy i ustawienia faktury dla języków sklepu.
+ *
+ * Zwraca demonstracyjny prefiks i dane wystawcy dla zapisu w Configuration. Parametr context pozostaje
+ * częścią wspólnego interfejsu konfiguratorów, a bieżąca implementacja pobiera języki globalnie.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array<string, mixed> Ustawienia faktury i fikcyjnego wystawcy, z wartościami wielojęzycznymi.
+ */
 function demoInvoiceSettings(\Context $context): array
 {
     $prefix = $notice = [];
@@ -51,6 +78,18 @@ function demoInvoiceSettings(\Context $context): array
     ];
 }
 
+/**
+ * Konfiguruje statusy i faktury bez przechodzenia statusów istniejących zamówień.
+ *
+ * Ustawia definicje statusów oczekiwania i potwierdzonej płatności oraz parametry wystawcy. Faktyczne
+ * przejście statusu, zapis płatności i utworzenie faktury wykonuje później natywny OrderHistory dla
+ * konkretnego zamówienia.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return void
+ * @throws \RuntimeException Przy niepoprawnym planie statusów, błędzie zapisu lub rozbieżności flag faktury i płatności.
+ */
 function configureOrders(\Context $context, bool $dryRun = false): void
 {
     $plan = orderStatusPlan();
@@ -65,9 +104,11 @@ function configureOrders(\Context $context, bool $dryRun = false): void
     transaction(function () use ($context, $plan, $settings): void {
         foreach ($plan as $entry) {
             $state = new \OrderState($entry['id']);
-            // An offline selection is not proof of payment. Both methods start unpaid.
-            // Only the explicit administrator transition to the paid state generates
-            // the invoice and lets native OrderHistory record the received payment.
+            // Obie płatności offline rozpoczynają się od statusu oczekiwania na pieniądze.
+            // Administrator potwierdza płatność zmianą statusu, która generuje fakturę
+            // i pozwala natywnemu OrderHistory zapisać otrzymaną kwotę.
+            // Zgodne flagi paid, invoice, pdf_invoice i logable wiążą potwierdzenie
+            // płatności z natywnym scenariuszem rejestracji kwoty i udostępnienia faktury.
             $state->paid = $entry['paid'];
             $state->invoice = $entry['paid'];
             $state->pdf_invoice = $entry['paid'];
@@ -83,9 +124,9 @@ function configureOrders(\Context $context, bool $dryRun = false): void
             echo 'SAVED STATE: ' . $entry['name'] . ', ID ' . $state->id . PHP_EOL;
         }
         echo "[2/3] Enabling native invoices and demonstrational issuer...\n";
-        foreach ($settings as $key => $value) contentSetting($key, $value, $context);
-        // Never reset PS_INVOICE_START_NUMBER or renumber existing invoices on reruns.
-        // Configuration changes do not transition existing orders or create invoices.
+        foreach ($settings as $key => $value) saveShopSetting($key, $value, $context);
+        // Zachowujemy PS_INVOICE_START_NUMBER i numery wystawionych faktur.
+        // Konfiguracja pozostawia bieżące statusy zamówień i istniejące dokumenty.
     });
     \Cache::clean('OrderState::getOrderStates_*');
     \Tools::clearSmartyCache();

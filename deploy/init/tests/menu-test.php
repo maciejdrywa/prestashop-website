@@ -1,17 +1,45 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test hierarchii menu, kolejności rodzeństwa i walidacji źródłowych ścieżek.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/menu-test.php
+ *
+ * Korzysta z lokalnego categories.json oraz błędnych fixture w pamięci.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/menu.php';
 
+/**
+ * Wymaga spełnienia warunku testu, a przy błędzie zgłasza podany komunikat.
+ *
+ * @param bool $value Wynik warunku, który musi być prawdziwy w scenariuszu menu.
+ * @param string $message Komunikat zgłaszany po niespełnieniu asercji.
+ * @return void
+ * @throws \RuntimeException Gdy warunek asercji jest fałszywy.
+ */
 function menuAssert(bool $value, string $message): void
 {
     if (!$value) throw new RuntimeException($message);
 }
+/**
+ * Sprawdza, że błędne drzewo kategorii zostanie odrzucone przez walidator menu.
+ *
+ * @param array $categories Niepoprawne definicje kategorii, które plan menu powinien odrzucić.
+ * @return void
+ * @throws \RuntimeException Gdy oczekiwany błąd walidacji nie wystąpi.
+ */
 function menuReject(array $categories): void
 {
     try { ShopInit\mainMenuPlan($categories); } catch (RuntimeException $error) { return; }
     throw new RuntimeException('Invalid menu source was accepted.');
 }
 try {
+    // Rodzeństwo ma celowo kolejność różną od alfabetu, a ta sama nazwa liścia
+    // występuje pod dwoma rodzicami. Asercje sprawdzają obie własności planu.
     $fixture = array_map(fn ($name) => ['category_path'=>[$name]], array_reverse(ShopInit\mainMenuRoots()));
     $root = ShopInit\mainMenuRoots()[0];
     $fixture[] = ['category_path'=>[$root, 'Second alphabetically']];

@@ -1,5 +1,15 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Nazwa sklepu, polskie etykiety dostaw i usunięcie rozpoznanej demonstracji.
+ *
+ * Wywoływana przez configure-storefront.php jako pierwszy etap przygotowania katalogu.
+ *
+ * Zapisuje Configuration i Shop, lokalizuje Carrier oraz usuwa produkty o zgodnych sygnaturach instalatora.
+ * Wyłącza demonstracyjne moduły strony głównej.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
@@ -8,6 +18,14 @@ require_once __DIR__ . '/prestashop.php';
 
 const PROJECT_SHOP_NAME = 'Twoje Drzwi do Sukcesu';
 
+/**
+ * Spolszcza nazwy i opisy metod instalatora z zachowaniem ich referencji i opłat.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return void
+ * @throws \RuntimeException Przy niepoprawnym języku albo błędzie odczytu i zapisu etykiet przewoźników.
+ */
 function configureDeliveryLanguage(\Context $context, bool $dryRun = false): void
 {
     $names = [
@@ -48,7 +66,7 @@ function configureDeliveryLanguage(\Context $context, bool $dryRun = false): voi
         foreach ($plans as $plan) {
             $row = $plan['row'];
             $id = (int) $row['id_carrier'];
-            // Update only wording; keep IDs, references, prices and delivery restrictions intact.
+            // Zmieniamy nazwy, zachowując ID, referencje, opłaty i ograniczenia dostaw.
             if ($row['name'] !== $plan['name'] && !$db->update('carrier',['name'=>pSQL($plan['name'])],'id_carrier=' . $id)) {
                 throw new RuntimeException('Cannot translate delivery name: ' . $id);
             }
@@ -66,6 +84,14 @@ function configureDeliveryLanguage(\Context $context, bool $dryRun = false): voi
     \Tools::clearSmartyCache();
 }
 
+/**
+ * Zapisuje nazwę projektu i sprawdza efekt aktualizacji konfiguracji.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return void
+ * @throws \RuntimeException Przy błędzie zapisu nazwy w Configuration lub Shop albo rozbieżności odczytu kontrolnego.
+ */
 function configureShopName(\Context $context, bool $dryRun = false): void
 {
     if ($dryRun) {
@@ -90,7 +116,11 @@ function configureShopName(\Context $context, bool $dryRun = false): void
     echo 'SHOP NAME: ' . PROJECT_SHOP_NAME . PHP_EOL;
 }
 
-/** Default product signatures shipped with the pinned PrestaShop 8.2.8 image. */
+/**
+ * Zwraca referencje i nazwy produktów demonstracyjnych przypiętej wersji instalatora.
+ *
+ * @return array<string, string> Oryginalne nazwy produktów według referencji instalatora.
+ */
 function demoProductSignatures(): array
 {
     return [
@@ -116,11 +146,28 @@ function demoProductSignatures(): array
     ];
 }
 
+/**
+ * Rozpoznaje produkt demonstracyjny przez zgodną parę referencji i nazwy.
+ *
+ * @param string $reference Trwała referencja produktu w formacie pandomu-ID.
+ * @param string $name Nazwa wyszukiwanego obiektu w języku domyślnym sklepu.
+ * @return bool Zgodność referencji i nazwy z sygnaturą produktu demonstracyjnego.
+ */
 function isInstallerDemoProduct(string $reference, string $name): bool
 {
     return (demoProductSignatures()[$reference] ?? null) === $name;
 }
 
+/**
+ * Przygotowuje listę rozpoznanych produktów demonstracyjnych do usunięcia.
+ *
+ * Do usunięcia kwalifikuje jedynie zgodne pary oryginalnej referencji i nazwy instalatora. Zmieniona nazwa
+ * przy referencji demo jest raportowana i zachowana, a duplikat referencji przerywa operację.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return list<array> Rekordy id_product, reference i name kwalifikujące się do usunięcia.
+ * @throws \RuntimeException Przy nieudanym odczycie lub wieloznacznej referencji produktu demonstracyjnego.
+ */
 function demoProductPlan(\Context $context): array
 {
     $references = implode(',', array_map(fn (string $reference): string => "'" . pSQL($reference) . "'", array_keys(demoProductSignatures())));
@@ -138,6 +185,8 @@ function demoProductPlan(\Context $context): array
     $plan = [];
     $seen = [];
     foreach ($rows as $row) {
+        // Sama referencja demo nie uprawnia do usunięcia rekordu po ręcznej edycji.
+        // Sygnatura nazwy ogranicza automatyczne czyszczenie do rozpoznanego instalatora.
         if (!isInstallerDemoProduct($row['reference'], $row['name'])) {
             echo 'WARNING: preserving modified demo reference: ' . $row['reference'] . ' (product ' . $row['id_product'] . ').' . PHP_EOL;
             continue;
@@ -151,6 +200,17 @@ function demoProductPlan(\Context $context): array
     return $plan;
 }
 
+/**
+ * Usuwa rozpoznane produkty demonstracyjne i wyłącza przykładowe moduły strony głównej.
+ *
+ * Usuwa rozpoznane produkty przez Product::delete i wyłącza trzy moduły demonstracyjne. Usuwanie produktu
+ * może obejmować wiele zapisów i pliki obrazów, dlatego błąd wymaga oceny częściowo wykonanego wyniku.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return void
+ * @throws \RuntimeException Przy nieudanym usunięciu produktu, wyłączeniu modułu lub rozbieżności kontroli końcowej.
+ */
 function cleanDemoStorefront(\Context $context, bool $dryRun = false): void
 {
     echo "[1/3] Identifying installer demo products...\n";

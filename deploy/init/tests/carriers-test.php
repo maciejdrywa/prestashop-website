@@ -1,5 +1,17 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test idempotencji konfiguracji przewoźników i natywnych taryf koszyka.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/carriers-test.php
+ *
+ * Ponawia konfigurator i tworzy klienta, adres oraz koszyk. finally usuwa dane pomocnicze. Wymaga wcześniej
+ * skonfigurowanych przewoźników.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/carriers.php';
 
 $customer = $address = $cart = null;
@@ -8,6 +20,8 @@ try {
     $context = ShopInit\boot();
     $db = Db::getInstance();
     $shopId = (int) $context->shop->id;
+    // Migawka obejmuje taryfy i powiązania projektu, aby ocenić idempotencję
+    // ponowionej konfiguracji. Normalizacja pomija technicznie zmienne klucze dostaw.
     $snapshot = function () use ($db, $shopId): array {
         $ids = [];
         foreach (ShopInit\projectCarrierDefinitions() as $key => $definition) {
@@ -19,12 +33,12 @@ try {
         foreach (['carrier', 'range_weight', 'delivery', 'carrier_zone', 'carrier_group', 'carrier_tax_rules_group_shop'] as $table) {
             $data[$table] = $db->executeS('SELECT * FROM ' . _DB_PREFIX_ . $table . ' WHERE id_carrier IN (' . implode(',', $ids) . ')');
             if ($data[$table] === false) throw new RuntimeException('Cannot snapshot carrier configuration.');
-            // Delivery row primary keys may change when restoring tariffs.
+            // Klucze główne wierszy dostaw mogą się zmienić podczas odtwarzania taryf.
             foreach ($data[$table] as &$row) unset($row['id_delivery']);
             unset($row);
         }
         $data['other_carriers'] = $db->executeS('SELECT * FROM ' . _DB_PREFIX_ . 'carrier WHERE id_carrier NOT IN (' . implode(',', $ids) . ') ORDER BY id_carrier');
-        // Configuration caches freshly written integers as int; database reads are strings.
+        // Cache zachowuje zapisane int, podczas gdy odczyt bazy zwraca ciągi znaków.
         foreach (['PS_SHIPPING_HANDLING', 'PS_SHIPPING_FREE_PRICE', 'PS_SHIPPING_FREE_WEIGHT', 'PS_CARRIER_DEFAULT'] as $key) $data[$key] = (string) Configuration::get($key);
         return $data;
     };
@@ -36,6 +50,8 @@ try {
     echo "OK: dry run and idempotence, existing carriers and global settings verified.\n";
 
     $customer = new Customer();
+    // Koszyk korzysta z odrębnego klienta i adresu. Sprawdza realny wybór taryf
+    // oraz płatności w klasach PrestaShop przed sprzątnięciem fixture.
     $customer->firstname = 'Test'; $customer->lastname = 'Dostawy';
     $customer->email = 'carriers-' . bin2hex(random_bytes(8)) . '@example.test';
     $customer->passwd = Tools::hash(bin2hex(random_bytes(18)));

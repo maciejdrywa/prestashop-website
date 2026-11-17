@@ -1,5 +1,16 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Test kompletności szablonów CMS, tokenów i odnośników oraz kodowania UTF-8.
+ *
+ * Wywołanie jako www-data w kontenerze z danymi wymaganymi przez scenariusz
+ * php /opt/shop/init/tests/content-test.php
+ *
+ * Czyta content/*.html i sprawdza renderowanie oraz błędy brakujących zasobów.
+ * Kod zakończenia 0 oznacza spełnienie asercji, a 1 nieudany scenariusz.
+ */
+
 require_once __DIR__ . '/../lib/content.php';
 
 try {
@@ -9,6 +20,8 @@ try {
         || count(array_unique(array_column($definitions, 'slug'))) !== 5) {
         throw new RuntimeException('Five distinct information pages are required.');
     }
+    // Test podstawia jawne lokalne adresy i listy metod. Dzięki temu kontroluje
+    // komplet tokenów szablonów niezależnie od ID stron nadanych przez bazę.
     $tokens = ['{{contact_url}}'=>'/kontakt', '{{account_url}}'=>'/moje-konto',
         '{{delivery_methods}}'=>'<ul><li>Dostawa testowa</li></ul>', '{{payment_methods}}'=>'<ul><li>Płatność testowa</li></ul>'];
     foreach ($definitions as $key=>$page) $tokens['{{'.$key.'_url}}'] = '/content/' . $page['slug'];

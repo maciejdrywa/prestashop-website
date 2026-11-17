@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import List, Optional
 from parser_classes.ProductVariant import ProductVariant
 
 class Product(BaseModel):
+    """Opisuje eksport produktu zgodny z kontraktem importera PrestaShop."""
     product_id: str
     product_url: str
     name: str

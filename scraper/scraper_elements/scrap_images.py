@@ -5,6 +5,7 @@ import re
 from urllib.parse import urlsplit
 
 def scrap_images(soup: BeautifulSoup) -> List[str]:
+    """Zbiera unikalne adresy galerii. Produkt bez zdjęć zachowuje z pustą listą."""
     images = []
 
     images_tag = soup.find('ul', class_='product-images js-qv-product-images')
@@ -16,13 +17,13 @@ def scrap_images(soup: BeautifulSoup) -> List[str]:
             if url and url not in images:
                 images.append(url)
 
-    # Some real source products have no gallery. Export the product with an
-    # explicit empty list; do not drop it or treat the generic placeholder as a photo.
+    # Produkty bez galerii źródłowej zachowujemy z jawną pustą listą.
+    # Ogólny obraz zastępczy pozostaje poza galerią konkretnego produktu.
     return images
 
 
 def scrap_cover_image(soup: BeautifulSoup, images: List[str]) -> str | None:
-    """Resolve the source cover independently of gallery order and image size."""
+    """Rozpoznaje okładkę po danych źródła i ID zdjęcia, odrzucając niejednoznaczny wybór."""
     if not images:
         return None
     candidates = []
@@ -46,6 +47,7 @@ def scrap_cover_image(soup: BeautifulSoup, images: List[str]) -> str | None:
         candidates.append(("url", meta["content"]))
 
     def image_id(url):
+        """Wyodrębnia identyfikator zdjęcia niezależnie od rozdzielczości w adresie URL."""
         match = re.search(r"/(\d+)(?:-[^/]*)?/", urlsplit(url).path)
         return match.group(1) if match else None
 

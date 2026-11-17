@@ -1,3 +1,13 @@
+/**
+ * Testy zachowania komunikatu cookies w izolowanym kontekście JavaScript.
+ *
+ * Uruchomienie z katalogu repozytorium
+ * node --test deploy/init/tests/cookie-notice.test.cjs
+ *
+ * Wczytuje rzeczywisty notice.js modułu shopcookieinfo. Atrapy DOM i cookie
+ * rejestrują zdarzenia i zapis, a node:vm wykonuje kod w nowym kontekście.
+ * Wymaga Node.js i plików modułu. Wszystkie zmiany stanu dotyczą pamięci fixture.
+ */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -5,6 +15,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 const code = fs.readFileSync(path.resolve(__dirname, '../../../shop/modules/shopcookieinfo/views/js/notice.js'), 'utf8');
 
+/**
+ * Wykonuje notice.js na kontrolowanym stanie dokumentu i przechowuje efekty.
+ *
+ * @param {object} [options] Parametry środowiska testowego.
+ * @param {string} [options.cookie=''] Początkowa treść document.cookie.
+ * @param {boolean} [options.loading=false] Odracza inicjalizację do DOMContentLoaded.
+ * @param {boolean} [options.blocked=false] Symuluje wyjątek przy odczycie i zapisie cookie.
+ * @param {string} [options.protocol='https:'] Protokół wpływający na atrybut Secure.
+ * @param {boolean} [options.present=true] Określa istnienie elementu komunikatu w DOM.
+ * @returns {object} Przycisk, handlery zdarzeń, zapisane cookie i odczyt stanu usunięcia.
+ */
 function fixture({ cookie = '', loading = false, blocked = false, protocol = 'https:', present = true } = {}) {
   const handlers = {};
   const writes = [];
@@ -20,10 +41,14 @@ function fixture({ cookie = '', loading = false, blocked = false, protocol = 'ht
     getElementById: () => present && !removed ? notice : null,
     addEventListener: (name, callback) => { handlers[name] = callback; },
   };
+  // Getter i setter odtwarzają udany dostęp do cookie albo błąd magazynu.
+  // Tablica writes pozwala asercjom porównać dokładny zapis atrybutów cookie.
   Object.defineProperty(document, 'cookie', {
     get: () => { if (blocked) throw new Error('Storage blocked'); return cookie; },
     set: (value) => { if (blocked) throw new Error('Storage blocked'); writes.push(value); },
   });
+  // Każde wywołanie fixture izoluje zmienne modułu i rejestruje jego rzeczywiste
+  // handlery. Testy wywołują następnie te handlery tak jak zdarzenia przeglądarki.
   vm.runInNewContext(code, { document, window: { location: { protocol } } });
   return { button, handlers, writes, removed: () => removed };
 }

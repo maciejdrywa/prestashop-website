@@ -1,7 +1,7 @@
 # Wyniki scrapowania
 
-Katalog zawiera dane pobrane ze sklepu źródłowego w formacie JSON lub CSV, zapisane w UTF-8, wraz z adresami źródłowymi zdjęć.
+`products.json` i `categories.json` przechowują eksport UTF-8 z adresami źródłowymi, a `scrape-report.json` raport kompletności. Format opisuje [instrukcja scrapera](../docs/SCRAPER.md).
 
-Do repozytorium dodajemy maksymalnie 20 przykładowych zdjęć. Pełny zbiór zdjęć przechowujemy poza Git i publikujemy jako archiwum ZIP lub TAR.GZ do 1 GB w GitHub Releases.
+Pełne zdjęcia JPEG są zapisywane na bieżąco w ignorowanym katalogu `images/`. Mają dłuższy bok 800–1600 px i maksymalnie 300000 bajtów. Do Git trafia maksymalnie 20 przykładów z `samples/`. Pełny zestaw oraz `product_images.zip` pozostają poza Git, a archiwum do 1 GB można publikować w GitHub Releases.
 
-Zdjęcia mają dłuższy bok 800–1600 px, format JPEG lub WebP i rozmiar do 300 KB na plik.
+Inicjalizacja wymaga obu JSON-ów i lokalnego `images/`. Obecny produkt 539 nie ma galerii w źródle. Raport zachowuje to ograniczenie.

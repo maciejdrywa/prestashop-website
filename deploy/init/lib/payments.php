@@ -1,16 +1,42 @@
 <?php
 declare(strict_types=1);
+
+/**
+ * Konfiguracja płatności offline oraz uprawnień dostępności w checkout.
+ *
+ * Używana po przewoźnikach przez configure-payments.php. Wymaga plików modułów przelewu i pobrania oraz
+ * PL/PLN.
+ *
+ * Instaluje lub włącza moduły, zapisuje tabele module_* i instrukcje demonstracyjne. Może odświeżyć
+ * istniejącą stronę Formy płatności.
+ */
+
 namespace ShopInit;
 
 use RuntimeException;
 
 require_once __DIR__ . '/content.php';
 
+/**
+ * Zwraca nazwy obsługiwanych modułów przelewu i pobrania.
+ *
+ * @return list<string> Nazwy modułów przelewu i pobrania.
+ */
 function allowedPaymentModules(): array
 {
     return ['ps_wirepayment','ps_cashondelivery'];
 }
 
+/**
+ * Odczytuje włączone moduły płatności przypisane do sklepu.
+ *
+ * Identyfikuje moduły przez powiązanie module_shop i hooki płatności, w tym historyczne payment i
+ * displayPayment. Wynik służy do porównania z listą metod dopuszczonych w projekcie.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return list<string> Nazwy modułów powiązanych ze sklepem i hookami płatności.
+ * @throws \RuntimeException Przy nieudanym odczycie modułów powiązanych z hookami płatności.
+ */
 function enabledPaymentModules(\Context $context): array
 {
     $rows=\Db::getInstance()->executeS('SELECT DISTINCT m.name FROM '._DB_PREFIX_.'module m INNER JOIN '
@@ -22,6 +48,16 @@ function enabledPaymentModules(\Context $context): array
     return array_column($rows,'name');
 }
 
+/**
+ * Sprawdza kraj, walutę, grupy klientów i przewoźników potrzebnych do uprawnień płatności.
+ *
+ * Uwzględnia referencje wszystkich nieusuniętych przewoźników sklepu, także aktualnie wyłączonych. Dzięki
+ * temu uprawnienia modułów pozostają poprawne po zmianie aktywności metod dostawy.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return array{country: int, currency: int, groups: list<int>, carriers: list<int>} carriers zawiera referencje przewoźników.
+ * @throws \RuntimeException Przy braku kraju, waluty, grup, przewoźników lub plików wymaganych modułów.
+ */
 function paymentInputs(\Context $context): array
 {
     $shopId=(int)$context->shop->id;
@@ -49,9 +85,23 @@ function paymentInputs(\Context $context): array
         'carriers'=>array_map(fn(array $row):int=>(int)$row['id_reference'],$carriers)];
 }
 
+/**
+ * Odtwarza płatności offline, dane demonstracyjne i ich uprawnienia w sklepie.
+ *
+ * Włącza przelew i pobranie oraz wyłącza pozostałe wykryte moduły płatności. Odtwarza uprawnienia kraju,
+ * waluty, grup i referencji przewoźników oraz demonstracyjne instrukcje bankowe. Instalacja modułów
+ * poprzedza transakcję zapisów uprawnień.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @param bool $dryRun Przy true wykonywane są kontrole i raportowanie planu przed zapisami danego konfiguratora.
+ * @return void
+ * @throws \RuntimeException Przy błędzie instalacji modułów, zapisu uprawnień lub niezgodnej liście aktywnych metod.
+ */
 function configurePayments(\Context $context,bool $dryRun=false): void
 {
     $inputs=paymentInputs($context);
+    // Lista modułów podpiętych do hooków płatności jest porównywana z allowlistą.
+    // Dodatkowe wykryte moduły zostaną wyłączone w ścieżce zapisu.
     $extra=array_values(array_diff(enabledPaymentModules($context),allowedPaymentModules()));
     if($dryRun) {
         echo 'PLAN ENABLE: '.implode(', ',allowedPaymentModules()).PHP_EOL;
@@ -80,7 +130,9 @@ function configurePayments(\Context $context,bool $dryRun=false): void
     transaction(function() use($context,$modules,$inputs,$shopId):void {
         $db=\Db::getInstance();
         foreach($modules as $module) {
-            $permissionSets=[
+            // Odtwarzamy dozwolone przekroje dostępności modułu dla jednego sklepu.
+        // module_carrier przechowuje id_reference, pozostałe tabele ID kraju, waluty i grup.
+        $permissionSets=[
                 'module_country'=>['column'=>'id_country','values'=>[$inputs['country']]],
                 'module_currency'=>['column'=>'id_currency','values'=>[$inputs['currency']]],
                 'module_group'=>['column'=>'id_group','values'=>$inputs['groups']],
@@ -101,10 +153,10 @@ function configurePayments(\Context $context,bool $dryRun=false): void
             'BANK_WIRE_ADDRESS'=>'Środowisko demonstracyjne — brak rzeczywistego rachunku bankowego.',
             'BANK_WIRE_PAYMENT_INVITE'=>1,
         ];
-        foreach($settings as $key=>$value) contentSetting($key,$value,$context);
+        foreach($settings as $key=>$value) saveShopSetting($key,$value,$context);
         $texts=[];
         foreach(\Language::getLanguages(false) as $language) $texts[(int)$language['id_lang']]='Zamówienie testowe. Nie wykonuj rzeczywistego przelewu; status płatności zmienia administrator podczas weryfikacji projektu.';
-        contentSetting('BANK_WIRE_CUSTOM_TEXT',$texts,$context);
+        saveShopSetting('BANK_WIRE_CUSTOM_TEXT',$texts,$context);
     });
     echo "[3/3] Checking enabled payment methods...\n";
     $actual=enabledPaymentModules($context);
@@ -115,6 +167,16 @@ function configurePayments(\Context $context,bool $dryRun=false): void
     echo "OK: only bank transfer and cash on delivery enabled for PL/PLN; test bank data configured.\n";
 }
 
+/**
+ * Aktualizuje istniejącą stronę płatności po zmianie dostępnych metod.
+ *
+ * Aktualizuje treść strony payments po zmianie metod. Przy niekompletnych mapowaniach pięciu stron kończy
+ * się komunikatem, a ich przygotowanie przejmuje późniejszy etap configure-content.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Przy błędzie zapisu treści strony płatności lub renderowania szablonu.
+ */
 function refreshPaymentInformationPage(\Context $context): void
 {
     $definitions=informationalPageDefinitions();
