@@ -56,6 +56,7 @@ Wynik `bool(true)` oznacza poprawne zbudowanie indeksu. To samo można zrobić w
 ```
 $env:BASE_URL="https://localhost"; npx playwright test cart
 $env:BASE_URL="https://localhost"; npx playwright test cart --headed
+$env:BASE_URL="https://localhost"; npx playwright test order --headed
 ```
 Opcja `--headed` pokazuje okno przeglądarki.
 
@@ -65,7 +66,7 @@ Opcja `--headed` pokazuje okno przeglądarki.
 Otwiera stronę główną pod adresem z `BASE_URL`. Sprawdza, że serwer odpowiada poprawnym kodem HTTP i że strona ma niepusty tytuł.
 
 #### `e2e/cart.spec.ts`: scenariusz koszyka
-Wykonuje scenariusz koszyka wymagany na odbiorze. Każda operacja kończy się asercją sprawdzającą jej efekt.
+Wykonuje scenariusz koszyka wymagany na odbiorze. Każda operacja kończy się asercją sprawdzającą jej efekt. Kroki znajdują się w funkcji `scenariuszKoszyka()` w pliku `e2e/helpers/koszyk.ts`, bo ten sam scenariusz otwiera test zamówienia.
 
 1. **Dodanie 10 różnych produktów z dwóch kategorii**: po 5 z kategorii „Akcesoria meblowe” i „Klamki do drzwi”, w różnych ilościach (1–3 szt.). Po każdym dodaniu test sprawdza, że pojawiło się okno potwierdzenia koszyka. Następnie sprawdza, że koszyk zawiera 10 pozycji z właściwymi ilościami.
 2. **Wyszukanie produktu po nazwie**: wpisuje frazę (domyślnie `klamka`) w wyszukiwarkę. Czeka na stronę wyników dla tej frazy (adres z parametrem `s`) i sprawdza, że lista wyników nie jest pusta. Losowanie korzysta tylko z tej listy.
@@ -83,6 +84,25 @@ Sposób działania:
 $env:BASE_URL="https://localhost"; $env:FRAZA="zawias"; npx playwright test cart
 ```
 - **Wyniki w konsoli.** Test wypisuje dodane produkty (nazwa, ID, ilość, stan) i wylosowany produkt.
+
+#### `e2e/order.spec.ts`: zakup przez nowego klienta
+Kontynuuje scenariusz koszyka i składa zamówienie jako nowy klient. Każdy krok kończy się asercją sprawdzającą jego efekt.
+
+1. **Operacje na koszyku**: cały scenariusz z `cart.spec.ts`. W koszyku zostaje 8 pozycji.
+2. **Rejestracja nowego konta**: imię, nazwisko, unikalny e-mail (`w43.<czas>.<losowe>@example.test`), hasło i wymagane zgody. Test sprawdza, że klient jest zalogowany, formularz nie zgłosił błędu, a koszyk po rejestracji nadal ma te same 8 pozycji i ilości.
+3. **Adres**: ulica, kod pocztowy, miasto i telefon. Test sprawdza, że kraj to Polska, krok adresu jest zaliczony i aktywny jest krok dostawy.
+4. **Przewoźnik**: test sprawdza, że dostępni są obaj nowi przewoźnicy (InPost i DPD), zaznacza jednego z nich i sprawdza przejście do kroku płatności.
+5. **Płatność przy odbiorze**: zaznacza płatność modułu `ps_cashondelivery`, sprawdza jej etykietę, akceptuje regulamin i składa zamówienie. Test sprawdza, że otworzyła się strona potwierdzenia.
+6. **Potwierdzenie**: numer zamówienia, wybrany przewoźnik i płatność przy odbiorze. Lista produktów ma tyle samo pozycji co koszyk, z tymi samymi nazwami i ilościami.
+7. **Historia klienta**: zamówienie o tym numerze jest na koncie klienta ze statusem płatności przy odbiorze.
+
+Uwagi:
+- **Ponowne uruchomienie.** Każdy bieg tworzy konto z nowym adresem e-mail, więc nie dochodzi do konfliktu z istniejącym kontem.
+- **Wybór przewoźnika.** Domyślnie InPost. Można go zmienić bez edycji kodu zmienną `PRZEWOZNIK`:
+```
+$env:BASE_URL="https://localhost"; $env:PRZEWOZNIK="DPD"; npx playwright test order
+```
+- **Stany magazynowe.** Każde zamówienie zmniejsza stany. Test dobiera dostępne produkty na bieżąco, ale po wielu uruchomieniach może zabraknąć produktów w wymaganych ilościach. Wtedy trzeba odtworzyć sklep albo uzupełnić stany w panelu.
 
 ### Wyniki
 - Raport HTML: `tests/playwright-report/` (podgląd: `npx playwright show-report`)
