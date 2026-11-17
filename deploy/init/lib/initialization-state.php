@@ -17,6 +17,7 @@ use RuntimeException;
 require_once __DIR__ . '/initialization.php';
 require_once __DIR__ . '/cookies.php';
 require_once __DIR__ . '/theme.php';
+require_once __DIR__ . '/theme-content.php';
 
 /**
  * Odczytuje dziennik zgodny z instalacją i odciskami wejścia.
@@ -150,6 +151,8 @@ function configurationPresent(string $script, \Context $context): bool
                 }
             }
             return true;
+        case 'configure-theme-content.php':
+            return themeContentPresent($context);
         case 'configure-cookies.php':
             return \Module::isInstalled('shopcookieinfo')
                 && \Validate::isLoadedObject(new \CMS((int) \Configuration::get('SHOP_COOKIE_INFO_CMS_ID')));

@@ -181,6 +181,7 @@ function initializationStages(): array
         ['name' => 'Kontrola galerii', 'script' => 'check-images.php', 'args' => ['--all']],
         ['name' => 'Magazyn i aktywacja', 'script' => 'import-stock.php', 'args' => ['--all']],
         ['name' => 'Końcowa kontrola magazynu i aktywacji', 'script' => 'check-stock.php', 'args' => ['--all']],
+        ['name' => 'Treści motywu i filtry katalogu', 'script' => 'configure-theme-content.php', 'args' => []],
     ];
 }
 
