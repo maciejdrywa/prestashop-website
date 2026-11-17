@@ -1,0 +1,4 @@
+/* Test Playwright odczytuje tę właściwość, żeby potwierdzić załadowanie arkusza. */
+:root {
+    --pandomu-theme-ready: 1;
+}
