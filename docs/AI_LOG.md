@@ -46,6 +46,7 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-17, Paweł Krajewski | Gemini | D2.1 — Zrozumienie celu i zakresu zadania Webservice API | Wyjaśnienie celu biznesowego i technicznego zadania, omówienie zasady najmniejszych uprawnień (Least Privilege) oraz ról komponentów PHP i Python | Brak błędów. Wyjaśnienie ok| Weryfikacja ze specyfikacją wymagań i kryteriami zakończenia zadania |
 | 2026-11-17, Paweł Krajewski | Gemini | D2.1 — Wygenerowanie tabeli konfiguracji w README | Przygotowanie tabelarycznego zestawienia zmiennych środowiskowych i parametrów Webservice API do dokumentacji | Brak błędów| Ręczna weryfikacja czytelności tabeli i zgodności z plikiem .env.example |
 | 2026-11-17, Paweł Krajewski | Gemini | D2.1 — Pomoc z connection| Przygotowano zmiany w funkcji connection. Zmiana z funkcji GET na response | Na początku próbował zrobić to dalej na self request GET, ale potem zmienil metodę| Ręczna weryfikacja działania |
+| 2026-11-17, Paweł Krajewski | Gemini | D2.1 — Konwersja danych na XML w zapisie API | Wyjaśnienie wymogu XML w PrestaShop 8.2 Webservice, omówienie konwersji słowników Pythona na XML| Brak błędów | Pomyślne testy zapisu POST/PUT i usunięcia kategorii na instancji sklepu oraz weryfikacja w pytest |
 
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:
