@@ -1,5 +1,7 @@
-from bs4 import BeautifulSoup
 from typing import List
+
+from bs4 import BeautifulSoup
+
 
 def scrap_catalog(soup: BeautifulSoup) -> List[str]:
     """Odczytuje oryginalną ścieżkę breadcrumbs produktu."""

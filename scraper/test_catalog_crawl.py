@@ -1,18 +1,17 @@
 """Regresje hierarchii kategorii, kompletności i wznowienia na lokalnych danych."""
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from Scrapping_products.catalog_discovery import discover_catalog, scan_category
-from Scrapping_products.parse_category import parse_category, parse_navigation
+from bs4 import BeautifulSoup
 from catalog_files import assign_categories, read_products, save_json
 from main_scraper import scrape_catalog
+from Scrapping_products.catalog_discovery import discover_catalog, scan_category
+from Scrapping_products.parse_category import parse_category, parse_navigation
 from Scrapping_products.parse_product import parse_product
-from bs4 import BeautifulSoup
-
 
 BASE = "https://pandomu.com.pl/"
 ROOT = BASE + "10-root"

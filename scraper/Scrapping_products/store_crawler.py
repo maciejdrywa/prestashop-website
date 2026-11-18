@@ -3,9 +3,8 @@ import time
 from pathlib import Path
 
 from bs4 import BeautifulSoup
-
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
 from Scrapping_products.catalog_discovery import discover_catalog, scan_category
 from Scrapping_products.variant_prices import collect_variants
 
@@ -140,7 +139,7 @@ class StoreCrawler:
 
     def close(self):
         """Zamyka kontekst przeglądarki i zatrzymuje instancję Playwright."""
-        logging.info(f"Zamkniecie przegladarki")
+        logging.info("Zamkniecie przegladarki")
         try:
             self.context.close()
         finally:

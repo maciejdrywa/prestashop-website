@@ -1,17 +1,18 @@
 import json
 import logging
-from pathlib import Path
 import shutil
 import time
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
+from scrapping_images.create_zip_archive import create_zip_archive
+from scrapping_images.process_and_save_images import (
+    image_meets_requirements,
+    process_and_save_images,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-from scrapping_images.create_zip_archive import create_zip_archive
-from scrapping_images.process_and_save_images import image_meets_requirements, process_and_save_images
-
 
 BASE_DIR = Path(__file__).parent.parent
 RESULTS_FILE = BASE_DIR / 'scraper-results' / 'products.json'
