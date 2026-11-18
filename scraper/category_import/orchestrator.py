@@ -2,27 +2,28 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from prestashop_api import (
-    PrestaShopClient,
     PrestaShopAPIError,
+    PrestaShopClient,
 )
-from .models import ImportStats, PRESTASHOP_HOME_CATEGORY_ID
+
+from .mapping import (
+    get_default_mapping_path,
+    load_category_mapping,
+    save_category_mapping,
+)
+from .models import PRESTASHOP_HOME_CATEGORY_ID, ImportStats
+from .prestashop_sync import (
+    build_category_payload,
+    build_prestashop_hierarchy_index,
+    fetch_active_languages,
+    fetch_category_for_update,
+    fetch_existing_categories,
+)
 from .utils import slugify
 from .validator import load_and_validate_categories
-from .mapping import (
-    save_category_mapping,
-    load_category_mapping,
-    get_default_mapping_path,
-)
-from .prestashop_sync import (
-    fetch_existing_categories,
-    build_prestashop_hierarchy_index,
-    fetch_category_for_update,
-    fetch_active_languages,
-    build_category_payload,
-)
 
 logger = logging.getLogger("category_import")
 
