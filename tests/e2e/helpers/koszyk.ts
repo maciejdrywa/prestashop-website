@@ -16,7 +16,11 @@ import { test, expect, Page, Locator } from '@playwright/test';
  * jak i na sklepie źródłowym. Adres sklepu ustawia BASE_URL.
  */
 
-export type Produkt = { id: string; nazwa: string; url: string; ilosc: number };
+/**
+ * idWariantu: id_product_attribute wariantu dodawanego ze strony produktu (0 = produkt bez wariantów,
+ * '' = nie udało się odczytać). Test zamówienia porównuje z nim wariant w koszyku i w zamówieniu.
+ */
+export type Produkt = { id: string; nazwa: string; url: string; ilosc: number; idWariantu?: string };
 
 
 // Kategorie główne z menu sklepu i ilości do dodania (różne, w zakresie stanów 0–10).
@@ -67,7 +71,9 @@ async function linkiProduktow(page: Page): Promise<string[]> {
 
 
 /**
- * Otwiera stronę produktu i zwraca jego ID oraz dostępny stan.
+ * Otwiera stronę produktu i zwraca jego ID, ID wybranego wariantu oraz dostępny stan.
+ * ID wariantu pochodzi z JSON-a data-product (#product-details, motyw classic),
+ * który zawiera id_product_attribute wariantu pokazanego na stronie.
  * Stan pochodzi z atrybutu data-stock (motyw classic). Gdy sklep go nie pokazuje,
  * zwracamy null i produkt jest pomijany, bo aktywny przycisk potwierdza tylko 1 sztukę.
  */
@@ -85,7 +91,15 @@ async function otworzProdukt(page: Page, url: string) {
     .getAttribute('data-stock', { timeout: 1_000 }).catch(() => null);
   const stan = stanAttr !== null && Number.isFinite(Number(stanAttr)) ? Number(stanAttr) : null;
 
-  return { id, nazwa, aktywny, stan };
+  const daneProduktu = await page.locator('#product-details[data-product]').first()
+    .getAttribute('data-product', { timeout: 1_000 }).catch(() => null);
+  let idWariantu = '';
+  try {
+    const wartosc = daneProduktu ? JSON.parse(daneProduktu).id_product_attribute : undefined;
+    if (wartosc !== undefined && wartosc !== null && /^\d+$/.test(String(wartosc).trim())) idWariantu = String(Number(wartosc));
+  } catch { /* brak lub uszkodzony JSON: idWariantu zostaje puste */ }
+
+  return { id, nazwa, aktywny, stan, idWariantu };
 }
 
 
@@ -134,14 +148,14 @@ async function dodajZKategorii(page: Page, kategoria: string, ilosci: number[], 
       const info = await otworzProdukt(page, url);
       if (zajete.has(info.id) || !wystarczy(info, ilosc)) continue;
 
-      const p: Produkt = { id: info.id, nazwa: info.nazwa, url, ilosc };
+      const p: Produkt = { id: info.id, nazwa: info.nazwa, url, ilosc, idWariantu: info.idWariantu };
 
       await dodajZeStrony(page, p);
 
       zajete.add(p.id);
       dodane.push(p);
 
-      console.log(`[${kategoria}] ${p.nazwa} (id ${p.id}) x ${p.ilosc}, stan: ${info.stan ?? 'nie pokazano'}`);
+      console.log(`[${kategoria}] ${p.nazwa} (id ${p.id}, wariant ${p.idWariantu || '?'}) x ${p.ilosc}, stan: ${info.stan ?? 'nie pokazano'}`);
     }
 
     strona = nastepna ? new URL(nastepna, page.url()).toString() : null;
@@ -254,7 +268,7 @@ export async function scenariuszKoszyka(page: Page): Promise<Produkt[]> {
     for (const url of kolejnosc) {
       const info = await otworzProdukt(page, url);
       if (!zajete.has(info.id) && wystarczy(info, 1)) {
-        wylosowany = { id: info.id, nazwa: info.nazwa, url, ilosc: 1 };
+        wylosowany = { id: info.id, nazwa: info.nazwa, url, ilosc: 1, idWariantu: info.idWariantu };
         break;
       }
     }

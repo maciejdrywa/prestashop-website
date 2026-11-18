@@ -1,6 +1,9 @@
 import { test, expect, Page, Locator } from '@playwright/test';
-import { scenariuszKoszyka, sprawdzKoszyk } from './helpers/koszyk';
+import { scenariuszKoszyka, sprawdzKoszyk, wierszKoszyka, KOSZYK } from './helpers/koszyk';
 import type { Produkt } from './helpers/koszyk';
+import { normalizujId, roznicePozycji } from './helpers/pozycje';
+import type { Pozycja } from './helpers/pozycje';
+import { pozycjeZamowieniaWPanelu } from './helpers/panel';
 
 /**
  * W4.3: zakup zawartości koszyka przez nowego klienta.
@@ -10,11 +13,17 @@ import type { Produkt } from './helpers/koszyk';
  *  3. Uzupełnienie adresu.
  *  4. Wybór jednego z dwóch nowych przewoźników (InPost, DPD).
  *  5. Płatność przy odbiorze, akceptacja regulaminu, złożenie zamówienia.
- *  6. Potwierdzenie: przewoźnik, płatność, produkty i ilości zgodne z koszykiem.
- *  7. Zamówienie widoczne w historii klienta ze statusem płatności przy odbiorze.
+ *  6. Potwierdzenie: przewoźnik, płatność, liczba pozycji i sztuk zgodna z koszykiem.
+ *  7. Pozycje zamówienia w panelu: ID produktu, ID wariantu i ilość zgodne z koszykiem.
+ *  8. Zamówienie widoczne w historii klienta ze statusem płatności przy odbiorze.
+ *
+ * Produkty w zamówieniu są dopasowywane po ID produktu i ID wariantu zapisanych z koszyka,
+ * a nie po nazwie: nazwa nie odróżnia wariantów (np. białego i grafitowego zatrzasku).
+ * Sklep pokazuje te ID klientowi tylko w koszyku, a w zamówieniu dopiero w panelu,
+ * dlatego krok 7 wymaga ADMIN_EMAIL i ADMIN_PASSWORD (zmienne albo .env, patrz helpers/panel.ts).
  */
 
-// Nowi przewoźnicy skonfigurowani w deploy/init (InPost 15 zł, DPD 20 zł).
+// Nowi przewoźnicy skonfigurowani w deploy/init.
 const NOWI_PRZEWOZNICY = ['InPost', 'DPD'];
 
 // Przewoźnik użyty w zamówieniu, można nadpisać zmienną środowiskową PRZEWOZNIK.
@@ -24,7 +33,7 @@ const PRZEWOZNIK = process.env.PRZEWOZNIK ?? 'InPost';
 const MODUL_PLATNOSCI = 'ps_cashondelivery';
 const PLATNOSC_PRZY_ODBIORZE = /przy odbiorze|pobrani|cash on delivery/i;
 
-// Dane nowego klienta. Nazwy pól tekstowych nie mogą zawierać cyfr.
+// Dane nowego klienta. Imię, nazwisko i miasto nie mogą zawierać cyfr (walidacja PrestaShop).
 const KLIENT = {
   imie: 'Jan',
   nazwisko: 'Testowy',
@@ -60,18 +69,43 @@ function noweHaslo(): string {
 
 
 /**
- * Dokładne dopasowanie nazwy produktu w zamówieniu. Samo „zawiera” myli produkty,
- * których nazwy są swoimi początkami (np. „Klamka X” i „Klamka X platyna”).
- * Dla kombinacji sklep dopisuje wybrany wariant w nawiasie, np.
- * „Zatrzask balkonowy pochwyt palacza - kolory (WYBIERZ KOLOR: biały)”.
- * Dopuszczamy też domyślny format PrestaShop: „Nazwa - Kolor : czarny”.
+ * Zapisuje z koszyka ID produktu i ID wariantu każdej pozycji (atrybuty przycisku usuwania).
+ * Produkt bez wariantów ma ID wariantu 0. Tymi ID test dopasowuje później pozycje zamówienia.
  */
-function nazwaWZamowieniu(nazwa: string): RegExp {
-  const wzorzec = nazwa
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\s+/g, '\\s+');
+async function pozycjeKoszyka(page: Page, produkty: Produkt[]): Promise<Pozycja[]> {
+  // Zwykle koszyk jest już otwarty przez sprawdzKoszyk, wtedy nie przeładowujemy strony.
+  if ((await page.locator('body#cart').count()) === 0) await page.goto(KOSZYK);
+  await expect(page.locator('.cart-item'), 'Inna liczba pozycji w koszyku').toHaveCount(produkty.length);
 
-  return new RegExp(`^\\s*${wzorzec}(\\s*\\(.+\\)|\\s+-\\s.+)?\\s*$`, 's');
+  const pozycje: Pozycja[] = [];
+
+  for (const p of produkty) {
+    const wiersz = wierszKoszyka(page, p);
+    await expect(wiersz, `Brak w koszyku: ${p.nazwa}`).toHaveCount(1);
+
+    const usun = wiersz.locator('a.remove-from-cart');
+    const href = (await usun.getAttribute('href')) ?? '';
+    const zHref = (nazwa: string) => new URL(href, page.url()).searchParams.get(nazwa);
+
+    // Pusty atrybut ('') też kieruje do adresu usuwania, który zawsze ma id_product i id_product_attribute.
+    const idProduktu = normalizujId((await usun.getAttribute('data-id-product')) || zHref('id_product'));
+    const idWariantu = normalizujId((await usun.getAttribute('data-id-product-attribute')) || zHref('id_product_attribute'));
+
+    expect(idProduktu, `Wiersz koszyka nie należy do produktu ${p.nazwa}`).toBe(normalizujId(p.id));
+    expect(idWariantu, `Brak ID wariantu w koszyku: ${p.nazwa}`).not.toBe('');
+
+    // Wariant w koszyku musi być tym, który test dodał ze strony produktu.
+    expect(p.idWariantu, `Nie odczytano ID wariantu ze strony produktu: ${p.nazwa}`).toBeTruthy();
+    expect(idWariantu, `W koszyku jest inny wariant niż dodany ze strony produktu: ${p.nazwa}`).toBe(p.idWariantu);
+
+    // Ilość z bieżącego stanu wiersza koszyka, nie z danych oczekiwanych.
+    const ilosc = Number(await wiersz.locator('input.js-cart-line-product-quantity').inputValue());
+    expect(ilosc, `Zła ilość w koszyku: ${p.nazwa}`).toBe(p.ilosc);
+
+    pozycje.push({ idProduktu, idWariantu, ilosc, nazwa: p.nazwa });
+  }
+
+  return pozycje;
 }
 
 
@@ -136,7 +170,7 @@ async function zarejestruj(page: Page, email: string, haslo: string) {
 /** Wybiera Polskę w formularzu adresu i czeka na jego przeładowanie, jeśli kraj był inny. */
 async function ustawPolske(page: Page, krok: Locator) {
   const kraj = krok.locator('select[name="id_country"]');
-  if ((await kraj.count()) === 0) return;
+  await expect(kraj, 'Brak wyboru kraju w formularzu adresu').toHaveCount(1);
 
   const wybrany = ((await kraj.locator('option:checked').textContent()) ?? '').trim();
 
@@ -178,8 +212,14 @@ async function uzupelnijAdres(page: Page) {
     ['phone', KLIENT.telefon],
   ];
 
+  // Pola wymagane muszą być w formularzu; telefon zależy od konfiguracji kraju.
+  const wymagane = ['firstname', 'lastname', 'address1', 'postcode', 'city'];
+
   for (const [nazwa, wartosc] of pola) {
-    await wypelnijJesliJest(krok.locator(`input[name="${nazwa}"]`), wartosc);
+    const pole = krok.locator(`input[name="${nazwa}"]`);
+    if (wymagane.includes(nazwa)) await expect(pole, `Brak wymaganego pola adresu: ${nazwa}`).toHaveCount(1);
+
+    await wypelnijJesliJest(pole, wartosc);
   }
 
   // Ponowna kontrola tuż przed zapisem: formularz nie został przeładowany i nie zgubił danych.
@@ -191,6 +231,15 @@ async function uzupelnijAdres(page: Page) {
 
   await krok.locator('button[name="confirm-addresses"]').click();
 
+  // Czekamy na wynik zapisu: zaliczony krok albo błędy formularza, żeby test pokazał ich treść.
+  // Tylko widoczne błędy: szablon classic zawsze ma w tym kroku ukryty .alert-danger.js-address-error.
+  const bledy = krok.locator('.help-block li, .alert-danger').filter({ visible: true });
+  await expect(page.locator('#checkout-addresses-step.-complete').or(bledy).first(), 'Brak odpowiedzi po zapisie adresu')
+    .toBeAttached({ timeout: 15_000 });
+
+  const tresc = (await bledy.allTextContents()).map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  expect(tresc, 'Formularz adresu zgłosił błąd').toEqual([]);
+
   await expect(krok, 'Adres nie został zapisany').toHaveClass(/-complete/, { timeout: 15_000 });
   await oczekujKroku(page, 'checkout-delivery-step', 'dostawa');
 }
@@ -200,7 +249,7 @@ async function wybierzPrzewoznika(page: Page, nazwa: string) {
   const krok = page.locator('#checkout-delivery-step');
   const opcje = krok.locator('.delivery-option');
 
-  // Obaj nowi przewoźnicy muszą być dostępne dla tego koszyka (limit 50 kg).
+  // Obaj nowi przewoźnicy muszą być dostępni dla tego koszyka.
   for (const przewoznik of NOWI_PRZEWOZNICY) {
     const opcja = opcje.filter({ has: page.locator('.carrier-name', { hasText: new RegExp(`^\\s*${przewoznik}\\s*$`) }) });
     await expect(opcja, `Przewoźnik niedostępny: ${przewoznik}`).toHaveCount(1);
@@ -211,7 +260,29 @@ async function wybierzPrzewoznika(page: Page, nazwa: string) {
 
   const radio = wybrana.locator('input[type="radio"]');
 
-  await radio.check();
+  // Zmiana przewoźnika zapisuje się AJAX-em (action=selectDeliveryOption), a motyw classic po zapisie
+  // przeładowuje stronę zamówienia (js-cart-payment-step-refresh). Klik „Dalej” w trakcie tego
+  // przeładowania mógłby zostać anulowany, więc czekamy na zapis i na nowe załadowanie strony.
+  if (!(await radio.isChecked())) {
+    const odswiezy = (await page.locator('.js-cart-payment-step-refresh').count()) > 0;
+    const zapis = page.waitForResponse(
+      odp => odp.request().method() === 'POST' && odp.url().includes('action=selectDeliveryOption'),
+      { timeout: 15_000 },
+    );
+    const nawigacja = odswiezy
+      ? page.waitForEvent('framenavigated', { predicate: ramka => ramka === page.mainFrame(), timeout: 15_000 })
+      : null;
+
+    await radio.check();
+
+    expect((await zapis).ok(), `Sklep nie zapisał przewoźnika ${nazwa}`).toBe(true);
+    if (nawigacja) {
+      await nawigacja;
+      await page.waitForLoadState('load');
+      await oczekujKroku(page, 'checkout-delivery-step', 'dostawa (po zapisie przewoźnika)');
+    }
+  }
+
   await expect(radio, `Nie zaznaczono przewoźnika ${nazwa}`).toBeChecked();
 
   await krok.locator('button[name="confirmDeliveryOption"]').click();
@@ -232,7 +303,9 @@ async function zaplacPrzyOdbiorzeIZamow(page: Page) {
 
   // Etykieta zaznaczonej opcji potwierdza, że to płatność przy odbiorze.
   const idOpcji = await radio.getAttribute('id');
-  await expect(krok.locator(`label[for="${idOpcji}"]`)).toContainText(PLATNOSC_PRZY_ODBIORZE);
+  expect(idOpcji, 'Opcja płatności nie ma id').toBeTruthy();
+  await expect(krok.locator(`label[for="${idOpcji}"]`), 'Etykieta opcji nie wskazuje płatności przy odbiorze')
+    .toContainText(PLATNOSC_PRZY_ODBIORZE);
 
   // Regulamin i inne warunki wymagane do złożenia zamówienia.
   for (const warunek of await krok.locator('input[name^="conditions_to_approve"]').all()) {
@@ -250,33 +323,77 @@ async function zaplacPrzyOdbiorzeIZamow(page: Page) {
 }
 
 
-/** Sprawdza stronę potwierdzenia i zwraca numer (referencję) zamówienia. */
-async function sprawdzPotwierdzenie(page: Page, przewoznik: string, oczekiwane: Produkt[]): Promise<string> {
+/**
+ * Sprawdza stronę potwierdzenia i zwraca ID oraz numer (referencję) zamówienia.
+ * Potwierdzenie nie zawiera ID produktów ani wariantów, więc tutaj sprawdzamy tylko
+ * liczbę pozycji i sztuk. Dopasowanie pozycji po ID wykonuje krok w panelu.
+ */
+async function sprawdzPotwierdzenie(page: Page, przewoznik: string, email: string, oczekiwane: Pozycja[]) {
   const szczegoly = page.locator('#order-details');
 
   const numerTekst = (await szczegoly.locator('#order-reference-value').textContent()) ?? '';
   const numer = numerTekst.match(/[A-Z]{9}/)?.[0];
   expect(numer, `Brak numeru zamówienia w: "${numerTekst}"`).toBeTruthy();
 
-  await expect(szczegoly, 'Zły przewoźnik w zamówieniu').toContainText(przewoznik);
-  await expect(szczegoly, 'Zła metoda płatności w zamówieniu').toContainText(PLATNOSC_PRZY_ODBIORZE);
+  // Adres potwierdzenia zawiera id_order (z przyjaznymi adresami i bez nich).
+  const id = normalizujId(new URL(page.url()).searchParams.get('id_order'));
+  expect(id, `Brak id_order w adresie potwierdzenia: ${page.url()}`).not.toBe('');
 
-  // Produkty i ilości muszą być takie same jak w koszyku.
+  // Zamówienie złożył nowy klient: potwierdzenie wysłano na jego adres e-mail.
+  await expect(page.locator('#content-hook_order_confirmation'), `Potwierdzenie nie dotyczy konta ${email}`)
+    .toContainText(email);
+
+  // Szablon classic: li[0] numer, li[1] płatność, li[2] przewoźnik i jego opis (<em>).
+  // Sprawdzamy każdy wiersz osobno, żeby opis przewoźnika nie zaliczył sprawdzenia płatności.
+  const wiersze = szczegoly.locator('ul > li');
+  await expect(wiersze.nth(1), 'Zła metoda płatności w zamówieniu').toContainText(PLATNOSC_PRZY_ODBIORZE);
+
+  const dostawa = wiersze.nth(2);
+  await expect(dostawa, 'Brak sposobu dostawy na potwierdzeniu').toBeAttached();
+  const em = dostawa.locator('em');
+  const opisDostawy = (await em.count()) > 0 ? ((await em.first().textContent()) ?? '') : '';
+  const nazwaDostawy = ((await dostawa.textContent()) ?? '').replace(opisDostawy, '').replace(/\s+/g, ' ').trim();
+  expect(nazwaDostawy, 'Zły przewoźnik w zamówieniu').toMatch(new RegExp(`:\\s*${przewoznik}$`));
+
   const linie = page.locator('#order-items .order-line');
   await expect(linie, 'Inna liczba pozycji niż w koszyku').toHaveCount(oczekiwane.length);
 
-  for (const p of oczekiwane) {
-    const linia = linie.filter({
-      has: page.locator('.details > span, .details > a > span', { hasText: nazwaWZamowieniu(p.nazwa) }),
-    });
+  // Kolumny w motywie classic: cena jednostkowa, ilość, suma. Druga kolumna to ilość.
+  // Porównujemy zbiór ilości (posortowany), bo potwierdzenie nie ma ID, po których dałoby się dopasować linie.
+  const komorki = linie.locator('.qty .row > div:nth-child(2)');
+  await expect(komorki, 'Nie odczytano ilości każdej pozycji').toHaveCount(oczekiwane.length);
 
-    await expect(linia, `Brak w zamówieniu: ${p.nazwa}`).toHaveCount(1);
-    // Kolumny w motywie classic: cena jednostkowa, ilość, suma. Druga kolumna to ilość.
-    await expect(linia.locator('.qty .row > div').nth(1), `Zła ilość w zamówieniu: ${p.nazwa}`)
-      .toHaveText(String(p.ilosc));
+  const ilosci = (await komorki.allTextContents()).map(t => t.trim());
+  expect(ilosci.filter(t => !/^\d+$/.test(t)), 'Nieliczbowa ilość na potwierdzeniu').toEqual([]);
+
+  const rosnaco = (lista: number[]) => [...lista].sort((a, b) => a - b);
+  expect(rosnaco(ilosci.map(Number)), 'Ilości pozycji na potwierdzeniu niezgodne z koszykiem')
+    .toEqual(rosnaco(oczekiwane.map(p => p.ilosc)));
+
+  return { id, numer: numer! };
+}
+
+
+/**
+ * Pozycje zamówienia z panelu muszą odpowiadać koszykowi po ID produktu i ID wariantu,
+ * a dopasowana pozycja musi mieć tę samą ilość. Inny wariant tego samego produktu
+ * przy tej samej ilości jest błędem (brak oczekiwanej pozycji + pozycja nieoczekiwana).
+ */
+async function sprawdzPozycjeZamowienia(page: Page, idZamowienia: string, numer: string, oczekiwane: Pozycja[]) {
+  const panel = await page.context().newPage();
+
+  try {
+    const zamowione = await pozycjeZamowieniaWPanelu(panel, idZamowienia, numer);
+
+    expect(roznicePozycji(oczekiwane, zamowione), `Zamówienie ${numer} niezgodne z koszykiem`).toEqual([]);
+  } catch (blad) {
+    // Zrzut z panelu przed zamknięciem karty (screenshot: only-on-failure obejmuje tylko otwarte strony).
+    const zrzut = await panel.screenshot({ fullPage: true }).catch(() => null);
+    if (zrzut) await test.info().attach('panel-zamowienia', { body: zrzut, contentType: 'image/png' });
+    throw blad;
+  } finally {
+    await panel.close();
   }
-
-  return numer!;
 }
 
 
@@ -286,7 +403,12 @@ async function sprawdzHistorie(page: Page, numer: string) {
   const wiersz = page.locator('table tbody tr').filter({ hasText: numer });
 
   await expect(wiersz, `Brak zamówienia ${numer} w historii klienta`).toHaveCount(1);
-  await expect(wiersz, 'Zły status zamówienia').toContainText(PLATNOSC_PRZY_ODBIORZE);
+
+  // Szablon classic: th = numer, td[0] data, td[1] suma, td[2] płatność, td[3] status (span.label-pill).
+  // Status sprawdzamy w jego własnej komórce, bo kolumna płatności też zawiera „przy odbiorze”.
+  await expect(wiersz.locator('td').nth(2), 'Zła płatność w historii').toContainText(PLATNOSC_PRZY_ODBIORZE);
+  await expect(wiersz.locator('.label-pill'), 'Zły status zamówienia (oczekiwano płatności przy odbiorze)')
+    .toHaveText(PLATNOSC_PRZY_ODBIORZE);
 }
 
 
@@ -306,12 +428,15 @@ test('zamówienie: nowy klient, przewoźnik, płatność przy odbiorze', async (
   // 1. Operacje na koszyku (W4.2), w koszyku zostaje 8 pozycji
   const koszyk = await scenariuszKoszyka(page);
 
-  // 2. Rejestracja nowego konta, koszyk zostaje zachowany
+  // 2. Rejestracja nowego konta, koszyk zostaje zachowany.
+  //    Z koszyka zapisujemy ID produktu i ID wariantu każdej pozycji (stan tuż przed zamówieniem).
+  let pozycje: Pozycja[] = [];
   await test.step(`Rejestracja konta ${email}`, async () => {
     await zarejestruj(page, email, haslo);
     console.log(`Zarejestrowano: ${email}`);
 
     await sprawdzKoszyk(page, koszyk);
+    pozycje = await pozycjeKoszyka(page, koszyk);
   });
 
   // 3. Adres
@@ -331,12 +456,18 @@ test('zamówienie: nowy klient, przewoźnik, płatność przy odbiorze', async (
 
   // 6. Potwierdzenie zgodne z koszykiem
   let numer = '';
+  let idZamowienia = '';
   await test.step('Sprawdzenie potwierdzenia zamówienia', async () => {
-    numer = await sprawdzPotwierdzenie(page, PRZEWOZNIK, koszyk);
-    console.log(`Zamówienie: ${numer}, przewoźnik: ${PRZEWOZNIK}, płatność przy odbiorze`);
+    ({ id: idZamowienia, numer } = await sprawdzPotwierdzenie(page, PRZEWOZNIK, email, pozycje));
+    console.log(`Zamówienie: ${numer} (id ${idZamowienia}), przewoźnik: ${PRZEWOZNIK}, płatność przy odbiorze`);
   });
 
-  // 7. Zamówienie w historii klienta
+  // 7. Produkty, warianty i ilości zamówienia zgodne z koszykiem (po ID)
+  await test.step('Pozycje zamówienia zgodne z koszykiem (ID produktu i wariantu)', async () => {
+    await sprawdzPozycjeZamowienia(page, idZamowienia, numer, pozycje);
+  });
+
+  // 8. Zamówienie w historii klienta
   await test.step('Zamówienie w historii klienta', async () => {
     await sprawdzHistorie(page, numer);
   });
