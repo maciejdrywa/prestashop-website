@@ -1,14 +1,13 @@
 import io
 import json
-from pathlib import Path
 import random
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from PIL import Image
-
 import scrapping_images_module as downloader
+from PIL import Image
 from scrapping_images.process_and_save_images import (
     MAX_IMAGE_BYTES,
     image_meets_requirements,

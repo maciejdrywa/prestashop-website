@@ -1,11 +1,10 @@
 import copy
-from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
 from bs4 import BeautifulSoup
-
 from catalog_files import read_products, save_json
 from main_scraper import scrape_catalog
 from refresh_descriptions import refresh_descriptions

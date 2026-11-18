@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 import re
 import tempfile
-from typing import Any, Dict, Optional
 import urllib.parse
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 from .models import PRESTASHOP_HOME_CATEGORY_ID
 

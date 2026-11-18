@@ -12,10 +12,10 @@ Weryfikuje:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
 import tempfile
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 from unittest.mock import Mock
 
@@ -27,19 +27,19 @@ if str(_CURRENT_DIR) not in sys.path:
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from prestashop_api import (
-    PrestaShopClient,
-    PrestaShopAPIError,
-)
-from import_categories import (
+# Importy korzystają ze ścieżek przygotowanych powyżej dla testu uruchamianego jako moduł.
+from import_categories import (  # noqa: E402
+    PRESTASHOP_HOME_CATEGORY_ID,
+    _extract_category_name,
     import_categories,
     load_and_validate_categories,
     load_category_mapping,
-    save_category_mapping,
-    get_default_mapping_path,
-    _extract_category_name,
     normalize_multilang_value,
-    PRESTASHOP_HOME_CATEGORY_ID,
+    save_category_mapping,
+)
+from prestashop_api import (  # noqa: E402
+    PrestaShopAPIError,
+    PrestaShopClient,
 )
 
 CATEGORIES_FILE = _PROJECT_ROOT / "scraper-results" / "categories.json"
@@ -611,19 +611,19 @@ def test_parent_failure_cascade_and_mapping_isolation() -> None:
         # Wczytanie pliku mapowania z dysku i asercja zachowania starych wpisów rodzica po błędzie PUT
         disk_map = load_category_mapping(temp_map_path)
         assert disk_map.get(test_cats[0]["source_url"]) == parent_id, (
-            f"Błąd: Nieudana aktualizacja rodzica usunęła jego source_url z pliku mapowania!"
+            "Błąd: Nieudana aktualizacja rodzica usunęła jego source_url z pliku mapowania!"
         )
         old_parent_name = f"Parent {ts}"
         assert disk_map.get(old_parent_name) == parent_id, (
-            f"Błąd: Nieudana aktualizacja rodzica usunęła jego starą ścieżkę z pliku mapowania!"
+            "Błąd: Nieudana aktualizacja rodzica usunęła jego starą ścieżkę z pliku mapowania!"
         )
         old_child_url = test_cats[1]["source_url"]
         assert disk_map.get(old_child_url) == child_id, (
-            f"Błąd: Pominięcie dziecka z powodu błędu rodzica usunęło jego source_url z pliku mapowania!"
+            "Błąd: Pominięcie dziecka z powodu błędu rodzica usunęło jego source_url z pliku mapowania!"
         )
         old_child_path = f"Parent {ts} > Child {ts}"
         assert disk_map.get(old_child_path) == child_id, (
-            f"Błąd: Pominięcie dziecka z powodu błędu rodzica usunęło jego starą ścieżkę z pliku mapowania!"
+            "Błąd: Pominięcie dziecka z powodu błędu rodzica usunęło jego starą ścieżkę z pliku mapowania!"
         )
 
         print(" [OK] Błąd rodzica poprawnie pominął zależne podkategorie i zachował izolację mapowania.")
@@ -699,7 +699,7 @@ def test_record_validation_rejects_nulls_and_continues_valid() -> None:
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_map:
         temp_map_path = Path(f_map.name)
 
-    created_id: Optional[int] = None
+    created_id: int | None = None
 
     try:
         stats, map_res = import_categories(
@@ -782,7 +782,7 @@ def test_multilang_payload_and_unmanaged_fields() -> None:
     oraz zachowania pól description i additional_description.
     """
     print("\n[TEST 9] Weryfikacja formatowania wielojęzycznego XML i pól niezarządzanych...")
-    from category_import import build_category_payload, CategoryItem
+    from category_import import CategoryItem, build_category_payload
     from prestashop_api import dict_to_prestashop_xml
 
     item = CategoryItem(name="Testowa Kategoria", category_path=["Testowa Kategoria"], source_url="https://test.local/cat")
@@ -971,7 +971,7 @@ def test_foreign_category_protection_against_unverified_rename() -> None:
     with temp_map_path.open("w", encoding="utf-8") as f:
         json.dump(fake_map_data, f)
 
-    created_id: Optional[int] = None
+    created_id: int | None = None
 
     try:
         stats, result_map = import_categories(

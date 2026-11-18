@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 
+
 def scrap_id(soup: BeautifulSoup) -> str:
     """Odczytuje identyfikator produktu z danych strony źródłowej."""
     body_tag = soup.find('body')

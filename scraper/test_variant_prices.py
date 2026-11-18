@@ -1,15 +1,19 @@
 import html as html_module
 import json
-from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from Scrapping_products.variant_prices import collect_variants, decimal_price, variant_from_data
-from Scrapping_products.store_crawler import store_crawler
 from catalog_files import assign_categories, read_products, save_json
 from main_scraper import scrape_catalog
+from Scrapping_products.store_crawler import store_crawler
+from Scrapping_products.variant_prices import (
+    collect_variants,
+    decimal_price,
+    variant_from_data,
+)
 
 
 def data(variant_id=101, selection=None, net="100", gross="123", product_id=5):

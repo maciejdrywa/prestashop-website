@@ -3,6 +3,42 @@ from __future__ import annotations
 import logging
 import sys
 
+from .cli import (
+    main,
+    print_summary,
+)
+from .mapping import (
+    get_default_mapping_path,
+    load_category_mapping,
+    normalize_instance_url,
+    sanitize_instance_host,
+    save_category_mapping,
+)
+from .models import (
+    PRESTASHOP_HOME_CATEGORY_ID,
+    CategoryItem,
+    ImportStats,
+)
+from .orchestrator import (
+    import_categories,
+)
+from .prestashop_sync import (
+    build_category_payload,
+    build_prestashop_hierarchy_index,
+    fetch_active_languages,
+    fetch_existing_categories,
+    normalize_multilang_value,
+)
+from .utils import (
+    PL_CHAR_TRANSLATION,
+    _extract_category_name,
+    slugify,
+)
+from .validator import (
+    load_and_validate_categories,
+    validate_category_record,
+)
+
 # Konfiguracja loggera
 logger = logging.getLogger("category_import")
 if not logger.handlers:
@@ -11,42 +47,6 @@ if not logger.handlers:
     _handler.setFormatter(_formatter)
     logger.addHandler(_handler)
     logger.setLevel(logging.INFO)
-
-from .models import (
-    CategoryItem,
-    ImportStats,
-    PRESTASHOP_HOME_CATEGORY_ID,
-)
-from .utils import (
-    PL_CHAR_TRANSLATION,
-    slugify,
-    _extract_category_name,
-)
-from .validator import (
-    validate_category_record,
-    load_and_validate_categories,
-)
-from .mapping import (
-    save_category_mapping,
-    load_category_mapping,
-    get_default_mapping_path,
-    sanitize_instance_host,
-    normalize_instance_url,
-)
-from .prestashop_sync import (
-    fetch_existing_categories,
-    build_prestashop_hierarchy_index,
-    fetch_active_languages,
-    build_category_payload,
-    normalize_multilang_value,
-)
-from .orchestrator import (
-    import_categories,
-)
-from .cli import (
-    print_summary,
-    main,
-)
 
 __all__ = [
     "PRESTASHOP_HOME_CATEGORY_ID",

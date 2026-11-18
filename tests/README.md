@@ -2,16 +2,22 @@
 
 ## Python i JavaScript
 
-Polecenia wykonuj z katalogu repozytorium po instalacji zależności scrapera.
+Polecenia wykonuj z głównego katalogu repozytorium, w aktywnym środowisku wirtualnym Pythona.
 
 ```powershell
-.\venv\Scripts\python.exe -m unittest discover -s scraper -p 'test_*.py'
-.\venv\Scripts\python.exe scraper/test_product_parser.py
-.\venv\Scripts\python.exe scraper/test_category_parser.py
+python -m pip install -r scraper/requirements-dev.txt
+python -m pytest -q
 node --test deploy/init/tests/cookie-notice.test.cjs
 ```
 
-Parsery dawnych fixture są funkcjami testowymi. Są dołączone do odkrywania unittest przez `load_tests`, łącznie dając 58 przypadków. Uruchomienie ich plików również wykonuje lokalne przypadki. Testy Pythona korzystają z zapisanych HTML i atrap odpowiedzi. Test JavaScript sprawdza zamknięcie cookies oraz zachowanie przy niedostępnym magazynie przeglądarki.
+Pytest wykonuje ten sam zestaw offline co GitHub Actions. Testy korzystają z lokalnych danych i atrap odpowiedzi, a `pytest-socket` blokuje połączenia sieciowe. Test JavaScript sprawdza zamknięcie cookies oraz zachowanie przy niedostępnym magazynie przeglądarki.
+
+Kontrolę Webservice i testy integracyjne importu kategorii uruchamiaj ręcznie na osobnej instancji testowej PrestaShop. Polecenie z `-o addopts=` umożliwia przejście całego modułu importu kategorii, w tym przypadków wykonujących operacje zapisu w sklepie.
+
+```powershell
+python scraper/test_api_client.py
+python -m pytest -o addopts= scraper/test_category_import.py
+```
 
 ## PHP
 

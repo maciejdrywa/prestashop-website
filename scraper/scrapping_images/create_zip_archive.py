@@ -1,6 +1,6 @@
-from pathlib import Path
 import logging
 import zipfile
+from pathlib import Path
 
 
 def create_zip_archive(source_dir: Path, zip_path: Path):

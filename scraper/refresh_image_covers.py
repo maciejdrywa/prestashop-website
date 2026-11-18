@@ -1,15 +1,14 @@
 """Odświeża okładki źródłowe z zachowaniem pozostałych pól katalogu."""
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.parse import urldefrag, urlsplit
 from urllib.request import Request, urlopen
 
 from bs4 import BeautifulSoup
-
 from catalog_files import read_products, save_json
 from scraper_elements.scrap_id import scrap_id
 from scraper_elements.scrap_images import scrap_cover_image

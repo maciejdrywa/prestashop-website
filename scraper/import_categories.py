@@ -15,8 +15,8 @@ scraper.category_import:
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Zapewnienie poprawnego importu niezależnie od katalogu wywołania
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -26,29 +26,30 @@ if str(_CURRENT_DIR) not in sys.path:
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from category_import import (
+# Import korzysta ze ścieżek ustawionych powyżej przy uruchamianiu przez python -m.
+from category_import import (  # noqa: E402
+    PL_CHAR_TRANSLATION,
     PRESTASHOP_HOME_CATEGORY_ID,
     CategoryItem,
     ImportStats,
-    PL_CHAR_TRANSLATION,
-    slugify,
     _extract_category_name,
-    validate_category_record,
-    load_and_validate_categories,
-    save_category_mapping,
-    load_category_mapping,
-    get_default_mapping_path,
-    sanitize_instance_host,
-    normalize_instance_url,
-    fetch_existing_categories,
+    build_category_payload,
     build_prestashop_hierarchy_index,
     fetch_active_languages,
-    build_category_payload,
-    normalize_multilang_value,
+    fetch_existing_categories,
+    get_default_mapping_path,
     import_categories,
-    print_summary,
-    main,
+    load_and_validate_categories,
+    load_category_mapping,
     logger,
+    main,
+    normalize_instance_url,
+    normalize_multilang_value,
+    print_summary,
+    sanitize_instance_host,
+    save_category_mapping,
+    slugify,
+    validate_category_record,
 )
 
 __all__ = [

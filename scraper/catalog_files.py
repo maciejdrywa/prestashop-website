@@ -1,8 +1,8 @@
 """Wspólny zapis katalogu i przypisania kategorii podczas wznowienia."""
 
 import json
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 
 def read_products(path: Path) -> list[dict]:

@@ -1,5 +1,7 @@
-from pydantic import BaseModel
 from typing import Dict
+
+from pydantic import BaseModel
+
 
 class ProductVariant(BaseModel):
     """Opisuje rzeczywistą kombinację atrybutów z cenami i modyfikatorem netto."""
