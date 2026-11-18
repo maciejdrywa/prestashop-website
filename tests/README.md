@@ -21,7 +21,7 @@ W aktywnym środowisku wirtualnym:
 $env:BASE_URL="https://localhost"; python -m pytest -c pytest-e2e.ini
 ```
 
-Test działa domyślnie w Chromium headless i akceptuje samodzielnie podpisany certyfikat HTTPS. Adres można również podać przez `--base-url`, który ma pierwszeństwo przed `BASE_URL`. Domyślny adres to `https://localhost`.
+Test działa domyślnie w Chromium headless, z locale `pl-PL` i strefą `Europe/Warsaw`, i akceptuje samodzielnie podpisany certyfikat HTTPS. Adres można również podać przez `--base-url`, który ma pierwszeństwo przed `BASE_URL`. Domyślny adres to `https://localhost`.
 
 Dodatkowe opcje:
 
@@ -44,13 +44,21 @@ Test `tests/e2e/test_checkout.py` wykonuje w jednej sesji:
 3. Usunięcie trzech produktów oraz kontrolę pozostałych ośmiu pozycji i ich ilości.
 4. Rejestrację konta z unikalnym e-mailem i zapis fikcyjnego adresu w Polsce.
 5. Wybór InPost, płatności przy odbiorze i zatwierdzenie zamówienia.
-6. Sprawdzenie potwierdzenia, przewoźnika, płatności oraz zgodności produktów, wariantów i ilości z koszykiem.
+6. Sprawdzenie potwierdzenia, przewoźnika, płatności, produktów, wariantów, ilości oraz końcowej kwoty brutto z dostawą i rabatami.
 
 Każdy etap ma asercje. Test pomija niedostępnych kandydatów i kończy się błędem, jeśli nie znajdzie wymaganej liczby produktów. Czeka na stan strony zamiast stosować stałe opóźnienia. Frazę wyszukiwania można zmienić zmienną `FRAZA`.
 
 Test tworzy rzeczywiste konta i zamówienia na wskazanej instancji oraz zmniejsza stany magazynowe. Dane pozostają do kontroli. Status zamówienia i pobranie faktury nie są jeszcze objęte scenariuszem.
 
+Kwota jest zapamiętywana po wyborze adresu, dostawy i płatności, przed zatwierdzeniem zakupu, a następnie porównywana dokładnie z potwierdzeniem w PLN.
+
 Cały scenariusz ma limit 300 sekund. Przekroczenie limitu kończy proces i może uniemożliwić zapis raportów.
+
+Kontrolę parsowania kwot, odrzucania niezgodnej sumy i oczekiwania na dane potwierdzenia można uruchomić bez składania zamówień:
+
+```powershell
+python -m pytest -c pytest-e2e.ini tests/unit
+```
 
 ## Raporty
 
