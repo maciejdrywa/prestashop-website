@@ -101,11 +101,19 @@ async function zarejestruj(page: Page, email: string, haslo: string) {
 
   await formularz.locator('button[data-link-action="save-customer"]').click();
 
-  // Po rejestracji klient jest zalogowany: w nagłówku pojawia się link wylogowania.
-  await expect(page.locator('a.logout').first(), `Rejestracja nie powiodła się dla ${email}`)
+  // Czekamy na wynik wysłania: link wylogowania (sukces) albo komunikat błędu formularza.
+  const wyloguj = page.locator('a.logout').first();
+  const bledy = page.locator('#customer-form .help-block li, #customer-form .alert-danger, #notifications .alert-danger');
+
+  await expect(wyloguj.or(bledy).first(), `Brak odpowiedzi formularza rejestracji dla ${email}`)
     .toBeAttached({ timeout: 15_000 });
-  await expect(page.locator('#customer-form .help-block li, #customer-form .alert-danger'),
-    'Formularz rejestracji zgłosił błąd').toHaveCount(0);
+
+  // Błędy sprawdzamy przed potwierdzeniem zalogowania, żeby test pokazał ich treść (np. zajęty e-mail).
+  const tresc = (await bledy.allTextContents()).map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  expect(tresc, `Formularz rejestracji zgłosił błąd dla ${email}`).toEqual([]);
+
+  // Po rejestracji klient jest zalogowany: w nagłówku jest link wylogowania.
+  await expect(wyloguj, `Rejestracja nie powiodła się dla ${email}`).toBeAttached();
 }
 
 
@@ -117,7 +125,11 @@ async function ustawPolske(page: Page, krok: Locator) {
   const wybrany = ((await kraj.locator('option:checked').textContent()) ?? '').trim();
 
   if (!/Polska/i.test(wybrany)) {
-    const przeladowanie = page.waitForResponse(odp => odp.request().method() === 'POST', { timeout: 15_000 });
+    // Formularz przeładowuje się żądaniem z action=addressForm (z przyjaznymi adresami i bez nich).
+    const przeladowanie = page.waitForResponse(
+      odp => odp.request().method() === 'POST' && odp.url().includes('action=addressForm'),
+      { timeout: 15_000 },
+    );
 
     await kraj.selectOption({ label: 'Polska' });
 
@@ -179,6 +191,8 @@ async function wybierzPrzewoznika(page: Page, nazwa: string) {
   }
 
   const wybrana = opcje.filter({ has: page.locator('.carrier-name', { hasText: new RegExp(`^\\s*${nazwa}\\s*$`) }) });
+  await expect(wybrana, `Brak opcji dostawy dla przewoźnika "${nazwa}"`).toHaveCount(1);
+
   const radio = wybrana.locator('input[type="radio"]');
 
   await radio.check();
@@ -239,6 +253,7 @@ async function sprawdzPotwierdzenie(page: Page, przewoznik: string, oczekiwane: 
     const linia = linie.filter({ has: page.locator('.details', { hasText: p.nazwa }) });
 
     await expect(linia, `Brak w zamówieniu: ${p.nazwa}`).toHaveCount(1);
+    // Kolumny w motywie classic: cena jednostkowa, ilość, suma. Druga kolumna to ilość.
     await expect(linia.locator('.qty .row > div').nth(1), `Zła ilość w zamówieniu: ${p.nazwa}`)
       .toHaveText(String(p.ilosc));
   }
@@ -263,6 +278,9 @@ async function sprawdzHistorie(page: Page, numer: string) {
 test('zamówienie: nowy klient, przewoźnik, płatność przy odbiorze', async ({ page }) => {
   // Scenariusz koszyka + zamówienie; README wymaga zakończenia w 5 minut.
   test.setTimeout(300_000);
+
+  // PRZEWOZNIK musi być jednym z dwóch nowych przewoźników; literówka kończy test od razu z czytelnym komunikatem.
+  expect(NOWI_PRZEWOZNICY, `PRZEWOZNIK="${PRZEWOZNIK}" nie jest nowym przewoźnikiem`).toContain(PRZEWOZNIK);
 
   const email = unikalnyEmail();
   const haslo = noweHaslo();
