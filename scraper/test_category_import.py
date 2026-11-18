@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 from typing import Any, Dict, List, Set, Tuple
+from unittest.mock import Mock
 
 # Zapewnienie poprawnego importu modułów
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -472,11 +473,13 @@ def test_dynamic_hierarchy_lifecycle() -> None:
             f"Błąd: Zmiana nazwy usunęła additional_description PL! Oczekiwano '{sample_additional_description['1']}', otrzymano: '{add_1_after}'"
         )
 
-        if isinstance(norm_desc_after, dict) and "2" in norm_desc_after:
+        if isinstance(norm_desc_before, dict) and "2" in norm_desc_before:
+            assert isinstance(norm_desc_after, dict) and "2" in norm_desc_after
             assert norm_desc_after["2"] == sample_description["2"], (
                 f"Błąd: Zmiana nazwy usunęła opis EN! Oczekiwano '{sample_description['2']}', otrzymano: '{norm_desc_after['2']}'"
             )
-        if isinstance(norm_add_after, dict) and "2" in norm_add_after:
+        if isinstance(norm_add_before, dict) and "2" in norm_add_before:
+            assert isinstance(norm_add_after, dict) and "2" in norm_add_after
             assert norm_add_after["2"] == sample_additional_description["2"], (
                 f"Błąd: Zmiana nazwy usunęła additional_description EN! Oczekiwano '{sample_additional_description['2']}', otrzymano: '{norm_add_after['2']}'"
             )
@@ -785,6 +788,10 @@ def test_multilang_payload_and_unmanaged_fields() -> None:
     item = CategoryItem(name="Testowa Kategoria", category_path=["Testowa Kategoria"], source_url="https://test.local/cat")
     mock_existing = {
         "id": 42,
+        "id_shop_default": 2,
+        "position": 0,
+        "date_add": "2026-01-02 03:04:05",
+        "meta_keywords": "",
         "description": [
             {"id": "1", "value": "<p>Opis PL</p>"},
             {"id": "2", "value": "<p>Description EN</p>"},
@@ -804,12 +811,119 @@ def test_multilang_payload_and_unmanaged_fields() -> None:
     assert payload["description"] == {"1": "<p>Opis PL</p>", "2": "<p>Description EN</p>"}
     assert payload["additional_description"] == {"1": "<p>Dodatkowy opis PL</p>", "2": "<p>Additional description EN</p>"}
     assert payload["meta_title"] == {"1": "Tytuł PL", "2": "Title EN"}
+    assert payload["meta_keywords"] == {"1": ""}
+    assert payload["id_shop_default"] == 2
+    assert payload["position"] == 0
+    assert payload["date_add"] == mock_existing["date_add"]
 
     xml = dict_to_prestashop_xml("categories", payload)
     assert 'language id="1"' in xml and 'Opis PL' in xml
     assert 'language id="2"' in xml and 'Description EN' in xml
     assert '<additional_description>' in xml
     print(" [OK] Pomyślnie zweryfikowano transformację list wielojęzycznych do XML.")
+
+
+def test_saved_id_requires_matching_previous_path() -> None:
+    client = Mock(spec=PrestaShopClient)
+    client.api_url = "https://shop.example/api"
+    source_url = "https://source.example/klamki"
+    client.get.side_effect = [
+        {"languages": [{"id": 1}]},
+        {"categories": [
+            {"id": 8, "id_parent": 2, "name": "Inny dział", "link_rewrite": "inny-dzial"},
+            {"id": 10, "id_parent": 8, "name": "Obca kategoria", "link_rewrite": "klamki"},
+        ]},
+    ]
+    client.post.return_value = {"category": {"id": 11}}
+
+    with tempfile.TemporaryDirectory() as directory:
+        categories = Path(directory) / "categories.json"
+        categories.write_text(json.dumps([
+            {"name": "Klamki", "category_path": ["Klamki"], "source_url": source_url},
+        ]), encoding="utf-8")
+        mapping = Path(directory) / "mapping.json"
+        save_category_mapping(
+            mapping, {source_url: 10, "Dawny dział > Obca kategoria": 10}, instance_url=client.api_url,
+        )
+        stats, result = import_categories(client, categories, mapping)
+
+    client.put.assert_not_called()
+    client.post.assert_called_once()
+    assert stats.created == 1
+    assert result[source_url] == 11
+
+
+def test_put_requires_complete_category_and_preserves_fields() -> None:
+    client = Mock(spec=PrestaShopClient)
+    client.api_url = "https://shop.example/api"
+    source_url = "https://source.example/klamki"
+    child_url = "https://source.example/klamki/dziecko"
+    existing = {
+        "id": "10",
+        "name": "Stara nazwa",
+        "link_rewrite": "stara-nazwa",
+        "id_parent": "2",
+        "active": "1",
+        "id_shop_default": "2",
+        "is_root_category": "0",
+        "position": "4",
+        "date_add": "2026-01-02 03:04:05",
+        "description": [{"id": "1", "value": "Opis"}, {"id": "2", "value": "Description"}],
+        "additional_description": [{"id": "1", "value": "Dodatkowy"}, {"id": "2", "value": "Additional"}],
+        "meta_title": "",
+        "meta_description": "",
+        "meta_keywords": "",
+    }
+    child = {"id": 11, "name": "Dziecko", "link_rewrite": "dziecko", "id_parent": 10}
+
+    incomplete_category = {key: value for key, value in existing.items() if key != "name"}
+    for response in ({"id": 10}, incomplete_category, {**existing, "id": 99}, existing):
+        client.reset_mock()
+        client.get.side_effect = [
+            {"languages": [{"id": 1}, {"id": 2}]},
+            {"categories": [existing, child]},
+            {"category": response},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            categories = Path(directory) / "categories.json"
+            categories.write_text(json.dumps([
+                {"name": "Klamki", "category_path": ["Klamki"], "source_url": source_url},
+                {
+                    "name": "Dziecko",
+                    "category_path": ["Klamki", "Dziecko"],
+                    "source_url": child_url,
+                    "parent_source_url": source_url,
+                },
+            ]), encoding="utf-8")
+            mapping = Path(directory) / "mapping.json"
+            save_category_mapping(
+                mapping,
+                {source_url: 10, "Stara nazwa": 10, child_url: 11, "Stara nazwa > Dziecko": 11},
+                instance_url=client.api_url,
+            )
+            stats, _ = import_categories(client, categories, mapping)
+            result = load_category_mapping(mapping)
+
+        client.post.assert_not_called()
+        assert result[source_url] == 10
+        assert result[child_url] == 11
+        if response is existing:
+            client.put.assert_called_once()
+            resource, category_id, payload = client.put.call_args.args
+            assert (resource, category_id) == ("categories", 10)
+            assert payload["description"] == {"1": "Opis", "2": "Description"}
+            assert payload["additional_description"] == {"1": "Dodatkowy", "2": "Additional"}
+            assert payload["position"] == existing["position"]
+            assert payload["id_shop_default"] == existing["id_shop_default"]
+            assert payload["date_add"] == existing["date_add"]
+            assert result["Klamki"] == 10 and result["Klamki > Dziecko"] == 11
+            assert stats.updated == 1 and stats.errors == 0
+        else:
+            client.put.assert_not_called()
+            assert result["Stara nazwa"] == 10 and result["Stara nazwa > Dziecko"] == 11
+            assert "Klamki" not in result
+            assert stats.errors == 2
+            assert any("Pominięto zależną podkategorię" in error for error in stats.error_details)
 
 
 def test_foreign_category_protection_against_unverified_rename() -> None:
@@ -911,6 +1025,8 @@ def run_all_tests() -> bool:
         test_record_validation_rejects_nulls_and_continues_valid,
         test_instance_isolation_and_collision_protection,
         test_multilang_payload_and_unmanaged_fields,
+        test_saved_id_requires_matching_previous_path,
+        test_put_requires_complete_category_and_preserves_fields,
         test_foreign_category_protection_against_unverified_rename,
     ]
 

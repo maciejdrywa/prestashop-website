@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from prestashop_api import (
+    PrestaShopAPIError,
     PrestaShopClient,
     PrestaShopAuthError,
 )
@@ -11,6 +12,38 @@ from .models import CategoryItem, PRESTASHOP_HOME_CATEGORY_ID
 from .utils import slugify, _extract_category_name
 
 logger = logging.getLogger("category_import")
+
+_CATEGORY_MANAGED_FIELDS = ("name", "link_rewrite", "id_parent", "active")
+_CATEGORY_REQUIRED_FIELDS = ("id", "name", "link_rewrite", "id_parent", "active")
+_CATEGORY_TRANSLATED_FIELDS = (
+    "description",
+    "additional_description",
+    "meta_title",
+    "meta_description",
+    "meta_keywords",
+)
+# PrestaShop sam aktualizuje date_upd i przelicza pola drzewa.
+_CATEGORY_PRESERVED_FIELDS = (
+    *_CATEGORY_TRANSLATED_FIELDS,
+    "id_shop_default",
+    "is_root_category",
+    "position",
+    "date_add",
+)
+
+
+def fetch_category_for_update(client: PrestaShopClient, category_id: int) -> Dict[str, Any]:
+    response = client.get("categories", category_id)
+    category = response.get("category", response) if isinstance(response, dict) else None
+    if not isinstance(category, dict) or str(category.get("id")) != str(category_id):
+        raise PrestaShopAPIError(f"API nie zwróciło kategorii ID {category_id}.")
+
+    missing = set(_CATEGORY_REQUIRED_FIELDS) - category.keys()
+    if missing:
+        raise PrestaShopAPIError(
+            f"Niepełne dane kategorii ID {category_id}. Brak pól: {', '.join(sorted(missing))}."
+        )
+    return category
 
 
 def normalize_multilang_value(val: Any) -> Any:
@@ -218,30 +251,14 @@ def build_category_payload(
         payload["id"] = category_id
 
     # Zachowanie istniejącego opisu i pozostałych pól, którymi importer nie zarządza (dla PUT)
-    if existing_data and isinstance(existing_data, dict):
-        unmanaged_fields = [
-            "description",
-            "additional_description",
-            "meta_title",
-            "meta_description",
-            "meta_keywords",
-            "is_root_category",
-        ]
-        multilang_unmanaged = {
-            "description",
-            "additional_description",
-            "meta_title",
-            "meta_description",
-            "meta_keywords",
-        }
-        for field_name in unmanaged_fields:
-            val = existing_data.get(field_name)
-            if val is not None and val != "":
-                if field_name in multilang_unmanaged:
-                    normalized = normalize_multilang_value(val)
-                    if normalized is not None and normalized != "":
-                        payload[field_name] = normalized
-                else:
-                    payload[field_name] = val
+    if existing_data:
+        for field in _CATEGORY_PRESERVED_FIELDS:
+            if field in existing_data:
+                value = existing_data[field]
+                if field in _CATEGORY_TRANSLATED_FIELDS:
+                    value = normalize_multilang_value(value)
+                    if isinstance(value, str):
+                        value = {langs[0]: value}
+                payload[field] = value
 
     return payload
