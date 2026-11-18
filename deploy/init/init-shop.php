@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Orkiestracja konfiguracji i importu w 18 etapach.
+ * Orkiestracja konfiguracji i importu w 20 etapach.
  *
  * Wywołanie jako www-data w kontenerze shop
  * php /opt/shop/init/init-shop.php [--dry-run|--resume]

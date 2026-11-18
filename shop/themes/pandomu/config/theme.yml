@@ -1,0 +1,41 @@
+name: pandomu
+display_name: PAN DOMU
+version: 1.0.0
+author:
+  name: PAN DOMU project
+parent: classic
+assets:
+  use_parent_assets: true
+# PrestaShop dziedziczy global_settings jako całą sekcję.
+# Tutaj ustawiamy tylko typy obrazów w kolejności Classic, aby zachować odciski galerii
+# oraz dotychczasowe ustawienia i rozmieszczenie modułów.
+global_settings:
+  image_types:
+    cart_default:
+      width: 125
+      height: 125
+      scope: [products]
+    small_default:
+      width: 98
+      height: 98
+      scope: [products, categories, manufacturers, suppliers]
+    medium_default:
+      width: 452
+      height: 452
+      scope: [products, manufacturers, suppliers]
+    home_default:
+      width: 250
+      height: 250
+      scope: [products]
+    large_default:
+      width: 800
+      height: 800
+      scope: [products, manufacturers, suppliers]
+    category_default:
+      width: 141
+      height: 180
+      scope: [categories]
+    stores_default:
+      width: 170
+      height: 115
+      scope: [stores]

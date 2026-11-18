@@ -10,13 +10,16 @@ Zalecana komenda startowa z [instrukcji wdrożenia](DEPLOYMENT.md) korzysta z `-
 
 | Etap | Operacja |
 |---|---|
-| 1–5 | Nazwa sklepu i usunięcie demonstracji, poczta, przewoźnicy, płatności, statusy i faktury |
-| 6 | Kategorie i produkty wraz z opisami, cenami, VAT i wagą |
-| 7–10 | Menu, strony i stopka, cookies, polskie treści modułów |
-| 11 | Włączenie Webservice API i uprawnienia klucza Least Privilege |
-| 12–13 | Słownik atrybutów i kombinacje z modyfikatorami netto |
-| 14–16 | Galerie, okładki, miniatury i kontrola katalogu |
-| 17–18 | Początkowe ilości, aktywacja i kontrola magazynu |
+| 1 | Nazwa sklepu i usunięcie demonstracji |
+| 2 | Synchronizacja i aktywacja motywu potomnego PAN DOMU |
+| 3–6 | Poczta, przewoźnicy, płatności, statusy i faktury |
+| 7 | Kategorie i produkty wraz z opisami, cenami, VAT i wagą |
+| 8–11 | Menu, strony i stopka, cookies, polskie treści modułów |
+| 12 | Włączenie Webservice API i uprawnienia klucza Least Privilege |
+| 13–14 | Słownik atrybutów i kombinacje z modyfikatorami netto |
+| 15–17 | Galerie, okładki, miniatury i kontrola katalogu |
+| 18–19 | Początkowe ilości, aktywacja i kontrola magazynu |
+| 20 | Kafle kategorii, odnośnik „O firmie”, popularne produkty, indeks wyszukiwania i filtry |
 
 Nowe produkty są nieaktywne do zakończenia kontroli danych i galerii. Produkt bez zdjęć źródłowych jest jawnie zgłaszany. Obecnie dotyczy to ID 539 i wymaga potwierdzonego wyjątku przy odbiorze.
 
