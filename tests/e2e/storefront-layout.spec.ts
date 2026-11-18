@@ -1,5 +1,32 @@
 import { expect, test } from '@playwright/test';
 
+test('baner strony głównej ładuje grafikę i prowadzi do kategorii na komputerze i telefonie', async ({ page }) => {
+  for (const width of [1680, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+
+    const banner = page.getByRole('region', { name: 'Klamki i okucia do drzwi' });
+    const image = banner.getByRole('img', { name: 'Klamka w otwartej paczce' });
+    const tiles = page.getByRole('region', { name: 'Kategorie', exact: true });
+    const tile = tiles.getByRole('link', { name: /klamki do drzwi/i });
+    const offer = banner.getByRole('link', { name: 'Zobacz klamki', exact: true });
+
+    await expect(banner).toBeVisible();
+    await expect(image).toHaveJSProperty('naturalWidth', 160);
+    await expect(offer).toHaveAttribute('href', (await tile.getAttribute('href'))!);
+    const bannerBounds = (await banner.boundingBox())!;
+    const tileBounds = (await tiles.boundingBox())!;
+    expect(bannerBounds.x).toBeGreaterThanOrEqual(0);
+    expect(bannerBounds.x + bannerBounds.width).toBeLessThanOrEqual(width);
+    expect(bannerBounds.y + bannerBounds.height).toBeLessThan(tileBounds.y);
+
+    await offer.click();
+    await expect(page.locator('body#category')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Klamki do drzwi', exact: true })).toBeVisible();
+    await expect(banner).toHaveCount(0);
+  }
+});
+
 test('kafle i sekcja o firmie prowadzą do lokalnych stron sklepu', async ({ page }) => {
   await page.goto('/');
 
