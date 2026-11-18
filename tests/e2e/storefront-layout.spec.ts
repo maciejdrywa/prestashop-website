@@ -25,9 +25,9 @@ test('nagłówek desktop pokazuje kontakt, konto, koszyk i osobną nawigację', 
   await expect(header.locator('#_desktop_cart .cart-products-count')).toHaveText('0');
 
   const categories = header.getByRole('navigation', { name: 'Kategorie produktów' });
-  const entry = categories.getByRole('link', { name: 'Klamki do drzwi', exact: true });
+  const entry = categories.getByRole('link', { name: 'Okucia drzwiowe', exact: true });
   await entry.hover();
-  const subcategory = categories.getByRole('link', { name: 'klamki zewnętrzne', exact: true });
+  const subcategory = categories.getByRole('link', { name: 'kłódki', exact: true });
   await expect(subcategory).toBeVisible();
   await expect(subcategory).toHaveCSS('text-align', 'left');
 
@@ -36,6 +36,29 @@ test('nagłówek desktop pokazuje kontakt, konto, koszyk i osobną nawigację', 
   const viewport = await page.evaluate(() => document.documentElement.clientWidth);
   expect(bounds?.x).toBeCloseTo(0);
   expect(bounds?.width).toBeCloseTo(viewport);
+
+  const child = categories.getByRole('link', { name: 'kłódki trzpieniowe', exact: true });
+  await expect(child).toHaveCSS('color', 'rgb(122, 122, 122)');
+  await child.hover();
+  await expect(child).toHaveCSS('color', 'rgb(38, 102, 168)');
+
+  await subcategory.focus();
+  await page.mouse.move(0, 0);
+  await page.keyboard.press('Tab');
+  await expect(child).toBeFocused();
+  await expect(child).toHaveCSS('color', 'rgb(38, 102, 168)');
+
+  await page.keyboard.press('Escape');
+  await categories.getByRole('link', { name: 'Klamki do drzwi', exact: true }).hover();
+  const interiorHandles = categories.getByRole('link', { name: 'klamki wewnętrzne', exact: true });
+  await expect(interiorHandles).toHaveCSS('color', 'rgb(35, 35, 35)');
+  await interiorHandles.hover();
+  await expect(interiorHandles).toHaveCSS('color', 'rgb(38, 102, 168)');
+
+  const roundPlateHandles = categories.getByRole('link', { name: 'klamki z szyldem okrągłym', exact: true });
+  await expect(roundPlateHandles).toHaveCSS('color', 'rgb(122, 122, 122)');
+  await roundPlateHandles.hover();
+  await expect(roundPlateHandles).toHaveCSS('color', 'rgb(38, 102, 168)');
 });
 
 

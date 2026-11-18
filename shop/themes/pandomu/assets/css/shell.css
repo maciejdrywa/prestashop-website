@@ -169,9 +169,29 @@
     #header .pd-navigation .sub-menu ul[data-depth] > li { float: none; margin: 0; min-width: 0; }
     #header .pd-navigation .sub-menu .collapse { display: block; }
     #header .pd-navigation .sub-menu .pd-submenu-toggle { display: none; }
-    #header .pd-navigation .sub-menu .pd-menu-item > a { font-size: .8rem; padding: .3rem 0; text-align: left; }
-    #header .pd-navigation .sub-menu a[data-depth="1"] { font-weight: 700; text-transform: uppercase; }
-    #header .pd-navigation .sub-menu a[data-depth="2"] { color: var(--pd-muted); }
+    #header .pd-navigation .sub-menu .pd-menu-item > a {
+        width: 100%;
+        padding: 0 .625rem .625rem 0;
+        font-size: .875rem;
+        line-height: 1.5;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+
+    #header .top-menu .sub-menu a.dropdown-item[data-depth="1"] {
+        color: var(--pd-text);
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    #header .top-menu .sub-menu a.dropdown-item[data-depth="2"] {
+        color: #7a7a7a;
+        font-weight: 400;
+    }
+}
+
+#header .top-menu .sub-menu a.dropdown-item:is(:hover, :focus-visible) {
+    color: var(--pd-link);
 }
 
 /* Kafle kategorii i stopka są osobnymi sekcjami w układzie sklepu. */
