@@ -151,7 +151,7 @@ def import_products(
                     default_category_id=default_cat_id,
                     associated_category_ids=associated_cat_ids,
                     active_languages=active_languages,
-                    product_features=feature_associations if feature_associations else None,
+                    product_features=feature_associations,
                 )
                 res = client.post("products", payload)
                 ps_product_id = int(res["product"]["id"])
@@ -164,27 +164,27 @@ def import_products(
                 assert existing_prod is not None
                 ps_product_id = int(existing_prod["id"])
                 if update_existing:
+                    # Pobranie pełnego obiektu przed is_product_dirty()
+                    full_prod = None
+                    try:
+                        res_prod = client.get("products", ps_product_id)
+                        full_prod = res_prod.get("product") if isinstance(res_prod, dict) else None
+                        if not isinstance(full_prod, dict) or not full_prod:
+                            raise ValueError(f"Odpowiedź API dla produktu ID {ps_product_id} nie zawiera poprawnego słownika 'product'.")
+                    except Exception as get_exc:
+                        err_msg = f"Nie można pobrać pełnego produktu ID {ps_product_id} przed PUT (ochrona asocjacji): {get_exc}"
+                        logger.error(err_msg)
+                        stats.errors += 1
+                        stats.error_details.append(err_msg)
+                        continue  # Przerywamy dla tego rekordu, aby nie wyczyścić galerii i kombinacji
+
                     if is_product_dirty(
-                        existing=existing_prod,
+                        existing=full_prod,
                         product=p,
                         default_category_id=default_cat_id,
                         associated_category_ids=associated_cat_ids,
-                        product_features=feature_associations if feature_associations else None,
+                        product_features=feature_associations,
                     ):
-                        # Pobranie pełnego obiektu przed PUT w celu ochrony unmanaged fields
-                        full_prod = None
-                        try:
-                            res_prod = client.get("products", ps_product_id)
-                            full_prod = res_prod.get("product") if isinstance(res_prod, dict) else None
-                            if not isinstance(full_prod, dict) or not full_prod:
-                                raise ValueError(f"Odpowiedź API dla produktu ID {ps_product_id} nie zawiera poprawnego słownika 'product'.")
-                        except Exception as get_exc:
-                            err_msg = f"Nie można pobrać pełnego produktu ID {ps_product_id} przed PUT (ochrona asocjacji): {get_exc}"
-                            logger.error(err_msg)
-                            stats.errors += 1
-                            stats.error_details.append(err_msg)
-                            continue  # Przerywamy PUT dla tego rekordu, aby nie wyczyścić galerii i kombinacji
-
                         payload = build_product_payload(
                             product=p,
                             default_category_id=default_cat_id,
@@ -192,7 +192,7 @@ def import_products(
                             active_languages=active_languages,
                             product_id=ps_product_id,
                             existing_full_product=full_prod,
-                            product_features=feature_associations if feature_associations else None,
+                            product_features=feature_associations,
                         )
                         client.put("products", ps_product_id, payload)
                         stats.updated += 1
@@ -239,7 +239,26 @@ def import_products(
                         comb_id = int(existing_comb["id"])
                         variant_comb_ids[variant.variant_id] = comb_id
                         if update_existing:
-                            if is_combination_dirty(existing_comb, variant, is_default):
+                            # Pobranie pełnego obiektu kombinacji przed is_combination_dirty()
+                            full_comb = None
+                            try:
+                                res_comb = client.get("combinations", comb_id)
+                                full_comb = res_comb.get("combination") if isinstance(res_comb, dict) else None
+                                if not isinstance(full_comb, dict) or not full_comb:
+                                    raise ValueError(f"Odpowiedź API dla kombinacji ID {comb_id} nie zawiera poprawnego słownika 'combination'.")
+                            except Exception as get_comb_exc:
+                                err_msg = f"Nie można pobrać pełnej kombinacji ID {comb_id} (produkt {p.reference}): {get_comb_exc}"
+                                logger.error(err_msg)
+                                stats.errors += 1
+                                stats.error_details.append(err_msg)
+                                continue  # Nie wykonujemy PUT na podstawie niepełnego indeksu
+
+                            if is_combination_dirty(
+                                existing=full_comb,
+                                variant=variant,
+                                is_default=is_default,
+                                option_value_ids=opt_val_ids,
+                            ):
                                 comb_payload = build_combination_payload(
                                     product_id=ps_product_id,
                                     source_product_id=p.product_id,
@@ -247,6 +266,7 @@ def import_products(
                                     option_value_ids=opt_val_ids,
                                     is_default=is_default,
                                     combination_id=comb_id,
+                                    existing_full_combination=full_comb,
                                 )
                                 client.put("combinations", comb_id, comb_payload)
                                 stats.combinations_updated += 1

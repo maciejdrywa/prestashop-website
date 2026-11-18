@@ -22,9 +22,16 @@ from typing import List
 from unittest.mock import MagicMock
 
 import pytest
+
+try:
+    from prestashop_api import dict_to_prestashop_xml
+except ImportError:
+    from scraper.prestashop_api import dict_to_prestashop_xml
+
 from product_import import (
     ProductItem,
     VariantItem,
+    build_combination_payload,
     build_product_payload,
     calculate_gross,
     calculate_netto,
@@ -680,16 +687,36 @@ def test_malformed_record_type_does_not_abort_validation():
 def test_stock_not_reset_for_existing_product_in_orchestrator():
     """Weryfikuje, że ponowny import istniejącego produktu nie resetuje bieżącego stanu ze sklepu."""
     mock_client = MagicMock()
-    mock_client.get.side_effect = lambda resource, *args, **kwargs: {
-        "languages": [{"id": 1, "iso_code": "pl"}],
-        "products": [{"id": 10, "reference": "pandomu-1", "price": "10.000000", "id_tax_rules_group": "1", "id_category_default": "2", "weight": "1.000000", "active": "1", "name": "Produkt 1", "description": "", "description_short": ""}],
-        "combinations": [],
-        "product_options": [],
-        "product_option_values": [],
-        "product_features": [],
-        "product_feature_values": [],
-        "stock_availables": [{"id": 100, "id_product": 10, "id_product_attribute": "0", "quantity": "4", "out_of_stock": "0", "depends_on_stock": "0"}],
-    }.get(resource, [])
+
+    def mock_get(resource, *args, **kwargs):
+        if resource == "products" and args:
+            return {
+                "product": {
+                    "id": str(args[0]),
+                    "reference": "pandomu-1",
+                    "price": "10.000000",
+                    "id_tax_rules_group": "1",
+                    "id_category_default": "2",
+                    "weight": "1.000000",
+                    "active": "1",
+                    "name": "Produkt 1",
+                    "description": "",
+                    "description_short": "",
+                    "associations": {"categories": [{"id": "2"}]},
+                }
+            }
+        return {
+            "languages": [{"id": 1, "iso_code": "pl"}],
+            "products": [{"id": 10, "reference": "pandomu-1", "price": "10.000000", "id_tax_rules_group": "1", "id_category_default": "2", "weight": "1.000000", "active": "1", "name": "Produkt 1", "description": "", "description_short": ""}],
+            "combinations": [],
+            "product_options": [],
+            "product_option_values": [],
+            "product_features": [],
+            "product_feature_values": [],
+            "stock_availables": [{"id": 100, "id_product": 10, "id_product_attribute": "0", "quantity": "4", "out_of_stock": "0", "depends_on_stock": "0"}],
+        }.get(resource, [])
+
+    mock_client.get.side_effect = mock_get
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         cat_file = Path(tmp_dir) / "category_mapping.json"
@@ -766,3 +793,258 @@ def test_product_identity_by_reference_only_ignores_stale_id_mapping():
         assert stats.updated == 0
         mock_client.post.assert_called()
         assert mapping["999"] == 11
+
+
+def test_dirty_checking_detects_category_add_and_remove():
+    """Weryfikuje, że dodanie i usunięcie dodatkowej kategorii jest wykrywane przy niezmienionej kategorii domyślnej."""
+    item = ProductItem(
+        product_id="1",
+        name="Klamka",
+        description="",
+        description_short="",
+        price_netto=Decimal("10.000000"),
+        price_brutto=Decimal("12.30"),
+        vat_rate=Decimal("23"),
+        weight=Decimal("1.000000"),
+    )
+
+    existing_base = {
+        "id": 10,
+        "name": "Klamka",
+        "price": "10.000000",
+        "id_tax_rules_group": "1",
+        "id_category_default": "2",
+        "weight": "1.000000",
+        "active": "1",
+        "associations": {
+            "categories": [{"id": "2"}, {"id": "5"}]
+        },
+    }
+
+    # Ten sam zestaw kategorii [2, 5] -> clean
+    assert is_product_dirty(existing_base, item, default_category_id=2, associated_category_ids=[2, 5]) is False
+
+    # Dodanie nowej kategorii [2, 5, 8] -> dirty
+    assert is_product_dirty(existing_base, item, default_category_id=2, associated_category_ids=[2, 5, 8]) is True
+
+    # Usunięcie kategorii [2] -> dirty
+    assert is_product_dirty(existing_base, item, default_category_id=2, associated_category_ids=[2]) is True
+
+
+def test_features_lifecycle_dirty_checking_and_empty_xml():
+    """Weryfikuje cykl życia cech: dodanie pierwszej, zmianę, usunięcie ostatniej i serializację XML."""
+    item = ProductItem(
+        product_id="1",
+        name="Klamka",
+        description="",
+        description_short="",
+        price_netto=Decimal("10.000000"),
+        price_brutto=Decimal("12.30"),
+        vat_rate=Decimal("23"),
+        weight=Decimal("1.000000"),
+    )
+
+    # 1. Brak cech w sklepie -> dodanie pierwszej cechy
+    existing_no_features = {
+        "id": 10,
+        "name": "Klamka",
+        "price": "10.000000",
+        "id_tax_rules_group": "1",
+        "id_category_default": "2",
+        "weight": "1.000000",
+        "active": "1",
+        "associations": {"product_features": []},
+    }
+    target_feature = [{"id": "1", "id_feature_value": "10"}]
+    assert is_product_dirty(existing_no_features, item, default_category_id=2, product_features=target_feature) is True
+
+    # 2. Ta sama cecha -> clean
+    existing_with_feature = {
+        "id": 10,
+        "name": "Klamka",
+        "price": "10.000000",
+        "id_tax_rules_group": "1",
+        "id_category_default": "2",
+        "weight": "1.000000",
+        "active": "1",
+        "associations": {"product_features": [{"id": "1", "id_feature_value": "10"}]},
+    }
+    assert is_product_dirty(existing_with_feature, item, default_category_id=2, product_features=target_feature) is False
+
+    # 3. Zmiana wartości cechy -> dirty
+    target_changed_feature = [{"id": "1", "id_feature_value": "20"}]
+    assert is_product_dirty(existing_with_feature, item, default_category_id=2, product_features=target_changed_feature) is True
+
+    # 4. Usunięcie ostatniej cechy (target = []) -> dirty
+    assert is_product_dirty(existing_with_feature, item, default_category_id=2, product_features=[]) is True
+
+    # 5. Pusta lista cech w build_product_payload daje pusty tag <product_features /> w XML
+    payload_empty_features = build_product_payload(
+        product=item,
+        default_category_id=2,
+        associated_category_ids=[2],
+        active_languages=["1"],
+        product_id=10,
+        existing_full_product=existing_with_feature,
+        product_features=[],
+    )
+    assert payload_empty_features["associations"]["product_features"] == []
+    xml = dict_to_prestashop_xml("products", payload_empty_features)
+    assert "<product_features />" in xml
+
+
+def test_combination_attributes_dirty_checking_and_payload():
+    """Weryfikuje detekcję zmian atrybutów wariantu oraz zachowanie zdjęć w payloadzie kombinacji."""
+    variant = VariantItem(
+        variant_id="1",
+        name="Rozmiar 50",
+        price_modifier=Decimal("0.000000"),
+    )
+
+    existing_comb = {
+        "id": 50,
+        "price": "0.000000",
+        "default_on": "1",
+        "associations": {
+            "product_option_values": [{"id": "10"}, {"id": "20"}],
+            "images": [{"id": "101"}, {"id": "102"}],
+        },
+    }
+
+    # 1. Te same atrybuty [10, 20] -> clean
+    assert is_combination_dirty(existing_comb, variant, is_default=True, option_value_ids=[10, 20]) is False
+
+    # 2. Zmiana wartości jednego z atrybutów [10, 30] -> dirty
+    assert is_combination_dirty(existing_comb, variant, is_default=True, option_value_ids=[10, 30]) is True
+
+    # 3. Usunięcie jednego z atrybutów [10] -> dirty
+    assert is_combination_dirty(existing_comb, variant, is_default=True, option_value_ids=[10]) is True
+
+    # 4. Payload kombinacji zachowuje powiązane zdjęcia
+    payload = build_combination_payload(
+        product_id=10,
+        source_product_id="1",
+        variant=variant,
+        option_value_ids=[10, 30],
+        is_default=True,
+        combination_id=50,
+        existing_full_combination=existing_comb,
+    )
+    assert payload["associations"]["product_option_values"] == [{"id": "10"}, {"id": "30"}]
+    assert payload["associations"]["images"] == [{"id": "101"}, {"id": "102"}]
+
+
+def test_dirty_checking_association_order_invariance():
+    """Weryfikuje, że różna kolejność identyfikatorów w asocjacjach nie powoduje fałszywego PUT."""
+    item = ProductItem(
+        product_id="1",
+        name="Klamka",
+        description="",
+        description_short="",
+        price_netto=Decimal("10.000000"),
+        price_brutto=Decimal("12.30"),
+        vat_rate=Decimal("23"),
+        weight=Decimal("1.000000"),
+    )
+
+    existing_prod = {
+        "id": 10,
+        "name": "Klamka",
+        "price": "10.000000",
+        "id_tax_rules_group": "1",
+        "id_category_default": "2",
+        "weight": "1.000000",
+        "active": "1",
+        "associations": {
+            "categories": [{"id": "5"}, {"id": "2"}, {"id": "9"}],
+            "product_features": [{"id": "2", "id_feature_value": "20"}, {"id": "1", "id_feature_value": "10"}],
+        },
+    }
+
+    # Inna kolejność kategorii [2, 9, 5] oraz cech -> clean (False)
+    target_cats = [2, 9, 5]
+    target_feats = [{"id": "1", "id_feature_value": "10"}, {"id": "2", "id_feature_value": "20"}]
+    assert is_product_dirty(
+        existing_prod,
+        item,
+        default_category_id=2,
+        associated_category_ids=target_cats,
+        product_features=target_feats,
+    ) is False
+
+    # Inna kolejność wartości opcji kombinacji [20, 10] vs [10, 20] -> clean (False)
+    variant = VariantItem(variant_id="1", name="W", price_modifier=Decimal("0.000000"))
+    existing_comb = {
+        "id": 50,
+        "price": "0.000000",
+        "default_on": "1",
+        "associations": {"product_option_values": [{"id": "20"}, {"id": "10"}]},
+    }
+    assert is_combination_dirty(existing_comb, variant, is_default=True, option_value_ids=[10, 20]) is False
+
+
+def test_get_error_protects_associations_and_continues_loop():
+    """Weryfikuje, że błąd GET nie wywołuje PUT na niepełnych danych i nie przerywa pętli importu."""
+    mock_client = MagicMock()
+
+    def mock_get(resource, *args, **kwargs):
+        if resource == "products" and args:
+            # Pierwszy produkt zwraca błąd API przy GET
+            if args[0] == 10:
+                raise RuntimeError("Błąd połączenia z API przy GET produktu 10")
+            # Drugi produkt zwraca poprawny słownik
+            return {
+                "product": {
+                    "id": "20",
+                    "reference": "pandomu-2",
+                    "price": "10.000000",
+                    "id_tax_rules_group": "1",
+                    "id_category_default": "2",
+                    "weight": "1.000000",
+                    "active": "1",
+                    "name": "Produkt 2",
+                    "description": "",
+                    "description_short": "",
+                    "associations": {"categories": [{"id": "2"}]},
+                }
+            }
+        return {
+            "languages": [{"id": 1, "iso_code": "pl"}],
+            "products": [
+                {"id": 10, "reference": "pandomu-1", "price": "10.000000", "id_tax_rules_group": "1", "id_category_default": "2", "weight": "1.000000", "active": "1", "name": "Produkt 1", "description": "", "description_short": ""},
+                {"id": 20, "reference": "pandomu-2", "price": "10.000000", "id_tax_rules_group": "1", "id_category_default": "2", "weight": "1.000000", "active": "1", "name": "Produkt 2", "description": "", "description_short": ""},
+            ],
+            "combinations": [],
+            "product_options": [],
+            "product_option_values": [],
+            "product_features": [],
+            "product_feature_values": [],
+            "stock_availables": [],
+        }.get(resource, [])
+
+    mock_client.get.side_effect = mock_get
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cat_file = Path(tmp_dir) / "category_mapping.json"
+        cat_file.write_text(json.dumps({"Drzwi": 2, "ROOT": 2}), encoding="utf-8")
+        prod_file = Path(tmp_dir) / "products.json"
+        prod_file.write_text(json.dumps([
+            {"product_id": "1", "name": "Produkt 1", "price_netto": 10.0, "vat_rate": 23.0, "weight": 1.0, "category_paths": [["Drzwi"]]},
+            {"product_id": "2", "name": "Produkt 2", "price_netto": 10.0, "vat_rate": 23.0, "weight": 1.0, "category_paths": [["Drzwi"]]},
+        ]), encoding="utf-8")
+        prod_map_file = Path(tmp_dir) / "product_mapping.json"
+
+        stats, mapping = import_products(
+            client=mock_client,
+            products_file=prod_file,
+            category_mapping_file=cat_file,
+            product_mapping_file=prod_map_file,
+        )
+
+        # Produkt 1 zgłosił błąd pobrania, produkt 2 został pominięty (clean)
+        assert stats.errors == 1
+        assert stats.skipped == 1
+        assert stats.updated == 0
+        assert stats.created == 0
+        # PUT nie został wywołany dla produktu 1
+        mock_client.put.assert_not_called()

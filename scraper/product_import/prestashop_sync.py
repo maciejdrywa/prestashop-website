@@ -311,13 +311,20 @@ def build_product_payload(
     # Ochrona istniejących asocjacji przy operacji PUT
     if existing_full_product and isinstance(existing_full_product, dict):
         existing_assoc = existing_full_product.get("associations") or {}
-        for key in ("combinations", "images", "product_option_values", "product_features"):
+        for key in ("combinations", "images", "product_option_values"):
             if key in existing_assoc and existing_assoc[key]:
                 associations[key] = existing_assoc[key]
 
-    # Nadpisz lub dołącz nowe cechy produktu, jeśli zostały podane
-    if product_features:
+    # Semantyka cech produktu (product_features):
+    # - None: zachowaj istniejące cechy z existing_full_product (jeśli istnieją)
+    # - []: usuń wszystkie cechy z produktu (pusty element w XML)
+    # - niepusta lista: zastąp zestaw cech
+    if product_features is not None:
         associations["product_features"] = product_features
+    elif existing_full_product and isinstance(existing_full_product, dict):
+        existing_assoc = existing_full_product.get("associations") or {}
+        if "product_features" in existing_assoc and existing_assoc["product_features"]:
+            associations["product_features"] = existing_assoc["product_features"]
 
     payload: Dict[str, Any] = {
         "reference": product.reference,
@@ -415,9 +422,9 @@ def is_product_dirty(
         if associated_category_ids is not None and "associations" in existing:
             assoc = existing.get("associations") or {}
             existing_cats = assoc.get("categories", [])
-            existing_cat_ids = {str(c.get("id")) for c in existing_cats if isinstance(c, dict)}
+            existing_cat_ids = {str(c.get("id")) for c in existing_cats if isinstance(c, dict) and "id" in c}
             target_cat_ids = {str(cid) for cid in associated_category_ids}
-            if existing_cat_ids and existing_cat_ids != target_cat_ids:
+            if existing_cat_ids != target_cat_ids:
                 return True
 
         # 10. Cechy produktu (jeśli dostępne w obiekcie)
@@ -426,13 +433,13 @@ def is_product_dirty(
             existing_feats = assoc.get("product_features", [])
             existing_feat_pairs = {
                 (str(f.get("id")), str(f.get("id_feature_value")))
-                for f in existing_feats if isinstance(f, dict)
+                for f in existing_feats if isinstance(f, dict) and "id" in f and "id_feature_value" in f
             }
             target_feat_pairs = {
                 (str(f.get("id")), str(f.get("id_feature_value")))
-                for f in product_features if isinstance(f, dict)
+                for f in product_features if isinstance(f, dict) and "id" in f and "id_feature_value" in f
             }
-            if existing_feat_pairs and existing_feat_pairs != target_feat_pairs:
+            if existing_feat_pairs != target_feat_pairs:
                 return True
 
         return False
@@ -447,18 +454,26 @@ def build_combination_payload(
     option_value_ids: List[int],
     is_default: bool,
     combination_id: Optional[int] = None,
+    existing_full_combination: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Tworzy słownik danych kombinacji dla Webservice API."""
     ref = variant.combination_reference(source_product_id)
+    associations: Dict[str, Any] = {
+        "product_option_values": [{"id": str(ovid)} for ovid in option_value_ids]
+    }
+    if existing_full_combination and isinstance(existing_full_combination, dict):
+        existing_assoc = existing_full_combination.get("associations") or {}
+        # Zachowaj istniejące zdjęcia powiązane z kombinacją
+        if "images" in existing_assoc and existing_assoc["images"]:
+            associations["images"] = existing_assoc["images"]
+
     payload: Dict[str, Any] = {
         "id_product": str(product_id),
         "reference": ref,
         "price": format_decimal(variant.price_modifier, 6),
         "default_on": "1" if is_default else "",
         "minimal_quantity": "1",
-        "associations": {
-            "product_option_values": [{"id": str(ovid)} for ovid in option_value_ids]
-        },
+        "associations": associations,
     }
     if combination_id is not None:
         payload["id"] = combination_id
@@ -469,8 +484,9 @@ def is_combination_dirty(
     existing: Dict[str, Any],
     variant: VariantItem,
     is_default: bool,
+    option_value_ids: Optional[List[int]] = None,
 ) -> bool:
-    """Sprawdza czy istniejąca kombinacja uległa zmianie (cena/modyfikator, flaga default_on)."""
+    """Sprawdza czy istniejąca kombinacja uległa zmianie (cena/modyfikator, flaga default_on, wartości opcji)."""
     try:
         curr_price = round_netto(existing.get("price", 0))
         if curr_price != variant.price_modifier:
@@ -480,6 +496,16 @@ def is_combination_dirty(
         target_default = "1" if is_default else ""
         if curr_default != target_default:
             return True
+
+        if option_value_ids is not None and "associations" in existing:
+            assoc = existing.get("associations") or {}
+            existing_ovs = assoc.get("product_option_values", [])
+            existing_ov_ids = {
+                str(o.get("id")) for o in existing_ovs if isinstance(o, dict) and "id" in o
+            }
+            target_ov_ids = {str(ovid) for ovid in option_value_ids}
+            if existing_ov_ids != target_ov_ids:
+                return True
 
         return False
     except Exception:
