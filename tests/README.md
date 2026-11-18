@@ -57,6 +57,7 @@ Wynik `bool(true)` oznacza poprawne zbudowanie indeksu. To samo można zrobić w
 $env:BASE_URL="https://localhost"; npx playwright test cart
 $env:BASE_URL="https://localhost"; npx playwright test cart --headed
 $env:BASE_URL="https://localhost"; npx playwright test order --headed
+$env:BASE_URL="https://localhost"; npx playwright test invoice --headed
 ```
 Opcja `--headed` pokazuje okno przeglądarki.
 
@@ -86,7 +87,7 @@ $env:BASE_URL="https://localhost"; $env:FRAZA="zawias"; npx playwright test cart
 - **Wyniki w konsoli.** Test wypisuje dodane produkty (nazwa, ID, ilość, stan) i wylosowany produkt.
 
 #### `e2e/order.spec.ts`: zakup przez nowego klienta
-Kontynuuje scenariusz koszyka i składa zamówienie jako nowy klient. Każdy krok kończy się asercją sprawdzającą jego efekt.
+Kontynuuje scenariusz koszyka i składa zamówienie jako nowy klient. Każdy krok kończy się asercją sprawdzającą jego efekt. Kroki 1–6 znajdują się w funkcji `scenariuszZamowienia()` w pliku `e2e/helpers/zamowienie.ts`, bo ten sam zakup otwiera test faktury.
 
 1. **Operacje na koszyku**: cały scenariusz z `cart.spec.ts`. W koszyku zostaje 8 pozycji.
 2. **Rejestracja nowego konta**: imię, nazwisko, unikalny e-mail (`w43.<czas>.<losowe>@example.test`), hasło i wymagane zgody. Test sprawdza, że klient jest zalogowany, formularz nie zgłosił błędu, a koszyk po rejestracji nadal ma te same 8 pozycji i ilości.
@@ -105,6 +106,27 @@ $env:BASE_URL="https://localhost"; $env:PRZEWOZNIK="DPD"; npx playwright test or
 - **Stany magazynowe.** Każde zamówienie zmniejsza stany. Test dobiera dostępne produkty na bieżąco, ale po wielu uruchomieniach może zabraknąć produktów w wymaganych ilościach. Test celowo nie zmienia magazynu sam. Początkowe stany (plan 0–10 szt.) przywraca komenda z głównego katalogu repozytorium, warto ją wykonać przed odbiorem:
 ```
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-stock.php --all
+```
+
+#### `e2e/invoice.spec.ts`: obsługa zamówienia po zakupie i faktura VAT
+Składa zamówienie jak `order.spec.ts`, a potem sprawdza jego obsługę. Każdy krok kończy się asercją sprawdzającą jego efekt.
+
+1. **Zakup**: cały scenariusz `scenariuszZamowienia()` z płatnością przy odbiorze.
+2. **Historia klienta przed opłaceniem**: zamówienie odszukane po numerze (referencji), status „Oczekiwanie na płatność przy odbiorze”, brak linku do faktury.
+3. **Potwierdzenie płatności w panelu**: test loguje się do panelu, otwiera to zamówienie, zmienia status na „Płatność zaakceptowana” i sprawdza komunikat sukcesu oraz nowy bieżący status.
+4. **Historia klienta po opłaceniu**: status „Płatność zaakceptowana” i link do faktury tego zamówienia.
+5. **Pobranie faktury**: test pobiera plik i sprawdza, że ma rozszerzenie `.pdf`, ponad 2 KB, nagłówek `%PDF-`, znacznik `%%EOF` i co najmniej jedną stronę. Faktura jest dołączona do raportu HTML.
+
+Brak faktury, nieudane pobranie albo plik, który nie jest PDF-em, kończą test błędem.
+
+Konfiguracja sklepu: płatność przy odbiorze zaczyna się bez faktury. Fakturę generuje zmiana statusu na „Płatność zaakceptowana” (`deploy/init/lib/orders.php`, `docs/CONFIGURATION.md`). Test wykonuje tę zmianę tak jak administrator i nie zmienia ustawień sklepu.
+
+Dane administratora:
+- `ADMIN_EMAIL` i `ADMIN_PASSWORD` ze zmiennych środowiskowych. Gdy ich nie ustawiono, test czyta je z pliku `.env` w głównym katalogu repozytorium (tego samego co Docker Compose). Hasło nie trafia do kodu ani do repozytorium.
+- `ADMIN_PATH`: katalog panelu, domyślnie `admin-dev`.
+```
+$env:BASE_URL="https://localhost"; npx playwright test invoice
+$env:BASE_URL="https://localhost"; $env:ADMIN_EMAIL="admin@example.test"; $env:ADMIN_PASSWORD="..."; npx playwright test invoice
 ```
 
 ### Wyniki
