@@ -45,7 +45,7 @@ Dokument opisuje wykorzystanie AI w projekcie oraz sposób weryfikacji otrzymany
 | 2026-11-17, Maciej Drywa | Codex 6.1 sol | Uporządkowanie scrapera | Wydzielono etapy pobierania i raportowania, uporządkowano nazwy oraz dodano polskie opisy funkcji. | Poprawiono zbędne oczekiwanie przy zdjęciach dostępnych w cache. | Przeszło 58 testów unittest, obejmujących również parsery zapisanych HTML. |
 | 2026-11-17, Maciej Drywa | Codex 6.1 sol | Automatyzacja uruchamiania sklepu | Dodano bootstrap, dziennik i bezpieczne wznowienie oraz szczegółowe polskie komentarze deployu. Usunięto powielone skrypty startowe i wskazane scenariusze HTTP. | Poprawiono uprawnienia cache, pierwszą instalację cookies i odświeżanie cache konfiguracji. | Przeszło 14 skryptów PHP i 5 testów JS. Pełny start trwał 5 min 11 s. Sprawdzono wznowienie i zachowanie edycji. |
 | 2026-11-17, Maciej Drywa | Codex 6.1 sol | Uporządkowanie dokumentacji | Przygotowano instrukcje architektury, wdrożenia, inicjalizacji, scrapera, konfiguracji i diagnostyki oraz raport po refaktoryzacji. | Nie usunięto nieaktualnych instrukcji, wymagało to doprecyzowania. | Sprawdzono lokalne odnośniki oraz udokumentowane polecenia uruchomienia i testowania. |
-
+| 2026-11-18, Wiktor Adamczyk | Claude, model Opus 5.5 | W4.3 — Test logowania i rejsetracji oraz koszyka |otrzymalem opinie o jakości i poprawności kodu i zmiany do wporwadzenia| Otrzymałem poprawki kodu: poprawione niedociągnięcia brak warunków brzegowych oraz poprawki do tego jak ma wyglądać ułożenie plików |  Uruchomienie `npx playwright test shop-available --headed`  (test zielony)|
 
 ## Etap 1 — refleksja zespołu
 Do uzupełnienia przed odbiorem etapu, należy opisać:
