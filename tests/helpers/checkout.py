@@ -3,11 +3,13 @@
 import re
 from collections import Counter
 from dataclasses import dataclass
+from decimal import Decimal
 from uuid import uuid4
 
 from playwright.sync_api import Page, expect
 
 from helpers.cart import Product
+from helpers.money import PLN_AMOUNT_PATTERN, parse_pln_amount
 
 
 @dataclass(frozen=True)
@@ -103,9 +105,7 @@ def select_cash_on_delivery(page: Page) -> None:
     expect(cash_on_delivery, "Cash on delivery is unavailable").to_have_count(1)
     cash_on_delivery.check()
     expect(cash_on_delivery).to_be_checked()
-    option = step.locator(".payment-option").filter(
-        has=page.locator('input[data-module-name="ps_cashondelivery"]')
-    )
+    option = step.locator('.payment-option:has(input[data-module-name="ps_cashondelivery"])')
     expect(option).to_contain_text(re.compile("przy odbiorze", re.I))
     for consent in step.locator("#conditions-to-approve input[required]").all():
         consent.check()
@@ -113,6 +113,16 @@ def select_cash_on_delivery(page: Page) -> None:
     button = step.locator('#payment-confirmation button[type="submit"]')
     expect(button).to_be_enabled()
     expect(button).not_to_have_class(re.compile("disabled"))
+
+
+def read_checkout_total(page: Page) -> Decimal:
+    """Odczytuje końcową kwotę brutto po wyborze adresu, dostawy i płatności."""
+    total = page.locator("#js-checkout-summary .cart-total .value")
+    expect(total).to_be_visible()
+    expect(total).to_have_text(PLN_AMOUNT_PATTERN)
+    amount = parse_pln_amount(total.inner_text())
+    print(f"Checkout total: {amount:.2f} PLN", flush=True)
+    return amount
 
 
 def confirm_order(page: Page, customer: Customer) -> None:
@@ -128,8 +138,8 @@ def confirm_order(page: Page, customer: Customer) -> None:
     print(f"Confirmation: {reference.inner_text()}", flush=True)
 
 
-def assert_order_contents(page: Page, products: list[Product]) -> None:
-    """Porównuje produkty, warianty i ilości z koszykiem oraz potwierdza InPost i pobranie."""
+def assert_order_contents(page: Page, products: list[Product], expected_total: Decimal) -> None:
+    """Sprawdza produkty, warianty, ilości, końcową kwotę brutto, InPost i pobranie."""
     details = page.locator("#order-details")
     expect(details).to_contain_text(re.compile(r"Sposób dostawy:\s*InPost", re.I))
     expect(details).to_contain_text(re.compile(r"Metoda płatności:\s*.*przy odbiorze", re.I))
@@ -139,8 +149,27 @@ def assert_order_contents(page: Page, products: list[Product]) -> None:
     # nazw z wariantami i ilości, także dla powtarzających się nazw.
     expected = Counter((" ".join(p.name.split()), p.quantity) for p in products)
     actual = Counter()
-    for row in rows.all():
-        name = " ".join((row.locator(".details > span").text_content() or "").split())
-        quantity = int(row.locator(".qty .row > div").nth(1).inner_text().strip())
+    for index in range(len(products)):
+        row = rows.nth(index)
+        name_field = row.locator(".details > span")
+        quantity_field = row.locator(".qty .row > div").nth(1)
+        expect(name_field).to_be_visible()
+        expect(name_field).to_have_text(re.compile(r"\S"))
+        expect(quantity_field).to_be_visible()
+        expect(quantity_field).to_have_text(re.compile(r"^\s*[1-9][0-9]*\s*$"))
+        name = " ".join((name_field.text_content() or "").split())
+        quantity = int(quantity_field.inner_text().strip())
         actual[(name, quantity)] += 1
     assert actual == expected, f"Order products or quantities differ from the cart: {actual} != {expected}"
+
+    # Porównujemy należność z dostawą i rabatami, nie sumę samych produktów.
+    total_row = page.locator("#order-items tr.total-value")
+    expect(total_row).to_have_count(1)
+    expect(total_row).to_be_visible()
+    total = total_row.locator("td").last
+    expect(total).to_be_visible()
+    expect(total).to_have_text(PLN_AMOUNT_PATTERN)
+    actual_total = parse_pln_amount(total.inner_text())
+    assert actual_total == expected_total, (
+        f"Order total differs from checkout: {actual_total:.2f} PLN != {expected_total:.2f} PLN"
+    )

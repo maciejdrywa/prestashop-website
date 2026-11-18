@@ -14,5 +14,7 @@ def browser_context_args(browser_context_args, base_url):
         **browser_context_args,
         "base_url": base_url or os.environ.get("BASE_URL", "https://localhost"),
         "ignore_https_errors": True,
+        "locale": "pl-PL",
+        "timezone_id": "Europe/Warsaw",
         "viewport": {"width": 1280, "height": 720},
     }

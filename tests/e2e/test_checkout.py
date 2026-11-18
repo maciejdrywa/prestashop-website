@@ -4,6 +4,7 @@ from helpers.cart import prepare_cart
 from helpers.checkout import (
     assert_order_contents,
     confirm_order,
+    read_checkout_total,
     register_customer,
     save_address,
     select_cash_on_delivery,
@@ -27,7 +28,9 @@ def test_cart_registration_and_order(page: Page):
         select_shipping_method(page)
     with step("Select cash on delivery and accept required terms"):
         select_cash_on_delivery(page)
+    with step("Read the final checkout total"):
+        expected_total = read_checkout_total(page)
     with step("Confirm the order"):
         confirm_order(page, customer)
-    with step("Verify products, quantities, shipping and payment"):
-        assert_order_contents(page, products)
+    with step("Verify products, quantities, shipping, payment and total"):
+        assert_order_contents(page, products, expected_total)

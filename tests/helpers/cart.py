@@ -192,10 +192,12 @@ def prepare_cart(page: Page) -> list[Product]:
             name = (row.locator(".product-line-info a.label").text_content() or "").strip()
             assert name == product.name
             attributes = []
-            for attribute in row.locator(".product-line-info").filter(has=page.locator("span.value")).all():
+            for attribute in row.locator(".product-line-info:has(span.value)").all():
                 label = (attribute.locator("span.label").text_content() or "").strip()
                 value = (attribute.locator("span.value").text_content() or "").strip()
-                attributes.append(f"{label} {value}")
+                attribute_text = " ".join(part for part in (label, value) if part)
+                if attribute_text:
+                    attributes.append(attribute_text)
             if attributes:
                 name += f" ({' - '.join(attributes)})"
             ordered_products.append(replace(product, name=name))
