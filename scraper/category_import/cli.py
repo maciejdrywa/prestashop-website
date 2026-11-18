@@ -3,15 +3,15 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-import sys
 
 from prestashop_api import (
-    PrestaShopClient,
     PrestaShopAuthError,
+    PrestaShopClient,
     PrestaShopConnectionError,
 )
-from .models import ImportStats
+
 from .mapping import get_default_mapping_path
+from .models import ImportStats
 from .orchestrator import import_categories
 
 logger = logging.getLogger("category_import")

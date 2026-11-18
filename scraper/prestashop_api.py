@@ -5,14 +5,14 @@ Służy do wymuszenia formatu JSON, obsługi błędów, Basic AUTH oraz konwersj
 
 from __future__ import annotations
 
-from pathlib import Path
 import os
-import urllib.parse
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
+
 import requests
 from requests.auth import HTTPBasicAuth
-from requests.exceptions import ConnectionError, Timeout, RequestException
+from requests.exceptions import ConnectionError, RequestException, Timeout
 
 
 class PrestaShopAPIError(Exception):

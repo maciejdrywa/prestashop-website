@@ -1,8 +1,10 @@
-from bs4 import BeautifulSoup
-from typing import List
 import json
 import re
+from typing import List
 from urllib.parse import urlsplit
+
+from bs4 import BeautifulSoup
+
 
 def scrap_images(soup: BeautifulSoup) -> List[str]:
     """Zbiera unikalne adresy galerii. Produkt bez zdjęć zachowuje z pustą listą."""

@@ -5,11 +5,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from prestashop_api import (
     PrestaShopAPIError,
-    PrestaShopClient,
     PrestaShopAuthError,
+    PrestaShopClient,
 )
-from .models import CategoryItem, PRESTASHOP_HOME_CATEGORY_ID
-from .utils import slugify, _extract_category_name
+
+from .models import PRESTASHOP_HOME_CATEGORY_ID, CategoryItem
+from .utils import _extract_category_name, slugify
 
 logger = logging.getLogger("category_import")
 
@@ -216,7 +217,11 @@ def fetch_active_languages(client: PrestaShopClient) -> List[str]:
         else:
             langs = []
 
-        lang_ids = [str(l["id"]) for l in langs if isinstance(l, dict) and "id" in l]
+        lang_ids = [
+            str(language["id"])
+            for language in langs
+            if isinstance(language, dict) and "id" in language
+        ]
         return lang_ids if lang_ids else ["1"]
     except PrestaShopAuthError:
         logger.debug("Brak uprawnień Webservice do zasobu 'languages' (Least Privilege). Użyto domyślnego ID języka '1'.")
