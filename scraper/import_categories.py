@@ -7,8 +7,8 @@ scraper.category_import:
 - models.py: struktury danych CategoryItem, ImportStats
 - utils.py: slugify, transliteracja, _extract_category_name
 - validator.py: walidacja rekordów i wczytywanie JSON
-- mapping.py: zapis i odczyt pliku mapowania
-- prestashop_sync.py: komunikacja z PrestaShop Webservice API, budowa hierarchii
+- mapping.py: zapis i odczyt pliku mapowania, dobór pliku per instancja
+- prestashop_sync.py: komunikacja z PrestaShop Webservice API, budowa hierarchii, formatowanie wielojęzyczne
 - orchestrator.py: pętla importu, dirty-checking, obsługa konfliktów i błędów rodzica
 - cli.py: obsługa argumentów wiersza poleceń i podsumowanie
 """
@@ -37,10 +37,14 @@ from category_import import (
     load_and_validate_categories,
     save_category_mapping,
     load_category_mapping,
+    get_default_mapping_path,
+    sanitize_instance_host,
+    normalize_instance_url,
     fetch_existing_categories,
     build_prestashop_hierarchy_index,
     fetch_active_languages,
     build_category_payload,
+    normalize_multilang_value,
     import_categories,
     print_summary,
     main,
@@ -58,10 +62,14 @@ __all__ = [
     "load_and_validate_categories",
     "save_category_mapping",
     "load_category_mapping",
+    "get_default_mapping_path",
+    "sanitize_instance_host",
+    "normalize_instance_url",
     "fetch_existing_categories",
     "build_prestashop_hierarchy_index",
     "fetch_active_languages",
     "build_category_payload",
+    "normalize_multilang_value",
     "import_categories",
     "print_summary",
     "main",

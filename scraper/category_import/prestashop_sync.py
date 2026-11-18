@@ -13,6 +13,45 @@ from .utils import slugify, _extract_category_name
 logger = logging.getLogger("category_import")
 
 
+def normalize_multilang_value(val: Any) -> Any:
+    """
+    Przekształca wartości wielojęzyczne z formatu odpowiedzi API PrestaShop
+    (np. [{'id': '1', 'value': '...'}, ...] lub {'language': [...]})
+    na słownik {id_jezyka: tekst}, poprawnie serializowany do <language id="...">
+    przez dict_to_prestashop_xml w prestashop_api.py.
+    """
+    if val is None:
+        return ""
+
+    if isinstance(val, dict):
+        # Sprawdzenie czy to już { "1": "tekst", "2": "tekst" }
+        if val and all(str(k).isdigit() for k in val.keys()):
+            return {str(k): (v if v is not None else "") for k, v in val.items()}
+        if "language" in val:
+            return normalize_multilang_value(val["language"])
+        # Format z 'value' lub '#text' w słowniku
+        res: Dict[str, str] = {}
+        for k, v in val.items():
+            if str(k).isdigit():
+                res[str(k)] = str(v) if v is not None else ""
+        if res:
+            return res
+        return val
+
+    if isinstance(val, list):
+        res: Dict[str, str] = {}
+        for item in val:
+            if isinstance(item, dict):
+                lid = str(item.get("id") or item.get("@id") or "")
+                text = item.get("value") or item.get("#text") or ""
+                if lid and lid.isdigit():
+                    res[lid] = str(text) if text is not None else ""
+        if res:
+            return res
+
+    return val
+
+
 def fetch_existing_categories(client: PrestaShopClient) -> List[Dict[str, Any]]:
     """
     Pobiera listę istniejących kategorii ze sklepu PrestaShop Webservice API
@@ -164,7 +203,8 @@ def build_category_payload(
     """
     Tworzy słownik danych dla PrestaShop Webservice API z obsługą wielojęzyczności
     dla wszystkich aktywnych języków oraz sluga w polu link_rewrite.
-    W przypadku operacji PUT zachowuje istniejący opis oraz pozostałe pola, którymi importer nie zarządza.
+    W przypadku operacji PUT zachowuje istniejący opis, dodatkowy opis oraz pozostałe
+    pola, którymi importer nie zarządza, poprawnie formatując pola wielojęzyczne.
     """
     langs = active_languages or ["1"]
     cat_slug = slugify(item.name)
@@ -181,14 +221,27 @@ def build_category_payload(
     if existing_data and isinstance(existing_data, dict):
         unmanaged_fields = [
             "description",
+            "additional_description",
             "meta_title",
             "meta_description",
             "meta_keywords",
             "is_root_category",
         ]
+        multilang_unmanaged = {
+            "description",
+            "additional_description",
+            "meta_title",
+            "meta_description",
+            "meta_keywords",
+        }
         for field_name in unmanaged_fields:
             val = existing_data.get(field_name)
             if val is not None and val != "":
-                payload[field_name] = val
+                if field_name in multilang_unmanaged:
+                    normalized = normalize_multilang_value(val)
+                    if normalized is not None and normalized != "":
+                        payload[field_name] = normalized
+                else:
+                    payload[field_name] = val
 
     return payload

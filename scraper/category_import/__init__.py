@@ -29,12 +29,16 @@ from .validator import (
 from .mapping import (
     save_category_mapping,
     load_category_mapping,
+    get_default_mapping_path,
+    sanitize_instance_host,
+    normalize_instance_url,
 )
 from .prestashop_sync import (
     fetch_existing_categories,
     build_prestashop_hierarchy_index,
     fetch_active_languages,
     build_category_payload,
+    normalize_multilang_value,
 )
 from .orchestrator import (
     import_categories,
@@ -55,10 +59,14 @@ __all__ = [
     "load_and_validate_categories",
     "save_category_mapping",
     "load_category_mapping",
+    "get_default_mapping_path",
+    "sanitize_instance_host",
+    "normalize_instance_url",
     "fetch_existing_categories",
     "build_prestashop_hierarchy_index",
     "fetch_active_languages",
     "build_category_payload",
+    "normalize_multilang_value",
     "import_categories",
     "print_summary",
     "main",

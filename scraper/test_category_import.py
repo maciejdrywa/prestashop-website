@@ -34,7 +34,10 @@ from import_categories import (
     import_categories,
     load_and_validate_categories,
     load_category_mapping,
+    save_category_mapping,
+    get_default_mapping_path,
     _extract_category_name,
+    normalize_multilang_value,
     PRESTASHOP_HOME_CATEGORY_ID,
 )
 
@@ -399,18 +402,31 @@ def test_dynamic_hierarchy_lifecycle() -> None:
         assert int(child_data["id_parent"]) == root_id
         assert int(grandchild_data["id_parent"]) == child_id
 
-        # Ustawienie opisu na kategorii wnuka, aby zweryfikować czy PUT zachowa opis przy zmianie nazwy
-        sample_description = f"<p>Ważny opis kategorii testowej {ts} - zachować przy PUT</p>"
+        # Ustawienie opisu oraz opisu dodatkowego w co najmniej dwóch językach (np. ID 1 i 2)
+        sample_description = {
+            "1": f"<p>Ważny opis PL kategorii testowej {ts} - zachować przy PUT</p>",
+            "2": f"<p>Important EN description for category {ts} - preserve on PUT</p>",
+        }
+        sample_additional_description = {
+            "1": f"<p>Dodatkowy opis PL {ts}</p>",
+            "2": f"<p>Additional description EN {ts}</p>",
+        }
         client.put("categories", grandchild_id, {
             "id": grandchild_id,
-            "name": dynamic_cats[2]["name"],
-            "link_rewrite": f"test-grandchild-{ts}",
+            "name": {"1": dynamic_cats[2]["name"], "2": f"Test Grandchild EN {ts}"},
+            "link_rewrite": {"1": f"test-grandchild-{ts}", "2": f"test-grandchild-en-{ts}"},
             "id_parent": child_id,
             "active": 1,
             "description": sample_description,
+            "additional_description": sample_additional_description,
         })
         gc_before = client.get("categories", grandchild_id)["category"]
-        assert gc_before.get("description") == sample_description
+        norm_desc_before = normalize_multilang_value(gc_before.get("description"))
+        norm_add_before = normalize_multilang_value(gc_before.get("additional_description"))
+        desc_1_before = norm_desc_before.get("1") if isinstance(norm_desc_before, dict) else norm_desc_before
+        add_1_before = norm_add_before.get("1") if isinstance(norm_add_before, dict) else norm_add_before
+        assert desc_1_before == sample_description["1"]
+        assert add_1_before == sample_additional_description["1"]
 
         # Krok B: Aktualizacja pod kątem dirty-checkingu
         # Modyfikacja nazwy jednej z dynamicznych kategorii (wnuka)
@@ -432,7 +448,7 @@ def test_dynamic_hierarchy_lifecycle() -> None:
         assert stats2.skipped == 2, f"Oczekiwano pominięcia 2 niezmienionych kategorii (pominięto: {stats2.skipped})"
         assert stats2.errors == 0, f"Błędy podczas aktualizacji: {stats2.error_details}"
 
-        # Weryfikacja w API zaktualizowanej nazwy oraz asercja zachowania opisu
+        # Weryfikacja w API zaktualizowanej nazwy oraz asercja zachowania opisu i opisu dodatkowego w wielu językach
         updated_grandchild_res = client.get("categories", grandchild_id)
         updated_data = (
             updated_grandchild_res["category"]
@@ -440,10 +456,30 @@ def test_dynamic_hierarchy_lifecycle() -> None:
             else updated_grandchild_res
         )
         assert _extract_category_name(updated_data.get("name", "")) == updated_grandchild_name
-        assert updated_data.get("description") == sample_description, (
-            f"Błąd: Zmiana nazwy kategorii usunęła jej opis! Oczekiwano '{sample_description}', "
-            f"otrzymano: '{updated_data.get('description')}'"
+
+        norm_desc_after = normalize_multilang_value(updated_data.get("description"))
+        norm_add_after = normalize_multilang_value(updated_data.get("additional_description"))
+
+        assert norm_desc_after is not None and norm_desc_after != "", "Pole 'description' zostało usunięte po PUT!"
+        assert norm_add_after is not None and norm_add_after != "", "Pole 'additional_description' zostało usunięte po PUT!"
+
+        desc_1_after = norm_desc_after.get("1") if isinstance(norm_desc_after, dict) else norm_desc_after
+        add_1_after = norm_add_after.get("1") if isinstance(norm_add_after, dict) else norm_add_after
+        assert desc_1_after == sample_description["1"], (
+            f"Błąd: Zmiana nazwy usunęła opis PL! Oczekiwano '{sample_description['1']}', otrzymano: '{desc_1_after}'"
         )
+        assert add_1_after == sample_additional_description["1"], (
+            f"Błąd: Zmiana nazwy usunęła additional_description PL! Oczekiwano '{sample_additional_description['1']}', otrzymano: '{add_1_after}'"
+        )
+
+        if isinstance(norm_desc_after, dict) and "2" in norm_desc_after:
+            assert norm_desc_after["2"] == sample_description["2"], (
+                f"Błąd: Zmiana nazwy usunęła opis EN! Oczekiwano '{sample_description['2']}', otrzymano: '{norm_desc_after['2']}'"
+            )
+        if isinstance(norm_add_after, dict) and "2" in norm_add_after:
+            assert norm_add_after["2"] == sample_additional_description["2"], (
+                f"Błąd: Zmiana nazwy usunęła additional_description EN! Oczekiwano '{sample_additional_description['2']}', otrzymano: '{norm_add_after['2']}'"
+            )
 
         print(f" [OK] Pomyślnie utworzono i zwalidowano 3-poziomowe drzewo (ID: {root_id} -> {child_id} -> {grandchild_id}), zweryfikowano dirty-checking oraz zachowanie opisu.")
     finally:
@@ -569,6 +605,24 @@ def test_parent_failure_cascade_and_mapping_isolation() -> None:
         # Nowa ścieżka niezależnej kategorii POWINNA znaleźć się w mapie (sukces nastąpił)
         assert new_indep_name in map2
 
+        # Wczytanie pliku mapowania z dysku i asercja zachowania starych wpisów rodzica po błędzie PUT
+        disk_map = load_category_mapping(temp_map_path)
+        assert disk_map.get(test_cats[0]["source_url"]) == parent_id, (
+            f"Błąd: Nieudana aktualizacja rodzica usunęła jego source_url z pliku mapowania!"
+        )
+        old_parent_name = f"Parent {ts}"
+        assert disk_map.get(old_parent_name) == parent_id, (
+            f"Błąd: Nieudana aktualizacja rodzica usunęła jego starą ścieżkę z pliku mapowania!"
+        )
+        old_child_url = test_cats[1]["source_url"]
+        assert disk_map.get(old_child_url) == child_id, (
+            f"Błąd: Pominięcie dziecka z powodu błędu rodzica usunęło jego source_url z pliku mapowania!"
+        )
+        old_child_path = f"Parent {ts} > Child {ts}"
+        assert disk_map.get(old_child_path) == child_id, (
+            f"Błąd: Pominięcie dziecka z powodu błędu rodzica usunęło jego starą ścieżkę z pliku mapowania!"
+        )
+
         print(" [OK] Błąd rodzica poprawnie pominął zależne podkategorie i zachował izolację mapowania.")
     finally:
         temp_cats_path.unlink(missing_ok=True)
@@ -625,6 +679,14 @@ def test_record_validation_rejects_nulls_and_continues_valid() -> None:
             "parent_source_url": None,
             "product_ids": [],
         },
+        # Rekord #5: rekord ze zduplikowanym source_url (powtórzenie URL z rekordu #4)
+        {
+            "name": f"Duplicate URL Item {ts}",
+            "category_path": [f"Duplicate URL Item {ts}"],
+            "source_url": f"https://example.test/valid-{ts}-4",
+            "parent_source_url": None,
+            "product_ids": [],
+        },
     ]
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_cats:
@@ -643,12 +705,13 @@ def test_record_validation_rejects_nulls_and_continues_valid() -> None:
             mapping_file=temp_map_path,
         )
 
-        # Powinno zaraportować błędy dla rekordów #0, #1, #2, #3
-        assert stats.errors >= 4, f"Oczekiwano co najmniej 4 błędów walidacji, otrzymano: {stats.errors}"
+        # Powinno zaraportować błędy dla rekordów #0, #1, #2, #3 oraz duplikatu #5
+        assert stats.errors >= 5, f"Oczekiwano co najmniej 5 błędów walidacji, otrzymano: {stats.errors}"
         assert any("Rekord #0" in err for err in stats.error_details), "Brak wzmianki o rekordzie #0 w błędach!"
         assert any("Rekord #1" in err for err in stats.error_details), "Brak wzmianki o rekordzie #1 w błędach!"
         assert any("Rekord #2" in err for err in stats.error_details), "Brak wzmianki o rekordzie #2 w błędach!"
         assert any("Rekord #3" in err for err in stats.error_details), "Brak wzmianki o rekordzie #3 w błędach!"
+        assert any("Rekord #5" in err and "zduplikowany" in err.lower() and "source_url" in err for err in stats.error_details), "Brak wzmianki o zduplikowanym source_url w błędach!"
 
         # Poprawny rekord #4 powinien zostać utworzony
         assert stats.created == 1, f"Oczekiwano utworzenia 1 poprawnej kategorii, utworzono: {stats.created}"
@@ -660,7 +723,7 @@ def test_record_validation_rejects_nulls_and_continues_valid() -> None:
         cat_in_ps = client.get("categories", created_id)["category"]
         assert _extract_category_name(cat_in_ps.get("name", "")) == raw_test_data[4]["name"]
 
-        print(f" [OK] Odrzucono 4 niepoprawne rekordy z numerami i zaimportowano poprawną pozycję ID {created_id}.")
+        print(f" [OK] Odrzucono 5 niepoprawnych rekordów (w tym duplikat) i zaimportowano poprawną pozycję ID {created_id}.")
     finally:
         temp_cats_path.unlink(missing_ok=True)
         temp_map_path.unlink(missing_ok=True)
@@ -669,6 +732,167 @@ def test_record_validation_rejects_nulls_and_continues_valid() -> None:
                 client.delete("categories", created_id)
             except Exception:
                 pass
+
+
+def test_instance_isolation_and_collision_protection() -> None:
+    """
+    Test 8: Weryfikacja izolacji instancji sklepu oraz wykrywania kolizji w starej mapie.
+    1. Sprawdza czy plik mapowania wygenerowany dla innego sklepu jest odrzucany przy niezgodności instancji.
+    2. Sprawdza czy kolizje w starym pliku (dwa różne URL-e wskazujące na to samo ID) są wykrywane i bezpiecznie neutralizowane.
+    """
+    print("\n[TEST 8] Weryfikacja izolacji instancji i kolizji starej mapy...")
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_map:
+        temp_map_path = Path(f_map.name)
+
+    try:
+        # Zapis mapy z metadanymi dla innej instancji sklepu
+        test_data = {
+            "_instance_url": "https://other-shop.example.com/api",
+            "https://pandomu.com.pl/kategoria-1": 100,
+            "https://pandomu.com.pl/kategoria-2": 100,  # Kolizja: to samo ID 100
+        }
+        with temp_map_path.open("w", encoding="utf-8") as f:
+            json.dump(test_data, f)
+
+        # 1. Próba wczytania z oczekiwaną inną instancją 'https://localhost/api'
+        loaded = load_category_mapping(temp_map_path, expected_instance_url="https://localhost/api")
+        assert loaded == {}, f"Oczekiwano pustej mapy przy niezgodności instancji, otrzymano: {loaded}"
+
+        # 2. Wczytanie z dopasowaną instancją - powinna zwrócić wpisy
+        loaded_same = load_category_mapping(temp_map_path, expected_instance_url="https://other-shop.example.com/api")
+        assert len(loaded_same) >= 2
+
+        # 3. Próba wczytania pliku bez metadanych _instance_url z podanym expected_instance_url
+        with temp_map_path.open("w", encoding="utf-8") as f:
+            json.dump({"https://pandomu.com.pl/kategoria-1": 100}, f)
+        loaded_no_meta = load_category_mapping(temp_map_path, expected_instance_url="https://localhost/api")
+        assert loaded_no_meta == {}, f"Oczekiwano pustej mapy przy braku metadanych instancji, otrzymano: {loaded_no_meta}"
+
+        print(" [OK] Pomyślnie zweryfikowano izolację per instancja oraz odrzucanie niepewnych ID.")
+    finally:
+        temp_map_path.unlink(missing_ok=True)
+
+
+def test_multilang_payload_and_unmanaged_fields() -> None:
+    """
+    Test 9: Weryfikacja formatowania XML wartości wielojęzycznych API PrestaShop
+    oraz zachowania pól description i additional_description.
+    """
+    print("\n[TEST 9] Weryfikacja formatowania wielojęzycznego XML i pól niezarządzanych...")
+    from category_import import build_category_payload, CategoryItem
+    from prestashop_api import dict_to_prestashop_xml
+
+    item = CategoryItem(name="Testowa Kategoria", category_path=["Testowa Kategoria"], source_url="https://test.local/cat")
+    mock_existing = {
+        "id": 42,
+        "description": [
+            {"id": "1", "value": "<p>Opis PL</p>"},
+            {"id": "2", "value": "<p>Description EN</p>"},
+        ],
+        "additional_description": [
+            {"id": "1", "value": "<p>Dodatkowy opis PL</p>"},
+            {"id": "2", "value": "<p>Additional description EN</p>"},
+        ],
+        "meta_title": [
+            {"id": "1", "value": "Tytuł PL"},
+            {"id": "2", "value": "Title EN"},
+        ],
+    }
+
+    payload = build_category_payload(item, parent_id=2, category_id=42, existing_data=mock_existing)
+
+    assert payload["description"] == {"1": "<p>Opis PL</p>", "2": "<p>Description EN</p>"}
+    assert payload["additional_description"] == {"1": "<p>Dodatkowy opis PL</p>", "2": "<p>Additional description EN</p>"}
+    assert payload["meta_title"] == {"1": "Tytuł PL", "2": "Title EN"}
+
+    xml = dict_to_prestashop_xml("categories", payload)
+    assert 'language id="1"' in xml and 'Opis PL' in xml
+    assert 'language id="2"' in xml and 'Description EN' in xml
+    assert '<additional_description>' in xml
+    print(" [OK] Pomyślnie zweryfikowano transformację list wielojęzycznych do XML.")
+
+
+def test_foreign_category_protection_against_unverified_rename() -> None:
+    """
+    Test 10: Weryfikacja ochrony obcej kategorii przed nadpisaniem (PUT)
+    przy braku zweryfikowanego powiązania source_url z ID w pliku mapy.
+    """
+    print("\n[TEST 10] Weryfikacja ochrony obcej kategorii przed nadpisaniem...")
+    client = PrestaShopClient()
+    ts = int(time.time() * 1000)
+
+    # 1. Tworzymy niezależną obcą kategorię bezpośrednio w PrestaShop (np. "Alien Category {ts}")
+    alien_cat = client.post("categories", {
+        "name": {"1": f"Alien Category {ts}"},
+        "link_rewrite": {"1": f"alien-category-{ts}"},
+        "id_parent": PRESTASHOP_HOME_CATEGORY_ID,
+        "active": 1,
+    })["category"]
+    alien_id = int(alien_cat["id"])
+
+    # 2. Przygotowujemy plik mapy, który złośliwie/błędnie wskazuje source_url na alien_id,
+    # ale NIE posiada historii ścieżki dla "Alien Category"
+    test_cats = [
+        {
+            "name": f"My New Category {ts}",
+            "category_path": [f"My New Category {ts}"],
+            "source_url": f"https://example.test/new-cat-{ts}",
+            "parent_source_url": None,
+            "product_ids": [],
+        }
+    ]
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_cats:
+        json.dump(test_cats, f_cats)
+        temp_cats_path = Path(f_cats.name)
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_map:
+        temp_map_path = Path(f_map.name)
+
+    fake_map_data = {
+        "_instance_url": client.api_url,
+        f"https://example.test/new-cat-{ts}": alien_id,
+        # Celowo BRAK klucza "Alien Category {ts}" -> brak zweryfikowanego powiązania!
+    }
+    with temp_map_path.open("w", encoding="utf-8") as f:
+        json.dump(fake_map_data, f)
+
+    created_id: Optional[int] = None
+
+    try:
+        stats, result_map = import_categories(
+            client=client,
+            categories_file=temp_cats_path,
+            mapping_file=temp_map_path,
+            update_existing=True,
+        )
+
+        # Importer NIE powinien nadpisać alien_id!
+        # Powinien utworzyć NOWĄ kategorię o innym ID lub zignorować obce powiązanie.
+        new_cat_id = result_map[test_cats[0]["source_url"]]
+        assert new_cat_id != alien_id, (
+            f"KRYTYCZNY BŁĄD: Importer nadpisał obcą kategorię ID {alien_id}!"
+        )
+        created_id = new_cat_id
+
+        # Weryfikacja, że kategoria Alien Category nadal istnieje nienaruszona w PrestaShop
+        alien_in_ps = client.get("categories", alien_id)["category"]
+        assert _extract_category_name(alien_in_ps["name"]) == f"Alien Category {ts}", (
+            f"Błąd: Nazwa obcej kategorii została zmieniona na '{alien_in_ps['name']}'!"
+        )
+        print(" [OK] Obca kategoria w PrestaShop została obroniona przed nadpisaniem.")
+    finally:
+        temp_cats_path.unlink(missing_ok=True)
+        temp_map_path.unlink(missing_ok=True)
+        if created_id:
+            try:
+                client.delete("categories", created_id)
+            except Exception:
+                pass
+        try:
+            client.delete("categories", alien_id)
+        except Exception:
+            pass
 
 
 def run_all_tests() -> bool:
@@ -685,6 +909,9 @@ def run_all_tests() -> bool:
         test_dynamic_hierarchy_lifecycle,
         test_parent_failure_cascade_and_mapping_isolation,
         test_record_validation_rejects_nulls_and_continues_valid,
+        test_instance_isolation_and_collision_protection,
+        test_multilang_payload_and_unmanaged_fields,
+        test_foreign_category_protection_against_unverified_rename,
     ]
 
     for test_fn in test_functions:

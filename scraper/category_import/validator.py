@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from .models import CategoryItem
 
@@ -113,8 +113,9 @@ def load_and_validate_categories(
 ) -> List[CategoryItem]:
     """
     Wczytuje i waliduje listę kategorii z pliku JSON.
-    Odrzuca brakujące, puste i null wartości, rejestruje numer rekordu w validation_errors
-    i kontynuuje wczytywanie pozostałych poprawnych, niezależnych pozycji.
+    Odrzuca brakujące, puste i null wartości, a także duplikaty source_url.
+    Rejestruje numer rekordu w validation_errors i kontynuuje wczytywanie pozostałych
+    poprawnych, niezależnych pozycji.
     Sortuje kategorie rosnąco według długości category_path (rodzice przed dziećmi).
     """
     if not categories_path.is_file():
@@ -130,9 +131,24 @@ def load_and_validate_categories(
         raise ValueError(f"Oczekiwano listy w pliku {categories_path}, otrzymano: {type(data).__name__}")
 
     items: List[CategoryItem] = []
+    seen_source_urls: Set[str] = set()
+
     for idx, raw_record in enumerate(data):
         try:
             item = validate_category_record(raw_record, idx)
+            # Wykrywanie duplikatów source_url w danych wejściowych
+            if item.source_url in seen_source_urls:
+                err_msg = (
+                    f"Odrzucono niepoprawny rekord #{idx} ('{item.name}'): "
+                    f"Rekord #{idx} posiada zduplikowany 'source_url' '{item.source_url}' "
+                    f"(wystąpił już wcześniej w pliku źródłowym)."
+                )
+                logger.warning(err_msg)
+                if validation_errors is not None:
+                    validation_errors.append(err_msg)
+                continue
+
+            seen_source_urls.add(item.source_url)
             items.append(item)
         except ValueError as exc:
             err_msg = f"Odrzucono niepoprawny rekord #{idx}: {exc}"

@@ -11,7 +11,11 @@ from prestashop_api import (
 from .models import CategoryItem, ImportStats, PRESTASHOP_HOME_CATEGORY_ID
 from .utils import slugify
 from .validator import load_and_validate_categories
-from .mapping import save_category_mapping, load_category_mapping
+from .mapping import (
+    save_category_mapping,
+    load_category_mapping,
+    get_default_mapping_path,
+)
 from .prestashop_sync import (
     fetch_existing_categories,
     build_prestashop_hierarchy_index,
@@ -23,6 +27,15 @@ logger = logging.getLogger("category_import")
 
 _CURRENT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _CURRENT_DIR.parent.parent
+
+
+def _extract_category_name_from_map_key(key: str) -> str:
+    """Wyciąga małą nazwę kategorii z klucza ścieżki w pliku mapowania."""
+    if " > " in key:
+        return key.split(" > ")[-1].strip().lower()
+    if " / " in key:
+        return key.split(" / ")[-1].strip().lower()
+    return key.strip().lower()
 
 
 def import_categories(
@@ -37,7 +50,7 @@ def import_categories(
     Parametry:
     - client: instancja PrestaShopClient (jeśli None, tworzona automatycznie ze zmiennych .env)
     - categories_file: ścieżka do categories.json (domyślnie scraper-results/categories.json)
-    - mapping_file: ścieżka do category_mapping.json (domyślnie scraper-results/category_mapping.json)
+    - mapping_file: ścieżka do category_mapping.json (domyślnie dobierana per instancja)
     - update_existing: czy aktualizować istniejące kategorie (PUT), czy je tylko pominąć
 
     Zwraca:
@@ -46,18 +59,24 @@ def import_categories(
     categories_path = (
         Path(categories_file) if categories_file else _PROJECT_ROOT / "scraper-results" / "categories.json"
     )
-    mapping_path = (
-        Path(mapping_file) if mapping_file else _PROJECT_ROOT / "scraper-results" / "category_mapping.json"
-    )
 
     if client is None:
         client = PrestaShopClient()
 
-    # 1. Wczytanie i walidacja danych ze scrapowania
+    # 1. Dobór pliku mapy wg instancji sklepu, o ile użytkownik nie podał explicite mapping_file
+    if mapping_file:
+        mapping_path = Path(mapping_file)
+    else:
+        mapping_path = get_default_mapping_path(
+            _PROJECT_ROOT / "scraper-results",
+            getattr(client, "api_url", None),
+        )
+
+    # 2. Wczytanie i walidacja danych ze scrapowania
     validation_errors: List[str] = []
     items = load_and_validate_categories(categories_path, validation_errors=validation_errors)
 
-    # 2. Pobranie aktywnych języków oraz istniejących kategorii w celu zachowania pełnej idempotencji
+    # 3. Pobranie aktywnych języków oraz istniejących kategorii w celu zachowania pełnej idempotencji
     active_languages = fetch_active_languages(client)
     logger.info("Aktywne języki PrestaShop: %s", ", ".join(active_languages))
 
@@ -69,20 +88,50 @@ def import_categories(
         stats.errors += len(validation_errors)
         stats.error_details.extend(validation_errors)
 
+    # Wczytanie i weryfikacja instancji istniejącego pliku mapowania
+    existing_file_map: Dict[str, int] = {}
+    if mapping_path.is_file():
+        try:
+            existing_file_map = load_category_mapping(
+                mapping_path,
+                expected_instance_url=getattr(client, "api_url", None),
+            )
+        except Exception as exc:
+            logger.debug("Nie udało się załadować istniejącego pliku mapowania (%s): %s", mapping_path, exc)
+
+    # Wykrywanie kolizji w starej mapie (różne URL-e wskazujące na to samo ID PrestaShop)
+    url_to_first_id: Dict[str, int] = {}
+    id_to_first_url: Dict[int, str] = {}
+    file_map_collisions: List[str] = []
+    collided_ids: Set[int] = set()
+
+    for k, cid in existing_file_map.items():
+        if k.startswith("http://") or k.startswith("https://"):
+            if cid in id_to_first_url and id_to_first_url[cid] != k:
+                collision_msg = (
+                    f"Wykryto kolizję w pliku mapowania: dwa różne source_url "
+                    f"('{id_to_first_url[cid]}' oraz '{k}') wskazują na to samo ID kategorii {cid} w PrestaShop!"
+                )
+                logger.error(collision_msg)
+                file_map_collisions.append(collision_msg)
+                collided_ids.add(cid)
+            else:
+                id_to_first_url[cid] = k
+            url_to_first_id[k] = cid
+
+    if file_map_collisions:
+        stats.errors += len(file_map_collisions)
+        stats.error_details.extend(file_map_collisions)
+        # Usunięcie ze starej mapy skolidowanych ID, aby zapobiec nadpisaniu obcej kategorii
+        existing_file_map = {k: v for k, v in existing_file_map.items() if v not in collided_ids}
+
     # Generowanie mapowania dla konkretnej instancji sklepu
     category_mapping: Dict[str, int] = {}
     assigned_id_to_url: Dict[int, str] = {}
     failed_parent_paths: Set[Tuple[str, ...]] = set()
     failed_parent_urls: Set[str] = set()
 
-    existing_file_map: Dict[str, int] = {}
-    if mapping_path.is_file():
-        try:
-            existing_file_map = load_category_mapping(mapping_path)
-        except Exception as exc:
-            logger.debug("Nie udało się załadować istniejącego pliku mapowania (%s): %s", mapping_path, exc)
-
-    # 3. Przetwarzanie kategorii z zachowaniem kolejności rodzic -> dzieci
+    # 4. Przetwarzanie kategorii z zachowaniem kolejności rodzic -> dzieci
     for item in items:
         # Sprawdzenie czy rodzic lub przodek uległ awarii (pominięcie zależnych podkategorii)
         parent_path = tuple(item.category_path[:-1])
@@ -102,6 +151,13 @@ def import_categories(
             stats.error_details.append(err_msg)
             failed_parent_paths.add(item.path_key)
             failed_parent_urls.add(item.source_url)
+            # Zachowanie dotychczasowych wpisów podkategorii ze starej mapy
+            if item.source_url in existing_file_map:
+                old_id = existing_file_map[item.source_url]
+                category_mapping[item.source_url] = old_id
+                for k, v in existing_file_map.items():
+                    if v == old_id and not str(k).startswith("_"):
+                        category_mapping[k] = v
             continue
 
         # Określenie ID rodzica w PrestaShop
@@ -125,6 +181,13 @@ def import_categories(
                 stats.error_details.append(err_msg)
                 failed_parent_paths.add(item.path_key)
                 failed_parent_urls.add(item.source_url)
+                # Zachowanie dotychczasowych wpisów podkategorii ze starej mapy
+                if item.source_url in existing_file_map:
+                    old_id = existing_file_map[item.source_url]
+                    category_mapping[item.source_url] = old_id
+                    for k, v in existing_file_map.items():
+                        if v == old_id and not str(k).startswith("_"):
+                            category_mapping[k] = v
                 continue
 
         # Sprawdzenie czy kategoria już istnieje w sklepie
@@ -146,20 +209,40 @@ def import_categories(
                 ps_cat = existing_by_id[candidate_id]
                 ps_parent = ps_cat.get("id_parent", 0)
                 ps_name = ps_cat.get("name", "").strip().lower()
+                expected_slug = slugify(item.name)
                 name_matches = ps_name == item.name.strip().lower()
-                slug_matches = ps_cat.get("link_rewrite", "").strip() == slugify(item.name)
+                slug_matches = ps_cat.get("link_rewrite", "").strip() == expected_slug
 
-                # Sprawdzenie czy ID nie należy do innej kategorii z pliku źródłowego o tej nazwie (np. 'Klamki do drzwi')
+                # Sprawdzenie czy w pliku wejściowym istnieje inna kategoria o nazwie ps_name (ochrona przed nadpisaniem)
                 other_item_with_ps_name = any(
                     other.name.strip().lower() == ps_name and other.source_url != item.source_url
                     for other in items
                 )
 
-                if name_matches or slug_matches or (ps_parent == target_parent_id and not other_item_with_ps_name):
+                # Weryfikacja powiązania source_url z ID w przypadku rename (inna nazwa i slug):
+                # Wymagamy dowodu, że candidate_id był wcześniej zaimportowany pod tym source_url
+                # i posiadał w starej mapie ścieżkę z aktualną nazwą w PrestaShop (ps_name).
+                has_previous_path_for_ps_name = any(
+                    _extract_category_name_from_map_key(str(k)) == ps_name
+                    for k, v in existing_file_map.items()
+                    if v == candidate_id
+                    and not str(k).startswith("http://")
+                    and not str(k).startswith("https://")
+                    and not str(k).startswith("_")
+                )
+
+                is_verified_rename = (
+                    has_previous_path_for_ps_name
+                    and ps_parent == target_parent_id
+                    and not other_item_with_ps_name
+                    and candidate_id not in assigned_id_to_url
+                )
+
+                if name_matches or slug_matches or is_verified_rename:
                     existing_cat_id = candidate_id
                 else:
                     logger.warning(
-                        "Zapisane ID %d w pliku mapowania nie należy do kategorii źródłowej '%s' "
+                        "Zapisane ID %d w pliku mapowania nie posiada zweryfikowanego powiązania z source_url '%s' "
                         "(w sklepie: '%s', rodzic: %d). Zignorowano niepoprawne powiązanie.",
                         candidate_id,
                         item.name,
@@ -220,8 +303,26 @@ def import_categories(
                         existing_cat_full = (
                             cat_resp.get("category", cat_resp) if isinstance(cat_resp, dict) else {}
                         )
-                    except Exception:
-                        existing_cat_full = {}
+                        if not existing_cat_full or not isinstance(existing_cat_full, dict) or "id" not in existing_cat_full:
+                            raise PrestaShopAPIError(f"Niepełna odpowiedź API dla kategorii ID {cat_id}: {cat_resp}")
+                    except Exception as exc:
+                        err_msg = (
+                            f"Błąd pobierania pełnych danych kategorii ID {cat_id} ('{item.name}') przed PUT: {exc}. "
+                            f"Pominięto aktualizację w celu ochrony przed wyczyszczeniem opisu."
+                        )
+                        logger.error(err_msg)
+                        stats.errors += 1
+                        stats.error_details.append(err_msg)
+                        failed_parent_paths.add(item.path_key)
+                        failed_parent_urls.add(item.source_url)
+                        # Zachowanie dotychczasowych wpisów rodzica z existing_file_map
+                        if item.source_url in existing_file_map:
+                            old_id = existing_file_map[item.source_url]
+                            category_mapping[item.source_url] = old_id
+                            for k, v in existing_file_map.items():
+                                if v == old_id and not str(k).startswith("_"):
+                                    category_mapping[k] = v
+                        continue
 
                     payload = build_category_payload(
                         item,
@@ -250,6 +351,14 @@ def import_categories(
                         stats.error_details.append(err_msg)
                         failed_parent_paths.add(item.path_key)
                         failed_parent_urls.add(item.source_url)
+
+                        # Zachowanie dotychczasowych wpisów rodzica z existing_file_map
+                        if item.source_url in existing_file_map:
+                            old_id = existing_file_map[item.source_url]
+                            category_mapping[item.source_url] = old_id
+                            for k, v in existing_file_map.items():
+                                if v == old_id and not str(k).startswith("_"):
+                                    category_mapping[k] = v
                         continue
             else:
                 stats.skipped += 1
@@ -310,9 +419,13 @@ def import_categories(
             if slash_path != formatted_path:
                 category_mapping[slash_path] = cat_id
 
-    # 4. Zapisanie pliku mapowania
+    # 5. Zapisanie pliku mapowania wraz z metadanymi instancji sklepu
     category_mapping["home"] = PRESTASHOP_HOME_CATEGORY_ID
     category_mapping["Strona główna"] = PRESTASHOP_HOME_CATEGORY_ID
-    save_category_mapping(mapping_path, category_mapping)
+    save_category_mapping(
+        mapping_path,
+        category_mapping,
+        instance_url=getattr(client, "api_url", None),
+    )
 
     return stats, category_mapping

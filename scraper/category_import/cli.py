@@ -11,6 +11,7 @@ from prestashop_api import (
     PrestaShopConnectionError,
 )
 from .models import ImportStats
+from .mapping import get_default_mapping_path
 from .orchestrator import import_categories
 
 logger = logging.getLogger("category_import")
@@ -73,7 +74,9 @@ def main() -> int:
         return 1
 
     mapping_path = (
-        args.mapping_file if args.mapping_file else _PROJECT_ROOT / "scraper-results" / "category_mapping.json"
+        args.mapping_file
+        if args.mapping_file
+        else get_default_mapping_path(_PROJECT_ROOT / "scraper-results", getattr(client, "api_url", None))
     )
 
     try:
