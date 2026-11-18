@@ -1,6 +1,33 @@
 {if $hookName === 'displayHome'}
   {assign var='tile_images' value=['Klamki do drzwi' => 'klamki.jpg','Okucia drzwiowe' => 'okucia-drzwiowe.jpg','Bramy i ogrodzenia' => 'bramy.jpg','Okucia budowlane' => 'okucia-budowlane.jpg']}
   {foreach $linkBlocks as $block}
+    {if $block.title === 'Kategorie'}
+      {* Używamy adresu wygenerowanego dla kafla, ponieważ ID kategorii zależy od instalacji. *}
+      {foreach $block.links as $link}
+        {if $link.title === 'Klamki do drzwi'}
+          <section class="pd-home-banner" aria-labelledby="pd-home-banner-title">
+            <div class="pd-home-banner-intro">
+              <img src="{$urls.child_img_url}baner-klamki.webp" width="160" height="160" alt="Klamka w otwartej paczce">
+              <div>
+                <h2 id="pd-home-banner-title">Klamki i okucia do drzwi</h2>
+                <p>Rozwiązania do domu i ogrodu</p>
+              </div>
+            </div>
+            <div class="pd-home-banner-help">
+              <i class="material-icons" aria-hidden="true">headset_mic</i>
+              <div>
+                <strong>Potrzebujesz pomocy?</strong>
+                <p>Doradzimy w wyborze okuć</p>
+              </div>
+            </div>
+            <a class="pd-home-banner-link" href="{$link.url|escape:'html':'UTF-8'}">
+              Zobacz klamki <i class="material-icons" aria-hidden="true">arrow_forward</i>
+            </a>
+          </section>
+          {break}
+        {/if}
+      {/foreach}
+    {/if}
     <section class="pd-category-tiles" aria-label="{$block.title|escape:'html':'UTF-8'}">
       {foreach $block.links as $link}
         <a href="{$link.url|escape:'html':'UTF-8'}">
