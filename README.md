@@ -29,6 +29,15 @@ Weryfikację poprawności połączenia i uprawnień wykonuje:
 python3 scraper/test_api_client.py
 ```
 
+## Sprawdzanie jakości kodu scrapera
+
+W aktywnym środowisku wirtualnym Pythona uruchom poniższe polecenia z głównego katalogu repozytorium. Pierwsze instaluje Ruff, a drugie sprawdza pliki Pythona w `scraper/` według reguł z [`ruff.toml`](ruff.toml).
+
+```sh
+python -m pip install -r scraper/requirements-dev.txt
+python -m ruff check scraper
+```
+
 ## Dokumentacja
 
 - Przygotowanie `.env`, certyfikat i uruchamianie ręczne opisuje [wdrożenie](docs/DEPLOYMENT.md).
