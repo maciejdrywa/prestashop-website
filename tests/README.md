@@ -102,7 +102,10 @@ Uwagi:
 ```
 $env:BASE_URL="https://localhost"; $env:PRZEWOZNIK="DPD"; npx playwright test order
 ```
-- **Stany magazynowe.** Każde zamówienie zmniejsza stany. Test dobiera dostępne produkty na bieżąco, ale po wielu uruchomieniach może zabraknąć produktów w wymaganych ilościach. Wtedy trzeba odtworzyć sklep albo uzupełnić stany w panelu.
+- **Stany magazynowe.** Każde zamówienie zmniejsza stany. Test dobiera dostępne produkty na bieżąco, ale po wielu uruchomieniach może zabraknąć produktów w wymaganych ilościach. Test celowo nie zmienia magazynu sam. Początkowe stany (plan 0–10 szt.) przywraca komenda z głównego katalogu repozytorium, warto ją wykonać przed odbiorem:
+```
+docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/import-stock.php --all
+```
 
 ### Wyniki
 - Raport HTML: `tests/playwright-report/` (podgląd: `npx playwright show-report`)
