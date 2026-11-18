@@ -5,53 +5,43 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
-    from prestashop_api import (
-        PrestaShopClient,
-        PrestaShopAPIError,
-        PrestaShopAuthError,
-        PrestaShopConnectionError,
-    )
+    from prestashop_api import PrestaShopClient
 except ImportError:
-    from scraper.prestashop_api import (
-        PrestaShopClient,
-        PrestaShopAPIError,
-        PrestaShopAuthError,
-        PrestaShopConnectionError,
-    )
+    from scraper.prestashop_api import PrestaShopClient
 
-from .models import ProductItem, VariantItem, ProductImportStats
-from .validator import load_and_validate_products
 from .mapping import (
-    load_category_mapping,
-    resolve_product_categories,
-    save_product_mapping,
-    load_product_mapping,
     get_default_category_mapping_path,
     get_default_product_mapping_path,
+    load_category_mapping,
+    load_product_mapping,
+    resolve_product_categories,
+    save_product_mapping,
 )
-from .stock import (
-    generate_deterministic_stock_plan,
-    distribute_stock_to_variants,
-)
+from .models import ProductImportStats
 from .prestashop_sync import (
-    fetch_active_languages,
-    fetch_existing_products_index,
-    fetch_existing_combinations_index,
-    fetch_product_options_cache,
-    fetch_option_values_cache,
-    ensure_product_option_group,
-    ensure_product_option_value,
-    fetch_product_features_cache,
-    fetch_feature_values_cache,
+    build_combination_payload,
+    build_product_payload,
     ensure_product_feature,
     ensure_product_feature_value,
-    build_product_payload,
-    is_product_dirty,
-    build_combination_payload,
-    is_combination_dirty,
+    ensure_product_option_group,
+    ensure_product_option_value,
+    fetch_active_languages,
+    fetch_existing_combinations_index,
+    fetch_existing_products_index,
+    fetch_feature_values_cache,
+    fetch_option_values_cache,
+    fetch_product_features_cache,
+    fetch_product_options_cache,
     fetch_stock_availables_for_product,
+    is_combination_dirty,
+    is_product_dirty,
     update_stock_available,
 )
+from .stock import (
+    distribute_stock_to_variants,
+    generate_deterministic_stock_plan,
+)
+from .validator import load_and_validate_products
 
 logger = logging.getLogger("product_import")
 

@@ -3,23 +3,22 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-import sys
 
 try:
     from prestashop_api import (
-        PrestaShopClient,
         PrestaShopAuthError,
+        PrestaShopClient,
         PrestaShopConnectionError,
     )
 except ImportError:
     from scraper.prestashop_api import (
-        PrestaShopClient,
         PrestaShopAuthError,
+        PrestaShopClient,
         PrestaShopConnectionError,
     )
 
-from .models import ProductImportStats
 from .mapping import get_default_product_mapping_path
+from .models import ProductImportStats
 from .orchestrator import import_products
 
 logger = logging.getLogger("product_import")

@@ -1,21 +1,12 @@
 from __future__ import annotations
 
-from decimal import Decimal
 import logging
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    from prestashop_api import (
-        PrestaShopClient,
-        PrestaShopAPIError,
-        PrestaShopAuthError,
-    )
+    from prestashop_api import PrestaShopClient
 except ImportError:
-    from scraper.prestashop_api import (
-        PrestaShopClient,
-        PrestaShopAPIError,
-        PrestaShopAuthError,
-    )
+    from scraper.prestashop_api import PrestaShopClient
 
 from .models import ProductItem, VariantItem
 from .pricing import (
@@ -51,7 +42,7 @@ def fetch_active_languages(client: PrestaShopClient) -> List[str]:
             langs = raw
         else:
             langs = []
-        lang_ids = [str(l["id"]) for l in langs if isinstance(l, dict) and "id" in l]
+        lang_ids = [str(lang["id"]) for lang in langs if isinstance(lang, dict) and "id" in lang]
         return lang_ids if lang_ids else ["1"]
     except Exception as exc:
         logger.debug("Nie udało się pobrać listy aktywnych języków (%s), użyto ID domyślnego '1'.", exc)
