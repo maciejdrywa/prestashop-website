@@ -59,6 +59,22 @@ function noweHaslo(): string {
 }
 
 
+/**
+ * Dokładne dopasowanie nazwy produktu w zamówieniu. Samo „zawiera” myli produkty,
+ * których nazwy są swoimi początkami (np. „Klamka X” i „Klamka X platyna”).
+ * Dla kombinacji sklep dopisuje wybrany wariant w nawiasie, np.
+ * „Zatrzask balkonowy pochwyt palacza - kolory (WYBIERZ KOLOR: biały)”.
+ * Dopuszczamy też domyślny format PrestaShop: „Nazwa - Kolor : czarny”.
+ */
+function nazwaWZamowieniu(nazwa: string): RegExp {
+  const wzorzec = nazwa
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+');
+
+  return new RegExp(`^\\s*${wzorzec}(\\s*\\(.+\\)|\\s+-\\s.+)?\\s*$`, 's');
+}
+
+
 /** Wypełnia pole tylko wtedy, gdy formularz je zawiera (pola zależą od konfiguracji kraju). */
 async function wypelnijJesliJest(pole: Locator, wartosc: string) {
   if ((await pole.count()) === 0) return;
@@ -250,7 +266,9 @@ async function sprawdzPotwierdzenie(page: Page, przewoznik: string, oczekiwane: 
   await expect(linie, 'Inna liczba pozycji niż w koszyku').toHaveCount(oczekiwane.length);
 
   for (const p of oczekiwane) {
-    const linia = linie.filter({ has: page.locator('.details', { hasText: p.nazwa }) });
+    const linia = linie.filter({
+      has: page.locator('.details > span, .details > a > span', { hasText: nazwaWZamowieniu(p.nazwa) }),
+    });
 
     await expect(linia, `Brak w zamówieniu: ${p.nazwa}`).toHaveCount(1);
     // Kolumny w motywie classic: cena jednostkowa, ilość, suma. Druga kolumna to ilość.
