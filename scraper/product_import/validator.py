@@ -233,6 +233,8 @@ def load_and_validate_products(
 
     for idx, raw in enumerate(data):
         try:
+            if not isinstance(raw, dict):
+                raise TypeError(f"Niepoprawny typ rekordu (oczekiwano słownika, otrzymano {type(raw).__name__}).")
             item = validate_product_record(raw)
             if item.product_id in seen_ids:
                 raise ValueError(f"Zduplikowany identyfikator product_id '{item.product_id}' (pozycja {idx + 1}).")
@@ -246,7 +248,8 @@ def load_and_validate_products(
                     all_stock_values.append(v.stock)
 
         except Exception as exc:
-            err = f"Błąd walidacji rekordu {idx + 1} (product_id: {raw.get('product_id', '?')}): {exc}"
+            raw_id = raw.get("product_id", "?") if isinstance(raw, dict) else "?"
+            err = f"Błąd walidacji rekordu {idx + 1} (product_id: {raw_id}): {exc}"
             logger.warning(err)
             if validation_errors is not None:
                 validation_errors.append(err)

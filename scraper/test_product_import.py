@@ -14,9 +14,11 @@ Weryfikuje:
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 from decimal import Decimal
 from pathlib import Path
+from typing import List
 from unittest.mock import MagicMock
 
 import pytest
@@ -33,8 +35,10 @@ from product_import import (
     format_decimal,
     generate_deterministic_stock_plan,
     get_tax_rules_group_id,
+    import_products,
     is_combination_dirty,
     is_product_dirty,
+    load_and_validate_products,
     load_product_mapping,
     resolve_product_categories,
     resolve_product_weight,
@@ -323,9 +327,12 @@ def test_product_mapping_atomic_persistence():
         save_product_mapping(mapping_file, data)
         assert mapping_file.is_file()
 
-        # Sprawdzenie uprawnień 0664 (rw-rw-r--)
+        # Sprawdzenie uprawnień: 0666 na Windowsie, 0664 na POSIX
         mode = oct(mapping_file.stat().st_mode & 0o777)
-        assert mode == oct(0o664)
+        if sys.platform == "win32":
+            assert mode == oct(0o666)
+        else:
+            assert mode == oct(0o664)
 
         # Odczyt
         loaded = load_product_mapping(mapping_file)
@@ -353,6 +360,8 @@ def test_product_dirty_checking():
         "id": 20,
         "reference": "pandomu-5",
         "name": "Zamek GAMA",
+        "description": "Opis",
+        "description_short": "Krótki",
         "price": "48.772358",
         "id_tax_rules_group": "1",
         "id_category_default": "64",
@@ -361,6 +370,14 @@ def test_product_dirty_checking():
     }
     # Dane zgodne -> nie jest dirty
     assert is_product_dirty(existing_matching, item, default_category_id=64) is False
+
+    # Zmiana opisu -> jest dirty
+    existing_diff_desc = dict(existing_matching, description="Stary opis")
+    assert is_product_dirty(existing_diff_desc, item, default_category_id=64) is True
+
+    # Zmiana krótkiego opisu -> jest dirty
+    existing_diff_short = dict(existing_matching, description_short="Stary krótki")
+    assert is_product_dirty(existing_diff_short, item, default_category_id=64) is True
 
     # Zmiana ceny -> jest dirty
     existing_diff_price = dict(existing_matching, price="50.000000")
@@ -591,3 +608,161 @@ def test_product_features_sync_and_payload():
         product_features=[{"id": "11", "id_feature_value": "102"}],
     )
     assert payload["associations"]["product_features"] == [{"id": "11", "id_feature_value": "102"}]
+
+
+# ==============================================================================
+# 8. TESTY POPRAWEK CODE REVIEW (PR #70 / Issue #66)
+# ==============================================================================
+
+def test_dirty_checking_detects_description_and_short_change():
+    """Weryfikuje, że zmiana opisu lub krótkiego opisu jest wykrywana przez dirty-checking."""
+    item = ProductItem(
+        product_id="10",
+        name="Klamka mosiężna",
+        description="<p>Nowy pełny opis produktu</p>",
+        description_short="<p>Nowy krótki opis</p>",
+        price_netto=Decimal("25.000000"),
+        price_brutto=Decimal("30.75"),
+        vat_rate=Decimal("23"),
+        weight=Decimal("0.500000"),
+    )
+
+    existing_same = {
+        "id": 55,
+        "reference": "pandomu-10",
+        "name": "Klamka mosiężna",
+        "price": "25.000000",
+        "id_tax_rules_group": "1",
+        "id_category_default": "2",
+        "weight": "0.500000",
+        "active": "1",
+        "description": "<p>Nowy pełny opis produktu</p>",
+        "description_short": "<p>Nowy krótki opis</p>",
+    }
+    assert is_product_dirty(existing_same, item, default_category_id=2) is False
+
+    # Zmiana opisu
+    existing_old_desc = dict(existing_same, description="<p>Stary opis</p>")
+    assert is_product_dirty(existing_old_desc, item, default_category_id=2) is True
+
+    # Zmiana opisu krótkiego
+    existing_old_short = dict(existing_same, description_short="<p>Stary krótki</p>")
+    assert is_product_dirty(existing_old_short, item, default_category_id=2) is True
+
+
+def test_malformed_record_type_does_not_abort_validation():
+    """Weryfikuje, że rekord o nieprawidłowym typie (string, int, None) nie przerywa walidacji."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        json_file = Path(tmp_dir) / "test_products.json"
+        content = [
+            "niepoprawny_string_zamiast_slownika",
+            42,
+            None,
+            {
+                "product_id": "99",
+                "name": "Poprawny produkt",
+                "price_netto": 10.0,
+                "vat_rate": 23.0,
+                "weight": 1.0,
+                "category_paths": [["Drzwi"]],
+            },
+        ]
+        json_file.write_text(json.dumps(content), encoding="utf-8")
+
+        errs: List[str] = []
+        items = load_and_validate_products(json_file, validation_errors=errs)
+        assert len(items) == 1
+        assert items[0].product_id == "99"
+        assert len(errs) == 3
+        assert any("niepoprawny_string_zamiast_slownika" in e or "str" in e for e in errs)
+
+
+def test_stock_not_reset_for_existing_product_in_orchestrator():
+    """Weryfikuje, że ponowny import istniejącego produktu nie resetuje bieżącego stanu ze sklepu."""
+    mock_client = MagicMock()
+    mock_client.get.side_effect = lambda resource, *args, **kwargs: {
+        "languages": [{"id": 1, "iso_code": "pl"}],
+        "products": [{"id": 10, "reference": "pandomu-1", "price": "10.000000", "id_tax_rules_group": "1", "id_category_default": "2", "weight": "1.000000", "active": "1", "name": "Produkt 1", "description": "", "description_short": ""}],
+        "combinations": [],
+        "product_options": [],
+        "product_option_values": [],
+        "product_features": [],
+        "product_feature_values": [],
+        "stock_availables": [{"id": 100, "id_product": 10, "id_product_attribute": "0", "quantity": "4", "out_of_stock": "0", "depends_on_stock": "0"}],
+    }.get(resource, [])
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cat_file = Path(tmp_dir) / "category_mapping.json"
+        cat_file.write_text(json.dumps({"Drzwi": 2, "ROOT": 2}), encoding="utf-8")
+        prod_file = Path(tmp_dir) / "products.json"
+        prod_file.write_text(json.dumps([{
+            "product_id": "1",
+            "name": "Produkt 1",
+            "price_netto": 10.0,
+            "vat_rate": 23.0,
+            "weight": 1.0,
+            "category_paths": [["Drzwi"]],
+            # stock jest None -> stan powinien pozostać 4 (ze sklepu), a nie deterministyczny tot_stock
+        }]), encoding="utf-8")
+        prod_map_file = Path(tmp_dir) / "product_mapping.json"
+
+        stats, mapping = import_products(
+            client=mock_client,
+            products_file=prod_file,
+            category_mapping_file=cat_file,
+            product_mapping_file=prod_map_file,
+        )
+
+        assert stats.created == 0
+        assert stats.skipped == 1
+        assert stats.errors == 0
+        # Stan 4 był zgodny z targetem (4 ze sklepu), więc nie wykonano PUT
+        assert stats.stocks_updated == 0
+        assert stats.stocks_skipped == 1
+
+
+def test_product_identity_by_reference_only_ignores_stale_id_mapping():
+    """Weryfikuje, że brak produktu po referencji nie powoduje fallbacku do starego ID z mapowania."""
+    mock_client = MagicMock()
+    # W sklepie nie ma produktu o referencji pandomu-999
+    # Ale w starym product_mapping jest "999": 10
+    mock_client.get.side_effect = lambda resource, *args, **kwargs: {
+        "languages": [{"id": 1, "iso_code": "pl"}],
+        "products": [{"id": 10, "reference": "pandomu-inny-produkt", "price": "10.000000", "id_tax_rules_group": "1", "id_category_default": "2", "weight": "1.000000", "active": "1", "name": "Inny", "description": "", "description_short": ""}],
+        "combinations": [],
+        "product_options": [],
+        "product_option_values": [],
+        "product_features": [],
+        "product_feature_values": [],
+        "stock_availables": [{"id": 100, "id_product": 11, "id_product_attribute": "0", "quantity": "0", "out_of_stock": "0", "depends_on_stock": "0"}],
+    }.get(resource, [])
+    mock_client.post.return_value = {"product": {"id": 11}}
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cat_file = Path(tmp_dir) / "category_mapping.json"
+        cat_file.write_text(json.dumps({"Drzwi": 2, "ROOT": 2}), encoding="utf-8")
+        prod_file = Path(tmp_dir) / "products.json"
+        prod_file.write_text(json.dumps([{
+            "product_id": "999",
+            "name": "Nowy produkt 999",
+            "price_netto": 15.0,
+            "vat_rate": 23.0,
+            "weight": 1.0,
+            "category_paths": [["Drzwi"]],
+        }]), encoding="utf-8")
+        prod_map_file = Path(tmp_dir) / "product_mapping.json"
+        # Stare, nieaktualne mapowanie
+        prod_map_file.write_text(json.dumps({"999": 10, "pandomu-999": 10}), encoding="utf-8")
+
+        stats, mapping = import_products(
+            client=mock_client,
+            products_file=prod_file,
+            category_mapping_file=cat_file,
+            product_mapping_file=prod_map_file,
+        )
+
+        # Produkt 999 NIE został dopasowany do ID 10! Został utworzony jako nowy (POST)
+        assert stats.created == 1
+        assert stats.updated == 0
+        mock_client.post.assert_called()
+        assert mapping["999"] == 11

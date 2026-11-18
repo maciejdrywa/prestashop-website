@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -57,7 +58,9 @@ def fetch_existing_products_index(client: PrestaShopClient) -> Tuple[Dict[str, D
     logger.info("Pobieranie istniejących produktów z PrestaShop API...")
     res = client.get(
         "products",
-        params={"display": "[id,reference,price,id_tax_rules_group,id_category_default,weight,active,name]"},
+        params={
+            "display": "[id,reference,price,id_tax_rules_group,id_category_default,weight,active,name,description,description_short]"
+        },
     )
     raw = res.get("products", []) if isinstance(res, dict) else res
     if isinstance(raw, dict):
@@ -347,10 +350,13 @@ def is_product_dirty(
     existing: Dict[str, Any],
     product: ProductItem,
     default_category_id: int,
+    associated_category_ids: Optional[List[int]] = None,
+    product_features: Optional[List[Dict[str, str]]] = None,
 ) -> bool:
     """
     Sprawdza, czy produkt w PrestaShop wymaga aktualizacji (Dirty Checking).
-    Porównuje: cenę, grupę podatkową, domyślną kategorię, masę, nazwę i status aktywności.
+    Porównuje: cenę, grupę podatkową, domyślną kategorię, masę, nazwę, opisy,
+    status aktywności oraz ewentualne asocjacje.
     """
     try:
         # 1. Cena netto
@@ -380,14 +386,54 @@ def is_product_dirty(
             return True
 
         # 6. Nazwa
-        name_val = existing.get("name")
-        if isinstance(name_val, list) and name_val:
-            curr_name = str(name_val[0].get("value", "")).strip()
-        else:
-            curr_name = str(name_val or "").strip()
+        def _extract_text(val: Any) -> str:
+            if isinstance(val, list) and val:
+                raw_text = str(val[0].get("value", ""))
+            else:
+                raw_text = str(val or "")
+            norm = raw_text.replace("\r\n", "\n").strip()
+            # PrestaShop normalizuje samozamykające tagi HTML np. <br/> -> <br />
+            return re.sub(r"(\S)/>", r"\1 />", norm)
 
-        if curr_name != product.name.strip():
+        curr_name = _extract_text(existing.get("name"))
+        if curr_name != _extract_text(product.name):
             return True
+
+        # 7. Opis pełny (jeśli dostępny w obiekcie)
+        if "description" in existing:
+            curr_desc = _extract_text(existing.get("description"))
+            if curr_desc != _extract_text(product.description):
+                return True
+
+        # 8. Opis krótki (jeśli dostępny w obiekcie)
+        if "description_short" in existing:
+            curr_desc_short = _extract_text(existing.get("description_short"))
+            if curr_desc_short != _extract_text(product.description_short):
+                return True
+
+        # 9. Asocjacje kategorii (jeśli dostępne w obiekcie)
+        if associated_category_ids is not None and "associations" in existing:
+            assoc = existing.get("associations") or {}
+            existing_cats = assoc.get("categories", [])
+            existing_cat_ids = {str(c.get("id")) for c in existing_cats if isinstance(c, dict)}
+            target_cat_ids = {str(cid) for cid in associated_category_ids}
+            if existing_cat_ids and existing_cat_ids != target_cat_ids:
+                return True
+
+        # 10. Cechy produktu (jeśli dostępne w obiekcie)
+        if product_features is not None and "associations" in existing:
+            assoc = existing.get("associations") or {}
+            existing_feats = assoc.get("product_features", [])
+            existing_feat_pairs = {
+                (str(f.get("id")), str(f.get("id_feature_value")))
+                for f in existing_feats if isinstance(f, dict)
+            }
+            target_feat_pairs = {
+                (str(f.get("id")), str(f.get("id_feature_value")))
+                for f in product_features if isinstance(f, dict)
+            }
+            if existing_feat_pairs and existing_feat_pairs != target_feat_pairs:
+                return True
 
         return False
     except Exception:

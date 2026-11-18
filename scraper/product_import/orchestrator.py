@@ -17,7 +17,7 @@ from .mapping import (
     resolve_product_categories,
     save_product_mapping,
 )
-from .models import ProductImportStats
+from .models import ProductImportStats, ProductItem
 from .prestashop_sync import (
     build_combination_payload,
     build_product_payload,
@@ -120,6 +120,9 @@ def import_products(
 
     for idx, p in enumerate(products, start=1):
         try:
+            if not isinstance(p, ProductItem):
+                raise TypeError(f"Niepoprawny typ rekordu w pętli importu (oczekiwano ProductItem, otrzymano {type(p).__name__}).")
+
             # A. Rozwiązanie kategorii
             default_cat_id, associated_cat_ids = resolve_product_categories(
                 p.category_paths,
@@ -135,15 +138,13 @@ def import_products(
                     fvid = ensure_product_feature_value(client, fid, f_val, feature_values_cache, active_languages)
                     feature_associations.append({"id": str(fid), "id_feature_value": str(fvid)})
 
-            # B. Wyszukanie istniejącego produktu
+            # B. Wyszukanie istniejącego produktu wyłącznie po unikalnej referencji (bez ryzykownego fallbacku ID)
             existing_prod = existing_by_ref.get(p.reference)
-            if existing_prod is None and p.product_id in product_mapping:
-                mapped_id = product_mapping[p.product_id]
-                existing_prod = existing_by_id.get(mapped_id)
+            is_new_product = (existing_prod is None)
 
             ps_product_id: Optional[int] = None
 
-            if existing_prod is None:
+            if is_new_product:
                 # Tworzenie nowego produktu (POST)
                 payload = build_product_payload(
                     product=p,
@@ -160,9 +161,16 @@ def import_products(
                 existing_by_ref[p.reference] = res["product"]
                 existing_by_id[ps_product_id] = res["product"]
             else:
+                assert existing_prod is not None
                 ps_product_id = int(existing_prod["id"])
                 if update_existing:
-                    if is_product_dirty(existing_prod, p, default_cat_id):
+                    if is_product_dirty(
+                        existing=existing_prod,
+                        product=p,
+                        default_category_id=default_cat_id,
+                        associated_category_ids=associated_cat_ids,
+                        product_features=feature_associations if feature_associations else None,
+                    ):
                         # Pobranie pełnego obiektu przed PUT w celu ochrony unmanaged fields
                         full_prod = None
                         try:
@@ -258,13 +266,19 @@ def import_products(
 
             if not p.has_variants:
                 # Produkt standardowy: aktualizacja rekordu id_product_attribute = 0
-                target_qty = tot_stock
                 base_stock_rec = stock_by_attr.get("0")
                 if base_stock_rec is not None:
                     s_id = int(base_stock_rec["id"])
                     c_qty = int(base_stock_rec.get("quantity", -1))
                     c_out = int(base_stock_rec.get("out_of_stock", -1))
                     c_dos = int(base_stock_rec.get("depends_on_stock", -1))
+
+                    if is_new_product:
+                        target_qty = tot_stock
+                    else:
+                        # Istniejący produkt: nie resetuj bieżącego stanu ze sklepu
+                        target_qty = c_qty if c_qty >= 0 else tot_stock
+
                     was_updated = update_stock_available(
                         client=client,
                         stock_record_id=s_id,
@@ -285,13 +299,19 @@ def import_products(
                 v_stock_map = distribute_stock_to_variants(tot_stock, variant_ids)
 
                 for vid, comb_id in variant_comb_ids.items():
-                    target_qty = v_stock_map.get(vid, 0)
                     comb_stock_rec = stock_by_attr.get(str(comb_id))
                     if comb_stock_rec is not None:
                         s_id = int(comb_stock_rec["id"])
                         c_qty = int(comb_stock_rec.get("quantity", -1))
                         c_out = int(comb_stock_rec.get("out_of_stock", -1))
                         c_dos = int(comb_stock_rec.get("depends_on_stock", -1))
+
+                        if is_new_product:
+                            target_qty = v_stock_map.get(vid, 0)
+                        else:
+                            # Istniejąca kombinacja: nie resetuj bieżącego stanu ze sklepu
+                            target_qty = c_qty if c_qty >= 0 else v_stock_map.get(vid, 0)
+
                         was_updated = update_stock_available(
                             client=client,
                             stock_record_id=s_id,
@@ -308,10 +328,13 @@ def import_products(
                             stats.stocks_skipped += 1
 
         except Exception as exc:
-            err_msg = f"Błąd przetwarzania produktu {p.product_id} ('{p.name}'): {exc}"
+            p_ref = getattr(p, "reference", getattr(p, "product_id", f"pozycja #{idx}"))
+            p_name = getattr(p, "name", "brak nazwy")
+            err_msg = f"Błąd przetwarzania produktu {p_ref} ('{p_name}'): {exc}"
             logger.error(err_msg)
             stats.errors += 1
             stats.error_details.append(err_msg)
+            continue
 
     # 5. Atomowy zapis zaktualizowanego mapowania produktów z maską uprawnień 0664
     save_product_mapping(prod_map_path, product_mapping)
