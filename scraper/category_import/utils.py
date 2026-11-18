@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 import unicodedata
+from typing import Any
 
 # Tablica transliteracji polskich znaków dla link_rewrite (slug)
 PL_CHAR_TRANSLATION = str.maketrans({

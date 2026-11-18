@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import sys
 import time
+
 from prestashop_api import (
-    PrestaShopClient,
     PrestaShopAuthError,
+    PrestaShopClient,
     PrestaShopConnectionError,
-    PrestaShopAPIError,
 )
 
 
@@ -36,7 +36,7 @@ def test_api() -> None:
         print("Sprawdzanie uprawnień do odczytu zasobów katalogu (GET):")
         for resource in ["categories", "products", "combinations", "stock_availables"]:
             try:
-                res = client.get(resource, params={"limit": 1})
+                client.get(resource, params={"limit": 1})
                 print(f" - GET  {resource:<18} [OK]")
             except PrestaShopAuthError:
                 print(f" - GET  {resource:<18} [BŁĄD: BRAK UPRAWNIEŃ 401/403]")

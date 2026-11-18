@@ -1,9 +1,12 @@
 """Odczytuje kombinację faktycznie potwierdzoną w bieżącym HTML produktu."""
 
 from bs4 import BeautifulSoup
-
 from parser_classes.ProductVariant import ProductVariant
-from Scrapping_products.variant_prices import attribute_choices, read_product_data, variant_from_data
+from Scrapping_products.variant_prices import (
+    attribute_choices,
+    read_product_data,
+    variant_from_data,
+)
 
 
 def scrap_variants(soup: BeautifulSoup, product_name: str, base_netto: float) -> list[ProductVariant]:

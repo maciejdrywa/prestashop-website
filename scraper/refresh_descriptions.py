@@ -1,8 +1,8 @@
 """Odświeża krótkie i pełne opisy w istniejącym katalogu źródłowym."""
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from catalog_files import read_products, save_json

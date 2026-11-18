@@ -1,12 +1,12 @@
 """Przechodzi drzewo kategorii i zachowuje źródła przypisań produktów."""
 
-from collections import deque
 import logging
 import re
+from collections import deque
 from urllib.parse import urlsplit
 
-from Scrapping_products.parse_category import parse_category, parse_navigation
 from parser_classes.category_page import CategoryLink
+from Scrapping_products.parse_category import parse_category, parse_navigation
 
 
 def product_id_from_url(url: str) -> str:

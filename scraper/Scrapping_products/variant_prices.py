@@ -1,15 +1,14 @@
 """Odczytuje rzeczywiste kombinacje PrestaShop i ich wyświetlane ceny."""
 
-from collections import deque
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from itertools import product as cartesian_product
 import json
 import logging
 import random
 import re
+from collections import deque
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from itertools import product as cartesian_product
 
 from bs4 import BeautifulSoup
-
 from parser_classes.ProductVariant import ProductVariant
 
 

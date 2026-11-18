@@ -1,16 +1,15 @@
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
-import tempfile
 from types import SimpleNamespace
 
 from bs4 import BeautifulSoup
-
-from refresh_image_covers import refresh_covers
-from scraper_elements.scrap_images import scrap_cover_image
 from catalog_files import read_products, save_json
 from main_scraper import scrape_catalog
+from refresh_image_covers import refresh_covers
+from scraper_elements.scrap_images import scrap_cover_image
 
 
 class CoverTests(unittest.TestCase):

@@ -3,8 +3,8 @@
 import io
 import logging
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from PIL import Image, ImageOps
 

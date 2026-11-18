@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 
+
 def scrap_pretax_price(soup: BeautifulSoup) -> float:
     """Odczytuje bazową cenę netto produktu ze źródła."""
     price_brutto_tag = soup.find('meta', property='product:pretax_price:amount')

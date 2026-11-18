@@ -5,8 +5,7 @@ import re
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
-
-from parser_classes.category_page import CategoryPage, CategoryLink
+from parser_classes.category_page import CategoryLink, CategoryPage
 
 
 def store_url(href: str, base_url: str, *, pagination: bool = False) -> str | None:

@@ -4,15 +4,14 @@ import argparse
 import logging
 import os
 from pathlib import Path
+
 from bs4 import BeautifulSoup
-
-from Scrapping_products.store_crawler import StoreCrawler
-from Scrapping_products.parse_product import parse_product
 from catalog_files import assign_categories, read_products, save_json
-from scraper_elements.scrap_images import scrap_cover_image
-from scraper_elements.scrap_id import scrap_id
 from scraper_elements.scrap_description import scrap_descriptions
-
+from scraper_elements.scrap_id import scrap_id
+from scraper_elements.scrap_images import scrap_cover_image
+from Scrapping_products.parse_product import parse_product
+from Scrapping_products.store_crawler import StoreCrawler
 
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "scraper-results"
 RESULTS_FILE = RESULTS_DIR / "products.json"
