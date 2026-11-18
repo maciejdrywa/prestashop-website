@@ -31,12 +31,15 @@ python3 scraper/test_api_client.py
 
 ## Sprawdzanie jakości kodu scrapera
 
-W aktywnym środowisku wirtualnym Pythona uruchom poniższe polecenia z głównego katalogu repozytorium. Pierwsze instaluje Ruff, a drugie sprawdza pliki Pythona w `scraper/` według reguł z [`ruff.toml`](ruff.toml).
+W aktywnym środowisku wirtualnym Pythona uruchom poniższe polecenia z głównego katalogu repozytorium. Ruff sprawdza pliki Pythona w `scraper/` według reguł z [`ruff.toml`](ruff.toml), a pytest uruchamia [testy scrapera offline](tests/README.md#python-i-javascript).
 
 ```sh
 python -m pip install -r scraper/requirements-dev.txt
 python -m ruff check scraper
+python -m pytest -q
 ```
+
+GitHub Actions uruchamia `Scraper CI` przy każdym pull requeście. W zakładce **Checks** są wyniki zadań **Ruff** i **Scraper unit tests**. Scalaj PR do `main`, gdy oba zadania mają status **Success** dla najnowszej wersji PR-a i recenzent zaakceptował zmiany.
 
 ## Dokumentacja
 
