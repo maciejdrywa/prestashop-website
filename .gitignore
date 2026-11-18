@@ -32,6 +32,9 @@ shop/img/
 shop/upload/
 shop/download/
 
+#DOCS
+docs/design-reference/
+
 # Cache and logs
 cache/
 logs/
