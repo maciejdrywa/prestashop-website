@@ -44,6 +44,46 @@ $env:BASE_URL="https://localhost"; npm test
 
 Testy działają w trybie headless. Samodzielnie podpisany certyfikat HTTPS jest akceptowany.
 
+### Wymagania przed uruchomieniem na lokalnym sklepie
+1. Sklep musi być uruchomiony (`https://localhost`), zgodnie z głównym README.
+2. Indeks wyszukiwarki musi być zbudowany. Skrypty importu nie indeksują produktów, przez co wyszukiwarka zwraca „Brak wyników wyszukiwania”, a test koszyka nie przechodzi kroku wyszukiwania. Indeks buduje się raz po imporcie, poleceniem z głównego katalogu repozytorium:
+```
+docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php -r "require '/var/www/html/config/config.inc.php'; var_dump(Search::indexation(true));"
+```
+Wynik `bool(true)` oznacza poprawne zbudowanie indeksu. To samo można zrobić w panelu: Parametry sklepu → Wyszukiwanie → „Przebuduj cały indeks”.
+
+### Uruchomienie pojedynczego testu
+```
+$env:BASE_URL="https://localhost"; npx playwright test cart
+$env:BASE_URL="https://localhost"; npx playwright test cart --headed
+```
+Opcja `--headed` pokazuje okno przeglądarki.
+
+### Opis testów
+
+#### `e2e/shop-available.spec.ts`: dostępność sklepu
+Otwiera stronę główną pod adresem z `BASE_URL`. Sprawdza, że serwer odpowiada poprawnym kodem HTTP i że strona ma niepusty tytuł.
+
+#### `e2e/cart.spec.ts`: scenariusz koszyka
+Wykonuje scenariusz koszyka wymagany na odbiorze. Każda operacja kończy się asercją sprawdzającą jej efekt.
+
+1. **Dodanie 10 różnych produktów z dwóch kategorii**: po 5 z kategorii „Akcesoria meblowe” i „Klamki do drzwi”, w różnych ilościach (1–3 szt.). Po każdym dodaniu test sprawdza, że pojawiło się okno potwierdzenia koszyka. Następnie sprawdza, że koszyk zawiera 10 pozycji z właściwymi ilościami.
+2. **Wyszukanie produktu po nazwie**: wpisuje frazę (domyślnie `klamka`) w wyszukiwarkę. Czeka na stronę wyników dla tej frazy (adres z parametrem `s`) i sprawdza, że lista wyników nie jest pusta. Losowanie korzysta tylko z tej listy.
+3. **Losowanie produktu z wyników**: wybiera losowo produkt, którego nie ma jeszcze w koszyku i który jest dostępny, a potem dodaje go do koszyka. Test sprawdza, że koszyk ma 11 pozycji.
+4. **Usunięcie 3 produktów**: po każdym usunięciu sprawdza, że zniknął właściwy wiersz i liczba pozycji zmalała o 1.
+5. **Stan końcowy**: koszyk zawiera 8 pozycji, pozostałe ilości są niezmienione, a usunięte produkty nie występują.
+
+Sposób działania:
+- **Dobór produktów.** Test nie ma zapisanych na sztywno adresów ani ID produktów. Otwiera kategorie przez menu, a na stronie produktu odczytuje ID i stan magazynowy (`data-stock`). Bierze tylko produkty z aktywnym przyciskiem „Dodaj do koszyka” i stanem nie mniejszym niż wymagana ilość. Produkty bez widocznego stanu są pomijane, bo aktywny przycisk potwierdza dostępność tylko 1 sztuki. Dlatego test nie próbuje dodać niedostępnych produktów i działa przy losowych stanach 0–10 w lokalnym sklepie.
+- **Rozpoznawanie pozycji w koszyku.** Pozycje są rozpoznawane po ID produktu, a nie po nazwie.
+- **Brak stałych opóźnień.** Test czeka na stan strony, np. na okno koszyka albo zniknięcie wiersza.
+- **Limit czasu.** Cały scenariusz ma limit 5 minut.
+- **Zmiana frazy.** Frazę wyszukiwania można zmienić bez edycji kodu, zmienną `FRAZA`:
+```
+$env:BASE_URL="https://localhost"; $env:FRAZA="zawias"; npx playwright test cart
+```
+- **Wyniki w konsoli.** Test wypisuje dodane produkty (nazwa, ID, ilość, stan) i wylosowany produkt.
+
 ### Wyniki
 - Raport HTML: `tests/playwright-report/` (podgląd: `npx playwright show-report`)
 - Raport JUnit XML: `tests/test-results/junit.xml`
@@ -56,3 +96,4 @@ Katalogi z wynikami są wykluczone z Git.
 Sprawdź pełny start na nowych wolumenach odrębnego projektu Compose, powtórzenie komendy, wznowienie po przerwaniu oraz zachowanie ręcznych zmian produktu, CMS i magazynu. Zmiana `COMPOSE_PROJECT_NAME` rozdziela wolumeny, ale porty hosta wymagają osobnych wartości albo usunięcia publikacji w lokalnym pliku nadpisującym.
 
 Końcowe kontrole bootstrapu obejmują gotowość usług i podstawowe odpowiedzi HTTP. Zakres testów obejmuje testy jednostkowe i integracyjne klas oraz testy E2E w Playwright (`tests/`). Wyniki i ograniczenia platform opisuje [audyt](../docs/AUDIT.md).
+
