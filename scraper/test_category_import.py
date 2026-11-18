@@ -110,8 +110,19 @@ def test_category_mapping_integrity() -> None:
     assert mapping.get("home") == PRESTASHOP_HOME_CATEGORY_ID, "Brak wpisu 'home' w pliku mapowania!"
     assert mapping.get("Strona główna") == PRESTASHOP_HOME_CATEGORY_ID, "Brak wpisu 'Strona główna' w pliku mapowania!"
 
+    # Weryfikacja braku konfliktu ID: 'Akcesoria meblowe' i 'Klamki do drzwi' muszą mieć różne ID
+    url_klamki = "https://pandomu.com.pl/4-klamki-do-drzwi"
+    url_akcesoria = "https://pandomu.com.pl/68-akcesoria-meblowe"
+    if url_klamki in mapping and url_akcesoria in mapping:
+        assert mapping[url_klamki] != mapping[url_akcesoria], (
+            f"Wykryto kolizję ID: 'Klamki do drzwi' i 'Akcesoria meblowe' dostały to samo ID {mapping[url_klamki]}!"
+        )
+
     # Sprawdzenie czy wszystkie kategorie ze scraper-results/categories.json mają odwzorowanie
+    # oraz czy dwa różne source_url nie wskazują na jedno ID (brak konfliktów 1:N)
     items = load_and_validate_categories(CATEGORIES_FILE)
+    id_to_source_url: Dict[int, str] = {}
+
     for item in items:
         # Mapowanie po source_url
         assert item.source_url in mapping, f"Brak wpisu dla source_url '{item.source_url}' w pliku mapowania!"
@@ -119,6 +130,14 @@ def test_category_mapping_integrity() -> None:
         assert isinstance(cat_id_by_url, int) and cat_id_by_url > 0, (
             f"Nieprawidłowy ID kategorii dla URL '{item.source_url}': {cat_id_by_url}"
         )
+
+        assert (
+            cat_id_by_url not in id_to_source_url or id_to_source_url[cat_id_by_url] == item.source_url
+        ), (
+            f"Konflikt w mapowaniu: dwa różne source_url ('{id_to_source_url.get(cat_id_by_url)}' oraz "
+            f"'{item.source_url}') wskazują na to samo ID kategorii {cat_id_by_url}!"
+        )
+        id_to_source_url[cat_id_by_url] = item.source_url
 
         # Mapowanie po pełnej ścieżce tekstowej
         path_str = item.formatted_path
@@ -128,7 +147,7 @@ def test_category_mapping_integrity() -> None:
             f"Niezgodność ID dla URL ({cat_id_by_url}) i ścieżki ({cat_id_by_path}) dla kategorii '{item.name}'"
         )
 
-    print(f" [OK] Słownik mapowania zawiera poprawne ID dla wszystkich {len(items)} kategorii.")
+    print(f" [OK] Słownik mapowania zawiera poprawne, bezkonfliktowe ID dla wszystkich {len(items)} kategorii.")
 
 
 def test_prestashop_parent_child_relations() -> None:
@@ -380,6 +399,19 @@ def test_dynamic_hierarchy_lifecycle() -> None:
         assert int(child_data["id_parent"]) == root_id
         assert int(grandchild_data["id_parent"]) == child_id
 
+        # Ustawienie opisu na kategorii wnuka, aby zweryfikować czy PUT zachowa opis przy zmianie nazwy
+        sample_description = f"<p>Ważny opis kategorii testowej {ts} - zachować przy PUT</p>"
+        client.put("categories", grandchild_id, {
+            "id": grandchild_id,
+            "name": dynamic_cats[2]["name"],
+            "link_rewrite": f"test-grandchild-{ts}",
+            "id_parent": child_id,
+            "active": 1,
+            "description": sample_description,
+        })
+        gc_before = client.get("categories", grandchild_id)["category"]
+        assert gc_before.get("description") == sample_description
+
         # Krok B: Aktualizacja pod kątem dirty-checkingu
         # Modyfikacja nazwy jednej z dynamicznych kategorii (wnuka)
         updated_grandchild_name = f"Test Grandchild Renamed {ts}"
@@ -400,7 +432,7 @@ def test_dynamic_hierarchy_lifecycle() -> None:
         assert stats2.skipped == 2, f"Oczekiwano pominięcia 2 niezmienionych kategorii (pominięto: {stats2.skipped})"
         assert stats2.errors == 0, f"Błędy podczas aktualizacji: {stats2.error_details}"
 
-        # Weryfikacja w API zaktualizowanej nazwy
+        # Weryfikacja w API zaktualizowanej nazwy oraz asercja zachowania opisu
         updated_grandchild_res = client.get("categories", grandchild_id)
         updated_data = (
             updated_grandchild_res["category"]
@@ -408,8 +440,12 @@ def test_dynamic_hierarchy_lifecycle() -> None:
             else updated_grandchild_res
         )
         assert _extract_category_name(updated_data.get("name", "")) == updated_grandchild_name
+        assert updated_data.get("description") == sample_description, (
+            f"Błąd: Zmiana nazwy kategorii usunęła jej opis! Oczekiwano '{sample_description}', "
+            f"otrzymano: '{updated_data.get('description')}'"
+        )
 
-        print(f" [OK] Pomyślnie utworzono i zwalidowano 3-poziomowe drzewo (ID: {root_id} -> {child_id} -> {grandchild_id}) oraz zweryfikowano dirty-checking.")
+        print(f" [OK] Pomyślnie utworzono i zwalidowano 3-poziomowe drzewo (ID: {root_id} -> {child_id} -> {grandchild_id}), zweryfikowano dirty-checking oraz zachowanie opisu.")
     finally:
         # Dynamiczne uzupełnienie created_ids ze słownika mapping1 lub pliku mapowania w razie przerwania przedwcześnie
         for cat in reversed(dynamic_cats):
@@ -437,6 +473,204 @@ def test_dynamic_hierarchy_lifecycle() -> None:
                 print(f"Ostrzeżenie: Nie udało się usunąć tymczasowej kategorii ID {cid}: {e}")
 
 
+def test_parent_failure_cascade_and_mapping_isolation() -> None:
+    """
+    Test 6: Weryfikacja błędu zapisu rodzica.
+    Zapis nowej ścieżki w mapie następuje dopiero po sukcesie API.
+    Gdy aktualizacja rodzica się nie powiedzie, zachowywana jest jego poprzednia ścieżka,
+    a zależne podkategorie są pomijane i raportowane.
+    """
+    print("\n[TEST 6] Weryfikacja obsługi błędu aktualizacji rodzica i pomijania podkategorii...")
+    base_client = PrestaShopClient()
+    ts = int(time.time() * 1000)
+
+    test_cats = [
+        {
+            "name": f"Parent {ts}",
+            "category_path": [f"Parent {ts}"],
+            "source_url": f"https://example.test/err-{ts}-parent",
+            "parent_source_url": None,
+            "product_ids": [],
+        },
+        {
+            "name": f"Child {ts}",
+            "category_path": [f"Parent {ts}", f"Child {ts}"],
+            "source_url": f"https://example.test/err-{ts}-child",
+            "parent_source_url": f"https://example.test/err-{ts}-parent",
+            "product_ids": [],
+        },
+        {
+            "name": f"Independent {ts}",
+            "category_path": [f"Independent {ts}"],
+            "source_url": f"https://example.test/err-{ts}-indep",
+            "parent_source_url": None,
+            "product_ids": [],
+        },
+    ]
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_cats:
+        json.dump(test_cats, f_cats)
+        temp_cats_path = Path(f_cats.name)
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_map:
+        temp_map_path = Path(f_map.name)
+
+    created_ids: List[int] = []
+
+    try:
+        # Krok 1: Poprawne utworzenie drzewa
+        stats1, map1 = import_categories(
+            client=base_client,
+            categories_file=temp_cats_path,
+            mapping_file=temp_map_path,
+        )
+        assert stats1.created == 3
+        parent_id = map1[test_cats[0]["source_url"]]
+        child_id = map1[test_cats[1]["source_url"]]
+        indep_id = map1[test_cats[2]["source_url"]]
+        created_ids = [child_id, parent_id, indep_id]
+
+        # Krok 2: Modyfikacja nazw
+        new_parent_name = f"Parent Renamed {ts}"
+        new_indep_name = f"Independent Renamed {ts}"
+        test_cats[0]["name"] = new_parent_name
+        test_cats[0]["category_path"] = [new_parent_name]
+        test_cats[1]["category_path"] = [new_parent_name, f"Child {ts}"]
+        test_cats[2]["name"] = new_indep_name
+        test_cats[2]["category_path"] = [new_indep_name]
+
+        with temp_cats_path.open("w", encoding="utf-8") as f_cats:
+            json.dump(test_cats, f_cats)
+
+        # Klient symulujący błąd API przy próbie PUT na rodzicu
+        class FailingParentClient(PrestaShopClient):
+            def put(self, resource: str, resource_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+                if resource == "categories" and resource_id == parent_id:
+                    raise PrestaShopAPIError(f"Symulowany błąd zapisu rodzica ID {resource_id}")
+                return super().put(resource, resource_id, data)
+
+        failing_client = FailingParentClient()
+
+        stats2, map2 = import_categories(
+            client=failing_client,
+            categories_file=temp_cats_path,
+            mapping_file=temp_map_path,
+            update_existing=True,
+        )
+
+        # Rodzic nie powiódł się (błąd), Dziecko pominięte i zaraportowane, Niezależna zaktualizowana sukcesem
+        assert stats2.errors >= 2, f"Oczekiwano co najmniej 2 błędów (rodzic + zależne dziecko), otrzymano: {stats2.errors}"
+        assert any(f"Błąd aktualizacji kategorii ID {parent_id}" in err for err in stats2.error_details)
+        assert any("Pominięto zależną podkategorię" in err for err in stats2.error_details)
+        assert stats2.updated == 1, f"Oczekiwano zaktualizowania 1 niezależnej kategorii, zaktualizowano: {stats2.updated}"
+
+        # Nowa ścieżka rodzica NIE powinna znaleźć się w mapie (sukces nie nastąpił)
+        assert new_parent_name not in map2
+        # Nowa ścieżka niezależnej kategorii POWINNA znaleźć się w mapie (sukces nastąpił)
+        assert new_indep_name in map2
+
+        print(" [OK] Błąd rodzica poprawnie pominął zależne podkategorie i zachował izolację mapowania.")
+    finally:
+        temp_cats_path.unlink(missing_ok=True)
+        temp_map_path.unlink(missing_ok=True)
+        for cid in created_ids:
+            try:
+                base_client.delete("categories", cid)
+            except Exception:
+                pass
+
+
+def test_record_validation_rejects_nulls_and_continues_valid() -> None:
+    """
+    Test 7: Weryfikacja walidacji rekordów (null, brakujące, puste wartości)
+    oraz kontynuacji importu poprawnych pozycji.
+    """
+    print("\n[TEST 7] Weryfikacja walidacji pól (null, brakujące wartości) i kontynuacji importu...")
+    client = PrestaShopClient()
+    ts = int(time.time() * 1000)
+
+    raw_test_data = [
+        # Rekord #0: brakujące pole 'name'
+        {
+            "category_path": ["Bez Nazwy"],
+            "source_url": f"https://example.test/err-{ts}-0",
+            "parent_source_url": None,
+        },
+        # Rekord #1: 'name' równe None / null
+        {
+            "name": None,
+            "category_path": ["Null Name"],
+            "source_url": f"https://example.test/err-{ts}-1",
+            "parent_source_url": None,
+        },
+        # Rekord #2: 'name' pusty string
+        {
+            "name": "   ",
+            "category_path": ["Empty Name"],
+            "source_url": f"https://example.test/err-{ts}-2",
+            "parent_source_url": None,
+        },
+        # Rekord #3: 'source_url' równe None
+        {
+            "name": f"Null URL {ts}",
+            "category_path": [f"Null URL {ts}"],
+            "source_url": None,
+            "parent_source_url": None,
+        },
+        # Rekord #4: poprawny, niezależny rekord
+        {
+            "name": f"Valid Item {ts}",
+            "category_path": [f"Valid Item {ts}"],
+            "source_url": f"https://example.test/valid-{ts}-4",
+            "parent_source_url": None,
+            "product_ids": [],
+        },
+    ]
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_cats:
+        json.dump(raw_test_data, f_cats)
+        temp_cats_path = Path(f_cats.name)
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f_map:
+        temp_map_path = Path(f_map.name)
+
+    created_id: Optional[int] = None
+
+    try:
+        stats, map_res = import_categories(
+            client=client,
+            categories_file=temp_cats_path,
+            mapping_file=temp_map_path,
+        )
+
+        # Powinno zaraportować błędy dla rekordów #0, #1, #2, #3
+        assert stats.errors >= 4, f"Oczekiwano co najmniej 4 błędów walidacji, otrzymano: {stats.errors}"
+        assert any("Rekord #0" in err for err in stats.error_details), "Brak wzmianki o rekordzie #0 w błędach!"
+        assert any("Rekord #1" in err for err in stats.error_details), "Brak wzmianki o rekordzie #1 w błędach!"
+        assert any("Rekord #2" in err for err in stats.error_details), "Brak wzmianki o rekordzie #2 w błędach!"
+        assert any("Rekord #3" in err for err in stats.error_details), "Brak wzmianki o rekordzie #3 w błędach!"
+
+        # Poprawny rekord #4 powinien zostać utworzony
+        assert stats.created == 1, f"Oczekiwano utworzenia 1 poprawnej kategorii, utworzono: {stats.created}"
+        valid_url = raw_test_data[4]["source_url"]
+        assert valid_url in map_res, f"Brak poprawnej kategorii '{valid_url}' w wygenerowanej mapie!"
+        created_id = map_res[valid_url]
+
+        # Weryfikacja w API
+        cat_in_ps = client.get("categories", created_id)["category"]
+        assert _extract_category_name(cat_in_ps.get("name", "")) == raw_test_data[4]["name"]
+
+        print(f" [OK] Odrzucono 4 niepoprawne rekordy z numerami i zaimportowano poprawną pozycję ID {created_id}.")
+    finally:
+        temp_cats_path.unlink(missing_ok=True)
+        temp_map_path.unlink(missing_ok=True)
+        if created_id:
+            try:
+                client.delete("categories", created_id)
+            except Exception:
+                pass
+
+
 def run_all_tests() -> bool:
     """Uruchamia wszystkie testy i zwraca True w przypadku sukcesu lub False przy błędzie."""
     print("=" * 65)
@@ -449,6 +683,8 @@ def run_all_tests() -> bool:
         test_prestashop_parent_child_relations,
         test_category_import_idempotence,
         test_dynamic_hierarchy_lifecycle,
+        test_parent_failure_cascade_and_mapping_isolation,
+        test_record_validation_rejects_nulls_and_continues_valid,
     ]
 
     for test_fn in test_functions:
