@@ -26,6 +26,7 @@ scraper/images/
 scraper-results/images/
 scraper-results/photos/
 scraper-results/product_images.zip
+scraper-results/category_mapping_*.json
 
 # PrestaShop uploads and generated images
 shop/img/
