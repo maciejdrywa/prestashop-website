@@ -46,7 +46,56 @@
 .products .product-miniature .product-description { width: 100%; height: auto; padding: .75rem 1rem 1rem; text-align: left; }
 .products .product-miniature .product-title { margin: 0 0 .3rem; text-align: left; }
 .products .product-miniature .product-title a { color: var(--pd-text); font-size: .875rem; font-weight: 400; text-align: left; }
-.products .product-miniature .product-price-and-shipping { text-align: left; color: var(--pd-link); font-weight: 600; }
+.products .product-miniature .product-price-and-shipping {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .35rem;
+    text-align: left;
+    color: var(--pd-link);
+    font-weight: 600;
+}
+.product-price-and-shipping .regular-price,
+.product-discount .regular-price {
+    color: var(--pd-muted);
+    font-size: .8125rem;
+    font-weight: 400;
+    text-decoration: line-through;
+}
+.discount-percentage,
+.discount-amount,
+.discount-product,
+.product-flags .product-flag.discount {
+    display: inline-block !important;
+    background: #d9534f;
+    color: var(--pd-white);
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .15rem .45rem;
+    border-radius: .2rem;
+    line-height: 1.2;
+}
+.product-prices .product-discount {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .25rem;
+}
+.product-prices .current-price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .65rem;
+    font-size: 1.35rem;
+    font-weight: 600;
+}
+.product-prices .current-price .discount {
+    background: #d9534f;
+    color: var(--pd-white);
+    font-size: .8125rem;
+    font-weight: 600;
+    padding: .2rem .5rem;
+    border-radius: .2rem;
+}
 .products .product-miniature .highlighted-informations { width: 100%; }
 .products .product-miniature .highlighted-informations .quick-view { color: var(--pd-link); }
 .product-list-top, .products-selection { margin-bottom: .75rem; }
