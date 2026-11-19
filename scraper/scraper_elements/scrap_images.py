@@ -63,3 +63,27 @@ def scrap_cover_image(soup: BeautifulSoup, images: List[str]) -> str | None:
     if len(images) == 1:
         return images[0]
     raise ValueError("Nie znaleziono okladki zrodla wsrod zdjec galerii.")
+
+
+def scrap_source_placeholder(soup: BeautifulSoup) -> str | None:
+    """Odczytuje jawny źródłowy obraz braku zdjęcia, osobno od galerii."""
+    candidates = []
+    details = soup.select_one("#product-details[data-product]")
+    if details:
+        data = json.loads(details["data-product"])
+        for size in (data.get("default_image") or {}).get("bySize", {}).values():
+            if isinstance(size, dict):
+                candidates.append(size.get("url"))
+    main = soup.select_one(".product-cover img")
+    if main:
+        candidates.extend(main.get(attr) for attr in ("data-image-large-src", "src"))
+    meta = soup.select_one('meta[property="og:image"]')
+    if meta:
+        candidates.append(meta.get("content"))
+    for value in candidates:
+        if not isinstance(value, str):
+            continue
+        parsed = urlsplit(value)
+        if parsed.scheme == "https" and parsed.hostname in {"pandomu.com.pl", "www.pandomu.com.pl"} and re.fullmatch(r"/img/p/pl-default(?:-[a-z_]+)?\.jpg", parsed.path):
+            return value
+    return None

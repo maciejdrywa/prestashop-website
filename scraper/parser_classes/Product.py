@@ -25,6 +25,7 @@ class Product(BaseModel):
     weight: Optional[float] = None
     images: List[str]
     cover_image: Optional[str] = None
+    source_placeholder: Optional[str] = None
     variants: List[ProductVariant] = Field(default_factory=list)
     stock: Optional[int] = None
     features: List[ProductFeature] = Field(default_factory=list)
