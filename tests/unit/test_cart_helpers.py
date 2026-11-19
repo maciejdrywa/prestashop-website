@@ -1,10 +1,8 @@
 """Kontrola odczytu karty produktu i synchronizacji z koszykiem bez uruchamiania sklepu."""
 
-from time import monotonic
-
 import pytest
 from helpers.cart import Product, add_product_to_cart, get_category_url, open_product, wait_for_shop_scripts
-from playwright.sync_api import Page, Route, expect
+from playwright.sync_api import Locator, Page, Route, expect
 
 SHOP = "https://shop.test"
 
@@ -63,12 +61,33 @@ def shop(page: Page):
 
 @pytest.mark.parametrize(("stock", "expected"), [("5", 5.0), ("0", 0.0), ("abc", None), ("inf", None), (None, None)])
 def test_open_product_reads_stock(shop, stock: str | None, expected: float | None):
-    """Sprawdza odczyt stanu bez czekania na zdjęcia oraz bez stałego opóźnienia przy jego braku."""
+    """Sprawdza odczyt stanu bez czekania na zdjęcia.
+
+    Zdjęcie nigdy nie odpowiada, więc nawigacja czekająca na "load" przekroczyłaby limit.
+    """
     page, pages, _ = shop
     pages[f"{SHOP}/p"] = product_html(stock)
-    start = monotonic()
     assert open_product(page, f"{SHOP}/p") == ("42", "Test product", True, expected)
-    assert monotonic() - start < 0.9
+
+
+def test_open_product_does_not_wait_for_missing_stock(shop, monkeypatch):
+    """Sprawdza, że brak stanu nie jest odczytywany z oczekiwaniem na element.
+
+    Zamiast mierzyć czas, co bywa niestabilne, sprawdzamy, że atrybut nie jest pobierany.
+    """
+    page, pages, _ = shop
+    pages[f"{SHOP}/p"] = product_html(None)
+    calls = []
+    original = Locator.get_attribute
+
+    def spy(self, name, *args, **kwargs):
+        if name == "data-stock":
+            calls.append(kwargs)
+        return original(self, name, *args, **kwargs)
+
+    monkeypatch.setattr(Locator, "get_attribute", spy)
+    assert open_product(page, f"{SHOP}/p")[3] is None
+    assert calls == [], f"Missing stock was read with waiting: {calls}"
 
 
 def test_open_product_detects_disabled_button(shop):
