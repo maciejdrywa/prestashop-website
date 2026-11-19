@@ -60,3 +60,13 @@ Nazwy wolumenów domyślnie wynikają z projektu Compose. Dla istniejącego skle
 Obrazy PrestaShop i MariaDB korzystają z `linux/amd64`. Na Apple Silicon wymagają emulacji w Docker Desktop. Testy tej zmiany wykonano na Windows z kontenerami Linux. Natywny Linux, macOS i Apple Silicon wymagają potwierdzenia na odpowiednich komputerach.
 
 `docker compose --env-file .env -f deploy/compose.yaml stop` zatrzymuje usługi z zachowaniem danych. `down` usuwa kontenery i sieć. Opcja `down -v` usuwa bazę, pliki sklepu i dziennik, dlatego służy wyłącznie do świadomego odtworzenia środowiska po wykonaniu kopii.
+
+## Kopia zapasowa
+
+Przed usunięciem wolumenów lub wdrożeniem istotnych zmian utwórz kopię zapasową bazy MariaDB, plików konfiguracyjnych i zdjęć produktów:
+
+```sh
+bash deploy/backup.sh [--maintenance]
+```
+
+Archiwum zapisywane jest w katalogu `deploy/backups/` w formacie `backup_YYYYMMDD_HHMMSS.tar.gz` z uprawnieniami `0600`. Szczegóły parametrów i strukturę archiwum opisuje [dokumentacja deploy](../deploy/BACKUP.md).

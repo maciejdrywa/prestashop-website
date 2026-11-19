@@ -19,6 +19,7 @@ require_once __DIR__ . '/webservice.php';
 require_once __DIR__ . '/cookies.php';
 require_once __DIR__ . '/theme.php';
 require_once __DIR__ . '/theme-content.php';
+require_once __DIR__ . '/promotions.php';
 
 /**
  * Odczytuje dziennik zgodny z instalacją i odciskami wejścia.
@@ -168,6 +169,8 @@ function configurationPresent(string $script, \Context $context): bool
             return true;
         case 'configure-webservice.php':
             return webserviceConfigurationPresent();
+        case 'configure-promotions.php':
+            return promotionsConfigured($context);
     }
     throw new RuntimeException('Nieznany etap konfiguracji ' . $script);
 }

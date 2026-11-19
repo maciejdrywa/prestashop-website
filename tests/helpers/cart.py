@@ -6,7 +6,7 @@ import random
 from dataclasses import dataclass, replace
 from urllib.parse import parse_qs, urljoin, urlparse
 
-from playwright.sync_api import Locator, Page, TimeoutError, expect
+from playwright.sync_api import Locator, Page, expect
 
 from helpers.steps import step
 
@@ -24,12 +24,32 @@ CATEGORIES = [
     ("Klamki do drzwi", [1, 3, 2, 2, 1]),
 ]
 CART_URL = "/index.php?controller=cart&action=show"
+# Nawigacje nie czekają na zdjęcia i fonty. Treść sprawdzają asercje expect,
+# a przed akcjami AJAX czekamy jawnie na skrypty sklepu.
+WAIT_UNTIL = "domcontentloaded"
+
+
+def wait_for_shop_scripts(page: Page) -> None:
+    """Czeka, aż skrypty sklepu podepną obsługę przycisków koszyka.
+
+    core.js i ps_shoppingcart podpinają kliknięcia oraz modal w funkcjach jQuery ready,
+    które startują asynchronicznie po DOMContentLoaded. Funkcja dodana do tej samej
+    kolejki wykona się po nich, więc kliknięcie trafi do obsługi AJAX, a nie do zwykłego
+    wysłania formularza.
+    """
+    page.wait_for_function(
+        "() => typeof window.prestashop?.emit === 'function' && typeof window.jQuery === 'function'",
+        timeout=15_000,
+    )
+    page.evaluate("() => new Promise(resolve => window.jQuery(() => resolve()))")
 
 
 def get_category_url(page: Page, name: str) -> str:
-    """Otwiera stronę główną i zwraca adres wskazanej kategorii z menu sklepu."""
-    page.goto("/")
+    """Zwraca adres wskazanej kategorii z menu sklepu, w razie potrzeby otwierając stronę główną."""
     link = page.get_by_role("link", name=name, exact=True).first
+    # Menu jest w nagłówku każdej strony sklepu, więc stronę główną otwieramy tylko bez niego.
+    if not link.count():
+        page.goto("/", wait_until=WAIT_UNTIL)
     expect(link, f'Category not found "{name}" in the menu').to_be_attached()
     href = link.get_attribute("href")
     assert href, f'Category link "{name}" has no URL'
@@ -48,15 +68,14 @@ def get_product_urls(page: Page) -> list[str]:
 
 def open_product(page: Page, url: str) -> tuple[str, str, bool, float | None]:
     """Otwiera produkt i odczytuje jego identyfikator, nazwę, dostępność oraz stan magazynowy."""
-    page.goto(url)
+    page.goto(url, wait_until=WAIT_UNTIL)
     product_id = page.locator('#add-to-cart-or-refresh input[name="id_product"]').input_value()
     name = (page.locator("h1").first.text_content() or "").strip()
     button = page.locator("button.add-to-cart")
     available = button.count() > 0 and button.is_enabled()
-    try:
-        stock_attribute = page.locator(".product-quantities [data-stock]").first.get_attribute("data-stock", timeout=1000)
-    except TimeoutError:
-        stock_attribute = None
+    # Dokument jest już sparsowany, więc brak stanu sprawdzamy bez czekania na element.
+    stock_element = page.locator(".product-quantities [data-stock]")
+    stock_attribute = stock_element.first.get_attribute("data-stock") if stock_element.count() else None
     try:
         stock = float(stock_attribute) if stock_attribute is not None else None
     except ValueError:
@@ -68,6 +87,7 @@ def open_product(page: Page, url: str) -> tuple[str, str, bool, float | None]:
 
 def add_product_to_cart(page: Page, product: Product) -> None:
     """Dodaje produkt z otwartej karty w zadanej ilości i sprawdza potwierdzenie dodania."""
+    wait_for_shop_scripts(page)
     field = page.locator("#quantity_wanted")
     field.fill(str(product.quantity))
     expect(field).to_have_value(str(product.quantity))
@@ -80,7 +100,7 @@ def add_products_from_category(page: Page, category: str, quantities: list[int],
     category_url = get_category_url(page, category)
     added = []
     while category_url and len(added) < len(quantities):
-        page.goto(category_url)
+        page.goto(category_url, wait_until=WAIT_UNTIL)
         expect(page.locator("body#category"), f"Category was not opened: {category}").to_be_attached()
         candidates = get_product_urls(page)
         assert candidates, f"Category has no products: {category}"
@@ -117,7 +137,7 @@ def get_cart_row(page: Page, product: Product) -> Locator:
 
 def assert_cart_contents(page: Page, expected: list[Product]) -> None:
     """Sprawdza liczbę pozycji koszyka, obecność oczekiwanych produktów i ich ilości."""
-    page.goto(CART_URL)
+    page.goto(CART_URL, wait_until=WAIT_UNTIL)
     expect(page.locator(".cart-item")).to_have_count(len(expected))
     for product in expected:
         row = get_cart_row(page, product)
@@ -127,11 +147,11 @@ def assert_cart_contents(page: Page, expected: list[Product]) -> None:
 
 def search_products(page: Page, query: str) -> list[str]:
     """Wyszukuje podaną frazę, sprawdza stronę wyników i zwraca adresy znalezionych produktów."""
-    page.goto("/")
+    page.goto("/", wait_until=WAIT_UNTIL)
     field = page.locator('#search_widget input[name="s"], input.ui-autocomplete-input').first
     field.fill(query)
     field.press("Enter")
-    page.wait_for_url(lambda url: parse_qs(urlparse(url).query).get("s") == [query], timeout=15_000)
+    page.wait_for_url(lambda url: parse_qs(urlparse(url).query).get("s") == [query], timeout=15_000, wait_until=WAIT_UNTIL)
     expect(page.locator("body#search")).to_be_attached()
     expect(page.locator("#js-product-list .product-miniature").first, f"No search results: {query}").to_be_visible()
     return get_product_urls(page)
@@ -139,7 +159,8 @@ def search_products(page: Page, query: str) -> list[str]:
 
 def remove_products_from_cart(page: Page, products: list[Product]) -> None:
     """Usuwa wskazane produkty i po każdej operacji sprawdza zniknięcie pozycji oraz licznik."""
-    page.goto(CART_URL)
+    page.goto(CART_URL, wait_until=WAIT_UNTIL)
+    wait_for_shop_scripts(page)
     rows = page.locator(".cart-item")
     count = rows.count()
     for product in products:

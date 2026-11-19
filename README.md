@@ -30,6 +30,19 @@ python3 scraper/test_api_client.py
 ```
 
 Konfigurację i wznowienie kategorii opisuje [Webservice](docs/WEBSERVICE.md), a komendy i wyniki D2.3 — [import produktów](docs/PRODUCT_IMPORT.md). Klucz importera nie ma uprawnień DELETE; stary test tworzący i usuwający kategorię zastąpiła kontrola tylko do odczytu.
+## Testy E2E
+
+Test Playwright sprawdza pełny zakup: koszyk, rejestrację, dostawę, płatność przy odbiorze, status zamówienia i pobranie faktury VAT. W aktywnym środowisku wirtualnym z zależnościami z `tests/requirements.txt`:
+
+```sh
+BASE_URL=https://localhost python -m pytest -c pytest-e2e.ini
+```
+
+```powershell
+$env:BASE_URL="https://localhost"; python -m pytest -c pytest-e2e.ini
+```
+
+Instalację, zmienne środowiskowe, scenariusz i raporty opisuje [instrukcja testów](tests/README.md).
 
 ## Sprawdzanie jakości kodu scrapera
 
@@ -61,7 +74,7 @@ GitHub Actions uruchamia `Scraper CI` przy każdym pull requeście. W zakładce 
 | `scraper-results/` | Eksport UTF-8 i do 20 próbek zdjęć, pełne zdjęcia lokalnie |
 | `deploy/` | Compose, HTTPS, inicjalizacja i testy klas PHP |
 | `docs/` | Instrukcje, audyt i dziennik AI |
-| `tests/` | Informacja o bieżącym zakresie testowania |
+| `tests/` | Testy E2E Playwright scenariusza zakupu i testy jednostkowe pomocników |
 
 Baza korzysta z MariaDB 10.11.14, HTTPS obsługuje Nginx. Pełny katalog danych zawiera obecnie 574 produkty, 80 kategorii, 1269 kombinacji i 1388 zdjęć. Produkt 539 nie ma galerii źródłowej. Zestaw zdjęć i archiwum są wykluczone z Gita, a do dystrybucji służy GitHub Releases.
 
