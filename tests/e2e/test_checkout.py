@@ -1,4 +1,4 @@
-"""W4.3–W4.4: pełny zakup w świeżej sesji przeglądarki i obsługa zamówienia po zakupie."""
+"""Pełny scenariusz zakupu w świeżej sesji przeglądarki: od koszyka przez zamówienie do pobrania faktury VAT."""
 
 from helpers.admin import (
     assert_invoice_generated,
@@ -36,7 +36,7 @@ from playwright.sync_api import Page
 
 
 def test_cart_registration_and_order(page: Page, admin_page: Page):
-    """Sprawdza zakup przez nowego klienta, status zamówienia w historii i pobranie faktury VAT."""
+    """Sprawdza koszyk, rejestrację, zakup za pobraniem, status zamówienia i pobranie faktury VAT."""
     with step("Log in to the back office"):
         # Brak lub błąd konta przerywa test przed złożeniem zamówienia, które nie dostałoby faktury.
         login_admin(admin_page, read_admin_credentials())
