@@ -133,6 +133,7 @@ def test_backup_execution_and_archive_structure(tmp_path: Path):
     assert config_dir.is_dir(), "Brak katalogu config/"
     assert (config_dir / "parameters.php").is_file(), "Brak parameters.php w config/"
     assert (config_dir / ".env").is_file(), "Brak .env w config/"
+    assert not (config_dir / "env.backup").exists(), "Plik env.backup nie powinien znajdować się w archiwum"
 
     # Weryfikacja manifestu
     manifest_file = backup_root / "manifest.json"
@@ -150,6 +151,8 @@ def test_backup_execution_and_archive_structure(tmp_path: Path):
     assert "files" in manifest
     assert "database.sql" in manifest["files"]
     assert "config/parameters.php" in manifest["files"]
+    assert "config/.env" in manifest["files"]
+    assert "config/env.backup" not in manifest["files"]
 
 
 def test_backup_with_maintenance_mode(tmp_path: Path):

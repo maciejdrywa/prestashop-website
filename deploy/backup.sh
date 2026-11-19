@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Skrypt tworzenia kompletnej kopii zapasowej sklepu PrestaShop.
 # Wywołanie z katalogu repozytorium lub dowolnego miejsca:
 #   bash deploy/backup.sh [--output-dir <katalog>] [--maintenance]
@@ -16,6 +16,9 @@
 set -euo pipefail
 umask 077
 
+# Wyłączenie automatycznej konwersji ścieżek POSIX->Windows w Git Bash (MSYS2)
+export MSYS_NO_PATHCONV=1
+
 # Kolorowanie wyjścia dla terminala interaktywnego
 if [[ -t 1 ]]; then
     COLOR_INFO="\033[1;34m"
@@ -31,10 +34,15 @@ else
     COLOR_RESET=""
 fi
 
+error_already_logged=false
+
 log_info() { echo -e "${COLOR_INFO}[INFO]${COLOR_RESET} $*"; }
 log_success() { echo -e "${COLOR_SUCCESS}[SUCCESS]${COLOR_RESET} $*"; }
 log_warn() { echo -e "${COLOR_WARN}[WARN]${COLOR_RESET} $*" >&2; }
-log_error() { echo -e "${COLOR_ERROR}[ERROR]${COLOR_RESET} $*" >&2; }
+log_error() {
+    error_already_logged=true
+    echo -e "${COLOR_ERROR}[ERROR]${COLOR_RESET} $*" >&2
+}
 
 print_help() {
     cat << 'EOF'
@@ -158,7 +166,13 @@ temp_dir=$(mktemp -d)
 maintenance_enabled_by_us=false
 
 cleanup() {
-    local exit_code=$?
+    local exit_code=${1:-$?}
+    trap - EXIT INT TERM
+    if [[ $exit_code -ne 0 ]]; then
+        if [[ "$error_already_logged" != "true" ]]; then
+            log_error "Kopia zapasowa nie powiodła się (kod błędu: $exit_code). Pliki tymczasowe zostały posprzątane."
+        fi
+    fi
     if [[ "$maintenance_enabled_by_us" == "true" ]]; then
         log_info "Przywracanie sklepu z trybu konserwacji..."
         "${compose[@]}" exec -T shop php bin/console prestashop:config set PS_SHOP_ENABLE --value=1 >/dev/null 2>&1 || true
@@ -168,7 +182,9 @@ cleanup() {
     fi
     exit "$exit_code"
 }
-trap cleanup EXIT INT TERM ERR
+trap cleanup EXIT
+trap 'cleanup 130' INT
+trap 'cleanup 143' TERM
 
 timestamp=$(date +"%Y%m%d_%H%M%S")
 iso_created_at=$(date +"%Y-%m-%dT%H:%M:%S%z")
@@ -180,7 +196,13 @@ mkdir -p "$backup_dir/images"
 
 # Opcjonalne włączenie trybu konserwacji
 if [[ "$maintenance_mode" == "true" ]]; then
-    current_status=$("${compose[@]}" exec -T shop php bin/console prestashop:config get PS_SHOP_ENABLE 2>/dev/null | grep -o 'PS_SHOP_ENABLE=[0-9]' | cut -d= -f2 || echo "1")
+    raw_status=$("${compose[@]}" exec -T shop php bin/console prestashop:config get PS_SHOP_ENABLE 2>/dev/null || true)
+    current_status="1"
+    if [[ "$raw_status" =~ PS_SHOP_ENABLE=([0-9]) ]]; then
+        current_status="${BASH_REMATCH[1]}"
+    elif [[ "$raw_status" =~ [[:space:]]*([01])[[:space:]]*$ ]]; then
+        current_status="${BASH_REMATCH[1]}"
+    fi
     if [[ "$current_status" == "1" ]]; then
         log_info "Włączanie trybu konserwacji w PrestaShop (PS_SHOP_ENABLE=0)..."
         "${compose[@]}" exec -T shop php bin/console prestashop:config set PS_SHOP_ENABLE --value=0 >/dev/null
@@ -192,7 +214,7 @@ fi
 
 # 1. Zrzut bazy MariaDB
 log_info "Wykonywanie transakcyjnego zrzutu bazy MariaDB..."
-"${compose[@]}" exec -T db sh -c 'exec mariadb-dump -u "$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" --single-transaction --quick --default-character-set=utf8mb4' > "$backup_dir/database.sql"
+"${compose[@]}" exec -T db sh -c 'exec env MYSQL_PWD="$MARIADB_PASSWORD" mariadb-dump -u "$MARIADB_USER" --single-transaction --quick --default-character-set=utf8mb4 "$MARIADB_DATABASE"' > "$backup_dir/database.sql"
 
 if [[ ! -s "$backup_dir/database.sql" ]]; then
     log_error "Zrzut bazy danych jest pusty!"
@@ -239,9 +261,8 @@ if "${compose[@]}" exec -T shop test -f /var/www/html/.htaccess; then
     "${compose[@]}" cp shop:/var/www/html/.htaccess "$backup_dir/config/.htaccess"
 fi
 
-# .env oraz env.backup
+# .env
 cp "$env_file" "$backup_dir/config/.env"
-cp "$env_file" "$backup_dir/config/env.backup"
 
 # Odczyt wersji PrestaShop
 ps_version=$("${compose[@]}" exec -T shop php -r '
