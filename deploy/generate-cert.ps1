@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $projectDirectory = Split-Path $PSScriptRoot -Parent
 Push-Location $projectDirectory
 try {
-    docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.bootstrap.yaml run --build --rm --no-deps certificates
+    docker compose --env-file .env -f deploy/compose.yaml run --build --rm --no-deps certificates
     # Błędy procesów natywnych są odczytywane z kodu wyjścia Dockera.
     # ErrorActionPreference obejmuje błędy PowerShell, więc kod sprawdzamy jawnie.
     if ($LASTEXITCODE -ne 0) {
