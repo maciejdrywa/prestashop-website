@@ -48,13 +48,23 @@ try {
     $db = Db::getInstance();
     foreach ($plan as $item) {
         $row = $db->getRow(
-            'SELECT id_specific_price, reduction, reduction_type, reduction_tax, price FROM ' . _DB_PREFIX_ . 'specific_price '
-            . 'WHERE id_product = ' . (int) $item['product_id'] . ' AND id_product_attribute = 0 AND id_cart = 0'
+            'SELECT id_specific_price, reduction, reduction_type, reduction_tax, price, id_group, id_currency, id_customer, id_country, from_quantity, `from`, `to` FROM ' . _DB_PREFIX_ . 'specific_price '
+            . 'WHERE id_product = ' . (int) $item['product_id']
+            . ' AND id_product_attribute = 0'
+            . ' AND id_cart = 0'
+            . ' AND id_group = 0'
+            . ' AND id_currency = 0'
+            . ' AND id_customer = 0'
+            . ' AND id_country = 0'
+            . ' AND from_quantity = 1'
+            . ' AND `from` = \'0000-00-00 00:00:00\''
+            . ' AND `to` = \'0000-00-00 00:00:00\''
         );
         promoAssert($row !== false && $row !== null, "Brak rekordu SpecificPrice dla produktu {$item['source_id']} (ID {$item['product_id']}).");
         promoAssert((int) $row['reduction_tax'] === 1, "Rabat dla produktu {$item['source_id']} musi mieć reduction_tax = 1 (brutto).");
         promoAssert((string) $row['reduction_type'] === $item['reduction_type'], "Niezgodny typ redukcji dla produktu {$item['source_id']}.");
         promoAssert(abs((float) $row['reduction'] - $item['reduction']) < 0.0001, "Niezgodna wartość redukcji dla produktu {$item['source_id']}.");
+        promoAssert(abs((float) $row['price'] - (-1.0)) < 0.0001, "Wartość price w SpecificPrice musi wynosić -1.0 dla produktu {$item['source_id']}.");
     }
 
     echo "[3/4] Weryfikacja cen pierwotnych i promocyjnych przez kalkulator PrestaShop...\n";
@@ -83,6 +93,34 @@ try {
         );
         promoAssert(abs($promoGross - $item['expected_promo_gross']) < 0.05, "Cena promocyjna produktu {$item['source_id']} różni się od oczekiwanej: {$promoGross} vs {$item['expected_promo_gross']}.");
         promoAssert($promoGross < $regularGross, "Cena promocyjna musi być niższa od bazowej dla produktu {$item['source_id']}.");
+
+        // Weryfikacja kombinacji dla produktów z wariantami
+        $attrIds = Product::getProductAttributesIds($item['product_id']);
+        foreach ($attrIds as $attrRow) {
+            $attrId = (int) $attrRow['id_product_attribute'];
+            $varRegGross = (float) Product::getPriceStatic(
+                id_product: $item['product_id'],
+                usetax: true,
+                id_product_attribute: $attrId,
+                decimals: 2,
+                usereduc: false,
+                use_group_reduction: false,
+                context: $context,
+                use_customer_price: false
+            );
+            $varPromoGross = (float) Product::getPriceStatic(
+                id_product: $item['product_id'],
+                usetax: true,
+                id_product_attribute: $attrId,
+                decimals: 2,
+                usereduc: true,
+                use_group_reduction: false,
+                context: $context,
+                use_customer_price: false
+            );
+            promoAssert($varPromoGross < $varRegGross, "Cena promocyjna wariantu {$attrId} musi być niższa od bazowej dla produktu {$item['source_id']}.");
+            promoAssert($varPromoGross >= 10.00, "Cena promocyjna wariantu {$attrId} nie może być niższa niż 10 PLN dla produktu {$item['source_id']}.");
+        }
     }
 
     echo "[4/4] Test naliczania rabatu w koszyku zakupowym...\n";

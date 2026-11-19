@@ -26,6 +26,7 @@ try {
 
     echo "[1/3] Wczytywanie kontekstu PrestaShop i katalogu produktów...\n";
     $context = ShopInit\boot();
+    ShopInit\priceContext($context);
     $catalog = ShopInit\readCatalog();
 
     echo "[2/3] Planowanie 25 promocji cenowych (procentowych i kwotowych)...\n";

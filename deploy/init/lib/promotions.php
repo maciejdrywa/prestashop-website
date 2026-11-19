@@ -18,17 +18,15 @@ require_once __DIR__ . '/prestashop.php';
 require_once __DIR__ . '/products.php';
 
 /**
- * Zapewnia obiekty cart i employee w kontekście, wymagane przez kalkulator cen PrestaShop w CLI.
+ * Zapewnia kontrolowany kontekst kalkulatora cen (PLN, brak klienta/koszyka, pracownik CLI).
  *
  * @param \Context $context
  * @return void
  */
 function ensurePriceContext(\Context $context): void
 {
-    if (!is_object($context->cart)) {
-        $context->cart = new \Cart();
-    }
-    if (!isset($context->employee)) {
+    priceContext($context);
+    if (!isset($context->employee) || !\Validate::isLoadedObject($context->employee)) {
         $context->employee = new \Employee(1);
     }
 }
@@ -37,41 +35,40 @@ function ensurePriceContext(\Context $context): void
  * Zwraca deterministyczną listę 25 produktów objętych promocją cenową.
  *
  * Zestaw obejmuje:
- * - 15 produktów prostych i 10 produktów z wariantami (kombinacjami)
- * - 15 rabatów procentowych (od -10% do -30%)
- * - 10 rabatów kwotowych brutto (od -5,00 zł do -35,00 zł)
+ * - 15 rabatów procentowych (od -10% do -30%), w tym wszystkie 10 produktów z wariantami
+ * - 10 rabatów kwotowych brutto (od -5,00 zł do -35,00 zł) wyłącznie dla produktów prostych
  *
  * @return list<array{source_id: string, reduction_type: 'percentage'|'amount', reduction: float}>
  */
 function promotionsDefinitions(): array
 {
     return [
-        // 15 rabatów procentowych (percentage)
-        ['source_id' => '12',  'reduction_type' => 'percentage', 'reduction' => 0.10],
-        ['source_id' => '901', 'reduction_type' => 'percentage', 'reduction' => 0.10],
-        ['source_id' => '393', 'reduction_type' => 'percentage', 'reduction' => 0.10],
-        ['source_id' => '137', 'reduction_type' => 'percentage', 'reduction' => 0.15],
-        ['source_id' => '501', 'reduction_type' => 'percentage', 'reduction' => 0.15],
-        ['source_id' => '343', 'reduction_type' => 'percentage', 'reduction' => 0.15],
-        ['source_id' => '4',   'reduction_type' => 'percentage', 'reduction' => 0.20],
-        ['source_id' => '139', 'reduction_type' => 'percentage', 'reduction' => 0.20],
-        ['source_id' => '576', 'reduction_type' => 'percentage', 'reduction' => 0.20],
-        ['source_id' => '5',   'reduction_type' => 'percentage', 'reduction' => 0.20],
-        ['source_id' => '107', 'reduction_type' => 'percentage', 'reduction' => 0.20],
-        ['source_id' => '712', 'reduction_type' => 'percentage', 'reduction' => 0.20],
-        ['source_id' => '541', 'reduction_type' => 'percentage', 'reduction' => 0.25],
-        ['source_id' => '815', 'reduction_type' => 'percentage', 'reduction' => 0.25],
-        ['source_id' => '944', 'reduction_type' => 'percentage', 'reduction' => 0.30],
+        // 15 rabatów procentowych (percentage) - wszystkie produkty z wariantami + produkty proste
+        ['source_id' => '12',  'reduction_type' => 'percentage', 'reduction' => 0.10], // prosty
+        ['source_id' => '901', 'reduction_type' => 'percentage', 'reduction' => 0.10], // prosty
+        ['source_id' => '393', 'reduction_type' => 'percentage', 'reduction' => 0.10], // warianty (4)
+        ['source_id' => '137', 'reduction_type' => 'percentage', 'reduction' => 0.15], // prosty
+        ['source_id' => '501', 'reduction_type' => 'percentage', 'reduction' => 0.15], // prosty
+        ['source_id' => '343', 'reduction_type' => 'percentage', 'reduction' => 0.15], // warianty (2)
+        ['source_id' => '909', 'reduction_type' => 'percentage', 'reduction' => 0.20], // warianty (9)
+        ['source_id' => '5',   'reduction_type' => 'percentage', 'reduction' => 0.20], // warianty (2)
+        ['source_id' => '107', 'reduction_type' => 'percentage', 'reduction' => 0.20], // warianty (13)
+        ['source_id' => '712', 'reduction_type' => 'percentage', 'reduction' => 0.20], // warianty (13)
+        ['source_id' => '466', 'reduction_type' => 'percentage', 'reduction' => 0.20], // warianty (4)
+        ['source_id' => '504', 'reduction_type' => 'percentage', 'reduction' => 0.20], // warianty (2)
+        ['source_id' => '815', 'reduction_type' => 'percentage', 'reduction' => 0.25], // warianty (2)
+        ['source_id' => '576', 'reduction_type' => 'percentage', 'reduction' => 0.25], // prosty
+        ['source_id' => '944', 'reduction_type' => 'percentage', 'reduction' => 0.30], // warianty (2)
 
-        // 10 rabatów kwotowych brutto (amount)
+        // 10 rabatów kwotowych brutto (amount) - wyłącznie produkty proste bez wariantów
         ['source_id' => '913', 'reduction_type' => 'amount', 'reduction' => 5.00],
         ['source_id' => '507', 'reduction_type' => 'amount', 'reduction' => 5.00],
         ['source_id' => '151', 'reduction_type' => 'amount', 'reduction' => 8.00],
         ['source_id' => '896', 'reduction_type' => 'amount', 'reduction' => 10.00],
-        ['source_id' => '909', 'reduction_type' => 'amount', 'reduction' => 10.00],
+        ['source_id' => '4',   'reduction_type' => 'amount', 'reduction' => 10.00],
         ['source_id' => '444', 'reduction_type' => 'amount', 'reduction' => 15.00],
-        ['source_id' => '466', 'reduction_type' => 'amount', 'reduction' => 20.00],
-        ['source_id' => '504', 'reduction_type' => 'amount', 'reduction' => 20.00],
+        ['source_id' => '139', 'reduction_type' => 'amount', 'reduction' => 15.00],
+        ['source_id' => '541', 'reduction_type' => 'amount', 'reduction' => 20.00],
         ['source_id' => '738', 'reduction_type' => 'amount', 'reduction' => 25.00],
         ['source_id' => '685', 'reduction_type' => 'amount', 'reduction' => 35.00],
     ];
@@ -105,6 +102,35 @@ function promotionsPlan(array $catalog, \Context $context): array
         $productId = productId($reference, $context);
         if ($productId === null) {
             throw new RuntimeException("Product {$reference} does not exist in PrestaShop.");
+        }
+
+        // Sprawdzamy czy produkt posiada warianty/kombinacje
+        $attrIds = \Product::getProductAttributesIds($productId);
+        if ($attrIds !== []) {
+            if ($def['reduction_type'] === 'amount') {
+                throw new RuntimeException("Product {$sourceId} has combinations; only percentage discounts are allowed for variant products.");
+            }
+            // Weryfikujemy każdą kombinację (w tym najtańszą)
+            foreach ($attrIds as $attrRow) {
+                $attrId = (int) $attrRow['id_product_attribute'];
+                $varRegularGross = (float) \Product::getPriceStatic(
+                    id_product: $productId,
+                    usetax: true,
+                    id_product_attribute: $attrId,
+                    decimals: 2,
+                    usereduc: false,
+                    use_group_reduction: false,
+                    context: $context,
+                    use_customer_price: false
+                );
+                if ($varRegularGross < 20.00) {
+                    throw new RuntimeException("Product {$sourceId} combination {$attrId} regular price {$varRegularGross} is too low for safe promotion.");
+                }
+                $varPromoGross = round($varRegularGross * (1.0 - $def['reduction']), 2);
+                if ($varPromoGross < 10.00) {
+                    throw new RuntimeException("Product {$sourceId} combination {$attrId} promo price {$varPromoGross} is below minimum 10 PLN.");
+                }
+            }
         }
 
         // Odczytujemy rzeczywistą cenę brutto domyślnego wariantu/produktu bezpośrednio z silnika PrestaShop
@@ -180,7 +206,8 @@ function configurePromotions(array $plan, \Context $context): array
 
         // Sprawdzamy istniejące specyficzne ceny dla tego produktu
         $existing = $db->executeS(
-            'SELECT id_specific_price, reduction, reduction_type, reduction_tax, price FROM ' . _DB_PREFIX_ . 'specific_price '
+            'SELECT id_specific_price, reduction, reduction_type, reduction_tax, price, '
+            . 'id_group, id_currency, id_customer, id_country, from_quantity, `from`, `to` FROM ' . _DB_PREFIX_ . 'specific_price '
             . 'WHERE id_product = ' . (int) $productId . ' AND id_product_attribute = 0 AND id_cart = 0'
         );
 
@@ -194,9 +221,25 @@ function configurePromotions(array $plan, \Context $context): array
             $rowType = (string) $row['reduction_type'];
             $rowTax = (int) $row['reduction_tax'];
             $rowPrice = (float) $row['price'];
+            $rowGroup = (int) $row['id_group'];
+            $rowCurrency = (int) $row['id_currency'];
+            $rowCustomer = (int) $row['id_customer'];
+            $rowCountry = (int) $row['id_country'];
+            $rowFromQty = (int) $row['from_quantity'];
+            $rowFrom = (string) $row['from'];
+            $rowTo = (string) $row['to'];
 
-            if ($rowType === $reductionType && abs($rowReduction - $reduction) < 0.0001
-                && $rowTax === 1 && abs($rowPrice - (-1.0)) < 0.0001) {
+            if ($rowType === $reductionType
+                && abs($rowReduction - $reduction) < 0.0001
+                && $rowTax === 1
+                && abs($rowPrice - (-1.0)) < 0.0001
+                && $rowGroup === 0
+                && $rowCurrency === 0
+                && $rowCustomer === 0
+                && $rowCountry === 0
+                && $rowFromQty === 1
+                && $rowFrom === '0000-00-00 00:00:00'
+                && $rowTo === '0000-00-00 00:00:00') {
                 $matched = true;
                 $unchanged++;
                 break;
@@ -295,13 +338,23 @@ function promotionsConfigured(\Context $context): bool
         }
 
         $row = \Db::getInstance()->getRow(
-            'SELECT reduction, reduction_type, reduction_tax FROM ' . _DB_PREFIX_ . 'specific_price '
-            . 'WHERE id_product = ' . (int) $productId . ' AND id_product_attribute = 0 AND id_cart = 0'
+            'SELECT id_specific_price, reduction, reduction_type, reduction_tax, price FROM ' . _DB_PREFIX_ . 'specific_price '
+            . 'WHERE id_product = ' . (int) $productId
+            . ' AND id_product_attribute = 0'
+            . ' AND id_cart = 0'
+            . ' AND id_group = 0'
+            . ' AND id_currency = 0'
+            . ' AND id_customer = 0'
+            . ' AND id_country = 0'
+            . ' AND from_quantity = 1'
+            . ' AND `from` = \'0000-00-00 00:00:00\''
+            . ' AND `to` = \'0000-00-00 00:00:00\''
         );
 
         if ($row && (string) $row['reduction_type'] === $def['reduction_type']
             && abs((float) $row['reduction'] - $def['reduction']) < 0.0001
-            && (int) $row['reduction_tax'] === 1) {
+            && (int) $row['reduction_tax'] === 1
+            && abs((float) $row['price'] - (-1.0)) < 0.0001) {
             $validCount++;
         }
     }
