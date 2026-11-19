@@ -205,3 +205,47 @@ def test_invalid_ssl_environment_and_empty_key_do_not_fallback(monkeypatch):
     monkeypatch.setenv("PRESTASHOP_API_VERIFY_SSL", "tru")
     with pytest.raises(ValueError):
         PrestaShopClient("https://shop/api", "a" * 32)
+
+
+def test_binary_upload_receipt_requires_gallery_reconciliation(client):
+    client.session.request.return_value = response(raw=b"\xff\xd8jpeg")
+    assert client.upload_image("products", 1, image_bytes=b"jpeg") == {
+        "image": {},
+        "binary_response": True,
+    }
+    assert client.session.request.call_args.kwargs["params"] == {
+        "output_format": "JSON"
+    }
+
+
+def test_image_update_uses_put_override_for_php_multipart(client):
+    client.session.request.return_value = response(raw=b"\xff\xd8jpeg")
+    result = client.upload_image("products", 1, image_id=7, image_bytes=b"jpeg")
+    assert result["image"]["id"] == "7"
+    args = client.session.request.call_args
+    assert args.args == ("POST", client.api_url + "/images/products/1/7")
+    assert args.kwargs["params"]["ps_method"] == "PUT"
+
+
+@pytest.mark.parametrize("body", [{}, {"image": {}}, {"image": {"id": "invalid"}}])
+def test_upload_invalid_receipt_is_not_success(client, body):
+    client.session.request.return_value = response(body=body)
+    with pytest.raises(PrestaShopProtocolError):
+        client.upload_image("products", 1, image_bytes=b"jpeg")
+
+
+def test_image_list_accepts_xml_and_empty_gallery_404(client):
+    client.session.request.return_value = response(
+        raw=b'<prestashop><image id="1"><declination id="7"/><declination id="8"/></image></prestashop>'
+    )
+    assert client.image_ids(1) == [7, 8]
+    client.session.request.return_value = response(status=404)
+    assert client.image_ids(1) == []
+
+
+def test_malformed_image_list_does_not_mean_empty_gallery(client):
+    client.session.request.return_value = response(
+        raw=b'<prestashop><image id="1"/></prestashop>'
+    )
+    with pytest.raises(PrestaShopProtocolError):
+        client.image_ids(1)

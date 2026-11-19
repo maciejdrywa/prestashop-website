@@ -251,7 +251,9 @@ class PrestaShopClient:
             )
         if port == 0:
             raise ValueError("Niepoprawny port PRESTASHOP_API_URL.")
-        self.api_key = api_key if api_key is not None else os.getenv("PRESTASHOP_API_KEY", "")
+        self.api_key = (
+            api_key if api_key is not None else os.getenv("PRESTASHOP_API_KEY", "")
+        )
 
         if verify_ssl is not None:
             if not isinstance(verify_ssl, bool):
@@ -510,6 +512,7 @@ class PrestaShopClient:
         image_bytes: Optional[bytes] = None,
         mime_type: str = "image/jpeg",
         filename: str = "image.jpg",
+        image_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Przesyła plik graficzny (multipart/form-data) do wskazanego zasobu (np. 'products', 'categories').
@@ -525,13 +528,34 @@ class PrestaShopClient:
         else:
             raise ValueError("Należy podać image_path lub image_bytes.")
 
+        if image_id is not None and (
+            isinstance(image_id, bool) or not isinstance(image_id, int) or image_id <= 0
+        ):
+            raise ValueError("Niepoprawne ID obrazu.")
+        if image_id is not None:
+            url += f"/{image_id}"
+        params = {"output_format": "JSON"}
+        if image_id is not None:
+            # PHP 8.1 wypełnia $_FILES dla POST; dispatcher PS obsługuje ps_method=PUT.
+            params["ps_method"] = "PUT"
         files = {"image": (fname, content, mime_type)}
-        response = self._send(
-            "POST", url, files=files, params={"output_format": "JSON"}
-        )
+        response = self._send("POST", url, files=files, params=params)
+        if response.content.startswith(b"\xff\xd8"):
+            # PS 8.2.8 zwraca JPEG także po POST. Nowe ID uzgadnia importer
+            # z listą galerii zapisaną przed operacją; nie zgadujemy ID w kliencie.
+            return {
+                "image": {"id": str(image_id)} if image_id else {},
+                "binary_response": True,
+            }
         try:
             result = response.json()
-            if isinstance(result, dict) and "errors" not in result:
+            image = result.get("image") if isinstance(result, dict) else None
+            if (
+                isinstance(image, dict)
+                and str(image.get("id", "")).isdigit()
+                and int(image["id"]) > 0
+                and "errors" not in result
+            ):
                 return result
         except ValueError:
             pass
@@ -539,11 +563,54 @@ class PrestaShopClient:
         try:
             root = ET.fromstring(response.content)
             image = root.find("image")
-            if root.tag == "prestashop" and image is not None and image.findtext("id"):
+            if (
+                root.tag == "prestashop"
+                and image is not None
+                and str(image.findtext("id", "")).isdigit()
+                and int(image.findtext("id")) > 0
+            ):
                 return {"image": {"id": image.findtext("id")}}
         except ET.ParseError:
             pass
         raise PrestaShopProtocolError("Niepoprawna odpowiedź po przesłaniu zdjęcia.")
+
+    def image_ids(self, product_id: int) -> list[int]:
+        """Lista XML; 404 oznacza pustą galerię uprzednio potwierdzonego produktu."""
+        try:
+            response = self._send(
+                "GET", self._build_url(f"images/products/{product_id}")
+            )
+        except PrestaShopNotFoundError:
+            return []
+        try:
+            root = ET.fromstring(response.content)
+            node = root.find("image")
+            if (
+                root.tag != "prestashop"
+                or node is None
+                or node.attrib.get("id") != str(product_id)
+            ):
+                raise ValueError("Niepoprawna lista galerii.")
+            ids = [int(item.attrib["id"]) for item in node.findall("declination")]
+            if not ids or any(rid <= 0 for rid in ids) or len(ids) != len(set(ids)):
+                raise ValueError("Niepoprawne ID galerii.")
+            return ids
+        except (ET.ParseError, ValueError, KeyError):
+            raise PrestaShopProtocolError(
+                "Niepoprawna odpowiedź listy obrazów API."
+            ) from None
+
+    def image_bytes(self, product_id: int, image_id: int) -> bytes:
+        """Odczytuje oryginalny JPEG; bez interpretacji odpowiedzi binarnej jako JSON."""
+        response = self._send(
+            "GET", self._build_url(f"images/products/{product_id}/{image_id}")
+        )
+        if (
+            not response.content.startswith(b"\xff\xd8")
+            or len(response.content) > 20_000_000
+        ):
+            raise PrestaShopProtocolError("API nie zwróciło oryginalnego JPEG.")
+        return response.content
 
     def check_connection(self) -> bool:
         """
