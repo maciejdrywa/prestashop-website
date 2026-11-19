@@ -1,0 +1,49 @@
+/**
+ * Style modułu Dyrektywy Omnibus dla motywu PAN DOMU.
+ */
+
+.product-prices .product-discount {
+    flex-wrap: wrap;
+}
+
+.products .product-miniature .product-price-and-shipping {
+    flex-wrap: wrap;
+}
+
+.shopomnibus-price-notice {
+    display: block;
+    width: 100%;
+    order: 10;
+    font-size: 0.8125rem;
+    color: var(--pd-muted, #7E7163);
+    margin-top: 0.25rem;
+    line-height: 1.35;
+    font-weight: 400;
+}
+
+.shopomnibus-price-notice .shopomnibus-label {
+    display: inline;
+    margin-right: 0.25rem;
+    color: var(--pd-muted, #7E7163);
+}
+
+.shopomnibus-price-notice .shopomnibus-price {
+    display: inline;
+    font-weight: 600;
+    color: var(--pd-text, #232323);
+}
+
+/* Wariant kompaktowy na listingu kategorii i stronie głównej */
+.shopomnibus-price-notice.shopomnibus-listing {
+    font-size: 0.75rem;
+    margin-top: 0.2rem;
+    line-height: 1.25;
+}
+
+.shopomnibus-price-notice.shopomnibus-listing .shopomnibus-label {
+    font-size: 0.75rem;
+}
+
+.shopomnibus-price-notice.shopomnibus-listing .shopomnibus-price {
+    font-size: 0.75rem;
+}
