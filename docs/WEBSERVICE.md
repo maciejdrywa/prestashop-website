@@ -41,4 +41,4 @@ Pierwsza komenda kontroluje połączenie, macierz uprawnień i odmowę odczytu z
 
 Mapa domyślna ma nazwę `category_mapping_<host>.json`. Obok niej powstaje `category_mapping_<host>.state.json`. Zachowuj oba pliki; są lokalne i wykluczone z Git. Dziennik umożliwia odzyskanie powiązania po utracie odpowiedzi lub przerwaniu przed zapisem mapy. Konflikt instalacji, uszkodzony stan i niejednoznaczny POST wymagają kontroli operatora, a nie usunięcia dziennika i ślepego ponowienia.
 
-Testy offline, osobną instancję integracyjną, scenariusze awarii i wyniki opisuje [odbiór D2.1–D2.2](D2_1-D2_2.md). Bootstrap nadal importuje katalog bezpośrednio przez modele PHP; integracja toru API należy do D2.5.
+Import produktów, cech, kombinacji i magazynu przez API oraz testy D2.3 opisuje [import produktów](PRODUCT_IMPORT.md). Bootstrap nadal importuje katalog bezpośrednio przez modele PHP; integracja toru API należy do D2.5.

@@ -88,13 +88,20 @@ Kontrola połączenia Webservice jest tylko do odczytu:
 python scraper/test_api_client.py
 ```
 
-Testy zapisu Webservice i kategorii są oznaczone `integration`. Korzystają wyłącznie z odrębnej instancji `deploy/compose.yaml` z testowym plikiem środowiskowym, jawnego `D21_TEST_API_URL` oraz klucza `PRESTASHOP_API_KEY`. Instrukcję przygotowania, HTTP/HTTPS i sprzątania zawiera [odbiór D2.1–D2.2](../docs/D2_1-D2_2.md).
+Testy zapisu Webservice, kategorii i produktów są oznaczone `integration`. Wymagają przygotowanej odrębnej instancji tego samego `deploy/compose.yaml`: projekt `prestashop-d21-tests`, osobne wolumeny, aktywne API oraz PLN, kg i polska reguła VAT. W konfiguracji testowej ustaw porty `HTTP_PORT=18080`, `HTTPS_PORT=18443`, `MAILPIT_PORT=18025`. Używaj istniejącego `.env.example` jako podstawy prywatnej konfiguracji; nie zapisuj haseł i klucza w repozytorium. Nie wskazuj wolumenów zwykłego sklepu przez `DB_VOLUME_NAME` lub `SHOP_VOLUME_NAME`.
+
+Po ustawieniu w środowisku `PRESTASHOP_API_KEY` instancji testowej oraz `REQUESTS_CA_BUNDLE` na jej zaufany certyfikat:
 
 ```sh
-python -m pytest -o addopts= -q scraper/test_api_integration.py
+export D21_TEST_API_URL=https://localhost:18443/api
+python -m pytest -o addopts= -q scraper/test_api_integration.py scraper/test_product_import_integration.py
 ```
 
-Test całego eksportu pozostawia kategorie w testowym sklepie. Scenariusze awarii sprzątają własne rekordy przez lokalny model PHP. Klucz API pozostaje bez DELETE. Domyślne testy offline nie zapisują map w `scraper-results/` ani nie uruchamiają importu po wykryciu brakującego pliku.
+HTTP używa `http://localhost:18080/api` i wymaga testowej konfiguracji Nginx obsługującej API bez przekierowania na domyślny port HTTPS. Fixture ustawia domeny i flagi SSL wyłącznie w kontenerze `prestashop-d21-tests-shop-1`; test odrzuca pozostałe adresy API. Przygotowanie usług i konfiguratorów PHP opisują [wdrożenie](../docs/DEPLOYMENT.md) oraz [inicjalizacja](../docs/INITIALIZATION.md).
+
+Test całego eksportu pozostawia kategorie w testowym sklepie. Testy produktów tworzą sześć własnych rekordów na scenariusz i sprzątają je oraz własną cechę przez lokalny model PHP. Klucz API pozostaje bez DELETE. Domyślne testy offline nie zapisują map w `scraper-results/` ani nie uruchamiają importu po wykryciu brakującego pliku.
+
+D2.3 obejmuje ceny i rzeczywisty wariant domyślny, cechy, kombinacje, idempotencję, zmianę opisów i cen, zachowanie magazynu i metadanych, jawny reset ilości, utratę odpowiedzi POST/PUT, przejęcie referencji bez dziennika oraz dry run bez zapisu. Reguły i odbiór pełnego eksportu opisuje [import produktów](../docs/PRODUCT_IMPORT.md).
 
 ## PHP
 
