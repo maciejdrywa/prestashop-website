@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import uuid4
 
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 
 from helpers.cart import Product
 from helpers.money import PLN_AMOUNT_PATTERN, parse_pln_amount
@@ -18,6 +18,15 @@ class Customer:
     last_name: str
     email: str
 
+
+# Zamówienia testowe rozpoznajemy po prefiksie e-maila, żeby odfiltrować je
+# w panelu i analityce. Domena example.com jest zarezerwowana i nie dostarcza poczty.
+TEST_EMAIL_PREFIX = "e2e-"
+TEST_EMAIL_DOMAIN = "example.com"
+
+# Przewoźnicy projektu z deploy/init/lib/carriers.php; scenariusz wybiera InPost.
+PROJECT_CARRIERS = ("InPost", "DPD")
+SELECTED_CARRIER = "InPost"
 
 ADDRESS = {"address1": "Testowa 12", "postcode": "00-001", "city": "Warszawa", "phone": "500600700"}
 
@@ -31,7 +40,7 @@ def start_checkout(page: Page) -> None:
 
 def register_customer(page: Page) -> Customer:
     """Rejestruje konto z unikalnym e-mailem i sprawdza zalogowanie oraz przejście do adresu."""
-    customer = Customer("Jan", "Testowy", f"w43-{uuid4()}@example.com")
+    customer = Customer("Jan", "Testowy", f"{TEST_EMAIL_PREFIX}{uuid4()}@{TEST_EMAIL_DOMAIN}")
     form = page.locator("#checkout-guest-form")
     for name, value in {"firstname": customer.first_name, "lastname": customer.last_name, "email": customer.email}.items():
         field = form.locator(f'input[name="{name}"]')
@@ -39,7 +48,7 @@ def register_customer(page: Page) -> Customer:
         expect(field).to_have_value(value)
     # Hasło tworzy konto także przy włączonym zakupie gościnnym; nie logujemy go.
     password = form.locator('input[name="password"]')
-    password.fill(f"W43!aZ9-{uuid4()}")
+    password.fill(f"E2e!aZ9-{uuid4()}")
     assert len(password.input_value()) >= 16
     for consent in form.locator('input[type="checkbox"][required]').all():
         consent.check()
@@ -82,13 +91,23 @@ def save_address(page: Page, customer: Customer) -> None:
         expect(saved_address).to_contain_text(text)
 
 
-def select_shipping_method(page: Page) -> None:
-    """Wybiera InPost i sprawdza zachowanie tego wyboru po przejściu do płatności."""
-    step = page.locator("#checkout-delivery-step")
-    option = step.locator(".delivery-option").filter(
-        has=page.locator(".carrier-name", has_text=re.compile("^InPost$"))
+def carrier_option(page: Page, name: str) -> Locator:
+    """Zwraca opcję dostawy o dokładnie podanej nazwie przewoźnika."""
+    return page.locator("#checkout-delivery-step .delivery-option").filter(
+        has=page.locator(".carrier-name", has_text=re.compile(f"^{re.escape(name)}$"))
     )
-    expect(option, "InPost is unavailable: check shipping configuration, address and the 50 kg limit").to_have_count(1)
+
+
+def select_shipping_method(page: Page) -> None:
+    """Sprawdza dostępność InPost i DPD, wybiera InPost i sprawdza zachowanie wyboru po przejściu do płatności."""
+    step = page.locator("#checkout-delivery-step")
+    # Wymaganie: wybór jednego z dwóch nowych przewoźników, więc oba muszą być dostępne.
+    for name in PROJECT_CARRIERS:
+        expect(
+            carrier_option(page, name),
+            f"{name} is unavailable: check shipping configuration, address and the 50 kg limit",
+        ).to_have_count(1)
+    option = carrier_option(page, SELECTED_CARRIER)
     radio = option.locator('input[type="radio"]')
     radio.check()
     expect(radio).to_be_checked()
@@ -125,8 +144,8 @@ def read_checkout_total(page: Page) -> Decimal:
     return amount
 
 
-def confirm_order(page: Page, customer: Customer) -> None:
-    """Zatwierdza zakup i sprawdza komunikat sukcesu, e-mail klienta oraz referencję zamówienia."""
+def confirm_order(page: Page, customer: Customer) -> str:
+    """Zatwierdza zakup, sprawdza komunikat sukcesu i e-mail klienta oraz zwraca referencję zamówienia."""
     page.locator('#payment-confirmation button[type="submit"]').click()
     expect(page.locator("body#order-confirmation")).to_be_attached(timeout=15_000)
     expect(page.locator("#content-hook_order_confirmation h3")).to_contain_text(
@@ -136,6 +155,9 @@ def confirm_order(page: Page, customer: Customer) -> None:
     reference = page.locator("#order-reference-value")
     expect(reference).to_contain_text(re.compile(r":\s*\S+"))
     print(f"Confirmation: {reference.inner_text()}", flush=True)
+    match = re.search(r":\s*([A-Z0-9]+)\s*$", reference.inner_text())
+    assert match, f"Order reference not found in: {reference.inner_text()!r}"
+    return match.group(1)
 
 
 def assert_order_contents(page: Page, products: list[Product], expected_total: Decimal) -> None:

@@ -6,6 +6,19 @@
 }
 .cart-container .cart-overview, .cart-container .cart-item, .cart-summary .cart-summary-line { border-color: var(--pd-border); }
 .cart-grid-body .cart-item .product-line-info a { color: var(--pd-link); }
+.cart-item .product-line-info .regular-price {
+    color: var(--pd-muted);
+    font-size: .8125rem;
+    text-decoration: line-through;
+    margin-right: .35rem;
+}
+.cart-item .product-line-info .current-price .price {
+    color: var(--pd-link);
+    font-weight: 600;
+}
+.cart-summary-line .discount-name {
+    color: #d9534f;
+}
 .cart-grid-right .cart-summary .cart-summary-line.cart-total { background: var(--pd-surface); }
 .cart-grid-right .cart-summary .checkout { padding: 1rem; }
 .cart-grid-right .cart-summary .checkout .btn { width: 100%; margin: 0; }
