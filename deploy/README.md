@@ -1,9 +1,11 @@
 # Środowisko Docker
 
-`compose.yaml` definiuje bazę, PrestaShop, Nginx i Mailpit. `compose.bootstrap.yaml` dodaje przygotowanie certyfikatu, kontrolę gotowości i bezpieczną inicjalizację.
+`compose.yaml` jest jedynym plikiem Compose projektu. Definiuje bazę, PrestaShop, Nginx, Mailpit, przygotowanie certyfikatu i bootstrap. Zwykłe `up` uruchamia usługi i przygotowuje TLS. Usługa `bootstrap` ma profil `init` i uruchamia się po jawnym `run bootstrap`, wykonując bezpieczną inicjalizację.
+
+Sklep i testy korzystają z tej samej definicji, z różnymi plikami `--env-file`, portami i nazwami projektów. Wzór testowy to `api-test.env.example`.
 
 ```sh
-docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.bootstrap.yaml run --build --rm bootstrap
+docker compose --env-file .env -f deploy/compose.yaml run --build --rm bootstrap
 ```
 
 Pełną instrukcję `.env`, HTTPS, platform i pracy ręcznej zawiera [wdrożenie](../docs/DEPLOYMENT.md). Etapy i aktualizacje opisuje [inicjalizacja](../docs/INITIALIZATION.md), a reguły sklepu [konfiguracja](../docs/CONFIGURATION.md).

@@ -82,12 +82,19 @@ python -m pytest -q
 node --test deploy/init/tests/cookie-notice.test.cjs
 ```
 
-Testy integracyjne Webservice i importu kategorii wymagają osobnej instancji testowej; mogą zmieniać dane:
+Kontrola połączenia Webservice jest tylko do odczytu:
 
-```powershell
+```sh
 python scraper/test_api_client.py
-python -m pytest -o addopts= scraper/test_category_import.py
 ```
+
+Testy zapisu Webservice i kategorii są oznaczone `integration`. Korzystają wyłącznie z odrębnej instancji `deploy/compose.yaml` z testowym plikiem środowiskowym, jawnego `D21_TEST_API_URL` oraz klucza `PRESTASHOP_API_KEY`. Instrukcję przygotowania, HTTP/HTTPS i sprzątania zawiera [odbiór D2.1–D2.2](../docs/D2_1-D2_2.md).
+
+```sh
+python -m pytest -o addopts= -q scraper/test_api_integration.py
+```
+
+Test całego eksportu pozostawia kategorie w testowym sklepie. Scenariusze awarii sprzątają własne rekordy przez lokalny model PHP. Klucz API pozostaje bez DELETE. Domyślne testy offline nie zapisują map w `scraper-results/` ani nie uruchamiają importu po wykryciu brakującego pliku.
 
 ## PHP
 
