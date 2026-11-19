@@ -18,3 +18,15 @@ def browser_context_args(browser_context_args, base_url):
         "timezone_id": "Europe/Warsaw",
         "viewport": {"width": 1280, "height": 720},
     }
+
+
+@pytest.fixture
+def admin_page(browser, browser_context_args):
+    """Osobna sesja administratora, która nie miesza ciasteczek panelu z sesją klienta.
+
+    Kontekst powstaje poza nagrywaniem pytest-playwright, bo ślad przy błędzie
+    zawierałby hasło administratora wpisane w formularz logowania.
+    """
+    context = browser.new_context(**browser_context_args)
+    yield context.new_page()
+    context.close()
