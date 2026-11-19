@@ -1,15 +1,15 @@
 # Wyniki testu E2E
 
-Szablon wyników kontroli odbiorowej scenariusza zakupu z `tests/e2e/test_checkout.py`. Opis testu i raportów: [instrukcja testów](../tests/README.md).
+Wyniki kontroli odbiorowej scenariusza zakupu z `tests/e2e/test_checkout.py`. Opis testu i raportów: [instrukcja testów](../tests/README.md).
 
 ## Środowisko
 
 | Pole | Wartość |
 |---|---|
-| Adres sklepu | — |
-| Data | — |
-| Gałąź / commit | — |
-| Wykonał | — |
+| Adres sklepu | `https://localhost` (lokalny Docker) |
+| Data | 2026-11-19, 17:21 |
+| Gałąź / commit | `W4.5`, przed commitem zmian |
+| Wykonał | Wiktor Adamczyk |
 
 ## Komenda
 
@@ -27,9 +27,11 @@ Przebiegi wykonuje się kolejno, bez resetu bazy. Na klastrze trzeba też ustawi
 
 | Nr | Czas [s] | Wynik | Referencja zamówienia | Numer faktury |
 |---|---|---|---|---|
-| 1 | — | — | — | — |
-| 2 | — | — | — | — |
-| 3 | — | — | — | — |
+| 1 | 64,9 | sukces | TMJFDLTLV | FVDEMO000010 |
+| 2 | 51,0 | sukces | MARLYFYFG | FVDEMO000011 |
+| 3 | 54,8 | sukces | AEZLDBKFB | FVDEMO000012 |
+
+Trzy kolejne przebiegi `--count=3` bez resetu bazy, łącznie 179,7 s razem z przygotowaniem przeglądarki. Etap dodawania 10 produktów trwał 27,8–34,9 s (wcześniej 171–176 s). Zamówienia mają ID 22–24, a faktury ok. 470 KB, 2 strony i referencję zamówienia. Oba kryteria są spełnione.
 
 ## Kryteria
 
