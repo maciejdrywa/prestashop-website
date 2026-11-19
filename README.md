@@ -18,7 +18,7 @@ Sklep jest dostępny pod `https://localhost`, panel pod `https://localhost/admin
 
 ### Webservice API
 
-Webservice API jest konfigurowane podczas inicjalizacji. Importer Python synchronizuje kategorie oraz produkty, cechy, kombinacje i magazyn; bootstrap nadal używa natywnych importerów PHP do katalogu. Parametry połączenia określa `.env`:
+Webservice API jest konfigurowane podczas inicjalizacji. Importer Python synchronizuje kategorie oraz produkty, cechy, kombinacje, magazyn i galerie; bootstrap nadal używa natywnych importerów PHP do katalogu. Parametry połączenia określa `.env`:
 - `PRESTASHOP_API_URL` — adres API (domyślnie `https://localhost/api`),
 - `PRESTASHOP_API_KEY` — 32-znakowy klucz alfanumeryczny z uprawnieniami *Least Privilege* (zasoby katalogu, bez dostępu do zamówień i klientów),
 - `PRESTASHOP_API_VERIFY_SSL` — weryfikacja certyfikatu TLS (`false` dla środowiska lokalnego).
@@ -29,7 +29,7 @@ Kontrolę połączenia, tożsamości instalacji i uprawnień, bez zapisywania da
 python3 scraper/test_api_client.py
 ```
 
-Konfigurację i wznowienie kategorii opisuje [Webservice](docs/WEBSERVICE.md), a komendy i wyniki D2.3 — [import produktów](docs/PRODUCT_IMPORT.md). Klucz importera nie ma uprawnień DELETE; stary test tworzący i usuwający kategorię zastąpiła kontrola tylko do odczytu.
+Konfigurację i wznowienie kategorii opisuje [Webservice](docs/WEBSERVICE.md), a komendy i wyniki D2.3 — [import produktów](docs/PRODUCT_IMPORT.md). Zdjęcia i wznowienie galerii opisuje [import zdjęć D2.4](docs/IMAGE_IMPORT.md). Klucz importera nie ma uprawnień DELETE; stary test tworzący i usuwający kategorię zastąpiła kontrola tylko do odczytu.
 ## Testy E2E
 
 Test Playwright sprawdza pełny zakup: koszyk, rejestrację, dostawę, płatność przy odbiorze, status zamówienia i pobranie faktury VAT. W aktywnym środowisku wirtualnym z zależnościami z `tests/requirements.txt`:

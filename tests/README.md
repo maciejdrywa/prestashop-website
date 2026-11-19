@@ -185,7 +185,7 @@ Po ustawieniu w środowisku `PRESTASHOP_API_KEY` instancji testowej oraz `REQUES
 
 ```sh
 export D21_TEST_API_URL=https://localhost:18443/api
-python -m pytest -o addopts= -q scraper/test_api_integration.py scraper/test_product_import_integration.py
+python -m pytest -o addopts= -q scraper/test_api_integration.py scraper/test_product_import_integration.py scraper/test_image_import_integration.py
 ```
 
 HTTP używa `http://localhost:18080/api` i wymaga testowej konfiguracji Nginx obsługującej API bez przekierowania na domyślny port HTTPS. Fixture ustawia domeny i flagi SSL wyłącznie w kontenerze `prestashop-d21-tests-shop-1`; test odrzuca pozostałe adresy API. Przygotowanie usług i konfiguratorów PHP opisują [wdrożenie](../docs/DEPLOYMENT.md) oraz [inicjalizacja](../docs/INITIALIZATION.md).
@@ -203,3 +203,5 @@ docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data sh
 ```
 
 Testy zmieniające dane uruchamiaj na osobnych wolumenach. Szczegóły inicjalizacji opisuje [instrukcja](../deploy/init/README.md), a ograniczenia weryfikacji — [audyt](../docs/AUDIT.md).
+
+Testy D2.4 w `scraper/test_image_import.py` sprawdzają ZIP, limity pobierania, JPEG/WebP, EXIF, przezroczystość, cache i uzgadnianie niepewnego POST. `scraper/test_image_import_integration.py` korzysta z tej samej odrębnej instancji D2 i własnych produktów fixture: upload, ponowienie, zmiana pliku pod tym samym URL, zmiana okładki, utrata odpowiedzi POST/PUT, przejęcie eksportu PHP i brak zapisu w dry run. Własne produkty oraz testowe mapowania PHP są sprzątane. Wyniki pełnego katalogu opisuje [D2.4](../docs/IMAGE_IMPORT.md).

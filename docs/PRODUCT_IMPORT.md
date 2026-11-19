@@ -28,7 +28,7 @@ python scraper/import_products.py --context-file logs/product-import/context.jso
 
 Nie uruchamiaj jednocześnie importera PHP i API. Podczas importu wstrzymaj edycję katalogu. Blokada procesu chroni przed równoległymi importerami Python tej samej instalacji.
 
-Nowe produkty są **nieaktywne**. Można je sprawdzić w panelu **Katalog → Produkty**, po referencji `pandomu-ID`. Aktywacja po odbiorze zdjęć należy do D2.4–D2.5. Istniejące produkty zachowują aktywność i ilości magazynowe.
+Nowe produkty są **nieaktywne**. Można je sprawdzić w panelu **Katalog → Produkty**, po referencji `pandomu-ID`. Galerie importuje [D2.4](IMAGE_IMPORT.md), a aktywacja po odbiorze zdjęć należy do finalizacji D2.5. Istniejące produkty zachowują aktywność i ilości magazynowe.
 
 ## Opcje i wznowienie
 
