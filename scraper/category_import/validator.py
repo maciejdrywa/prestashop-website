@@ -4,6 +4,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from urllib.parse import urlsplit
 
 from .models import CategoryItem
 
@@ -46,6 +47,10 @@ def validate_category_record(raw: Dict[str, Any], index: int) -> CategoryItem:
     if not source_url or source_url.lower() in ("null", "none"):
         raise ValueError(f"Rekord #{index} ('{name}') posiada pustą wartość w polu 'source_url'.")
 
+    parsed = urlsplit(source_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.fragment or parsed.username or parsed.password:
+        raise ValueError(f"Rekord #{index} posiada niepoprawny source_url.")
+
     # Sprawdzenie 'category_path'
     category_path = raw.get("category_path")
     if category_path is None or not isinstance(category_path, list) or not category_path:
@@ -67,13 +72,7 @@ def validate_category_record(raw: Dict[str, Any], index: int) -> CategoryItem:
 
     # Weryfikacja spójności: ostatni element ścieżki powinien odpowiadać nazwie kategorii
     if cleaned_path[-1] != name:
-        logger.debug(
-            "Rekord #%d: nazwa '%s' różni się od ostatniego segmentu ścieżki '%s'. Ujednolicono.",
-            index,
-            name,
-            cleaned_path[-1],
-        )
-        cleaned_path[-1] = name
+        raise ValueError(f"Rekord #{index}: nazwa kategorii różni się od ostatniego segmentu ścieżki.")
 
     parent_source_url_raw = raw.get("parent_source_url")
     if parent_source_url_raw is not None and not isinstance(parent_source_url_raw, str):
@@ -132,12 +131,14 @@ def load_and_validate_categories(
 
     items: List[CategoryItem] = []
     seen_source_urls: Set[str] = set()
+    duplicate_urls: Set[str] = set()
 
     for idx, raw_record in enumerate(data):
         try:
             item = validate_category_record(raw_record, idx)
             # Wykrywanie duplikatów source_url w danych wejściowych
             if item.source_url in seen_source_urls:
+                duplicate_urls.add(item.source_url)
                 err_msg = (
                     f"Odrzucono niepoprawny rekord #{idx} ('{item.name}'): "
                     f"Rekord #{idx} posiada zduplikowany 'source_url' '{item.source_url}' "
@@ -155,6 +156,39 @@ def load_and_validate_categories(
             logger.warning(err_msg)
             if validation_errors is not None:
                 validation_errors.append(err_msg)
+
+    # Walidacja grafu po odczycie wszystkich rekordów: błędy blokują gałąź, nie cały plik.
+    by_url = {item.source_url: item for item in items}
+    paths = {}
+    invalid = set(duplicate_urls)
+    for item in items:
+        key = tuple(segment.casefold() for segment in item.category_path)
+        paths.setdefault(key, []).append(item.source_url)
+    for urls in paths.values():
+        if len(urls) > 1:
+            invalid.update(urls)
+    for item in items:
+        parent = by_url.get(item.parent_source_url)
+        if item.depth == 1:
+            if item.parent_source_url is not None:
+                invalid.add(item.source_url)
+        elif parent is None or parent.category_path != item.category_path[:-1]:
+            invalid.add(item.source_url)
+    # Spójna ścieżka zmniejsza głębokość o jeden, co wyklucza cykle.
+    changed = True
+    while changed:
+        changed = False
+        for item in items:
+            if item.source_url not in invalid and item.parent_source_url in invalid:
+                invalid.add(item.source_url)
+                changed = True
+    for item in items:
+        if item.source_url in invalid:
+            message = f"Odrzucono kategorię '{item.name}': konflikt ścieżki, rodzica lub zależność od błędnej gałęzi."
+            logger.warning(message)
+            if validation_errors is not None:
+                validation_errors.append(message)
+    items = [item for item in items if item.source_url not in invalid]
 
     # Sortowanie hierarchiczne: najpierw poziom 1 (długość 1), potem 2, potem 3...
     items.sort(key=lambda c: (len(c.category_path), c.name))

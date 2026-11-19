@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from prestashop_api import (
     PrestaShopAPIError,
-    PrestaShopAuthError,
     PrestaShopClient,
 )
 
@@ -94,46 +93,23 @@ def fetch_existing_categories(client: PrestaShopClient) -> List[Dict[str, Any]]:
     logger.info("Pobieranie istniejących kategorii z PrestaShop API (display=[id,id_parent,name,link_rewrite,active])...")
     res = client.get("categories", params={"display": "[id,id_parent,name,link_rewrite,active]"})
 
-    if isinstance(res, dict):
-        raw = res.get("categories", [])
-    elif isinstance(res, list):
-        raw = res
-    else:
-        raw = []
-
-    if isinstance(raw, dict):
-        if "category" in raw:
-            cat_list = raw["category"]
-            categories = cat_list if isinstance(cat_list, list) else [cat_list]
-        else:
-            categories = [raw]
-    elif isinstance(raw, list):
-        categories = raw
-    else:
-        categories = []
-
+    categories = resource_records(res, "categories", "category")
     cleaned: List[Dict[str, Any]] = []
+    seen = set()
     for cat in categories:
-        if not isinstance(cat, dict) or "id" not in cat:
-            continue
         try:
-            cid = int(cat["id"])
-            pid = int(cat.get("id_parent", 0))
-            name = _extract_category_name(cat.get("name", ""))
-            link_rewrite = _extract_category_name(cat.get("link_rewrite", ""))
-            try:
-                active = int(cat.get("active", 1))
-            except (ValueError, TypeError):
-                active = 1
-            cleaned.append({
-                "id": cid,
-                "id_parent": pid,
-                "name": name,
-                "link_rewrite": link_rewrite,
-                "active": active,
-            })
-        except (ValueError, TypeError):
-            continue
+            if set(_CATEGORY_REQUIRED_FIELDS) - cat.keys():
+                raise ValueError("Brak wymaganych pól kategorii")
+            cid, pid, active = int(cat["id"]), int(cat["id_parent"]), int(cat["active"])
+            name = _extract_category_name(cat["name"])
+            slug = _extract_category_name(cat["link_rewrite"])
+            if cid <= 0 or pid < 0 or active not in {0, 1} or not name or cid in seen:
+                raise ValueError("Niepoprawne lub powielone dane kategorii")
+            cleaned.append({"id": cid, "id_parent": pid, "name": name,
+                            "link_rewrite": slug, "active": active})
+            seen.add(cid)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise PrestaShopAPIError("Niepełna lub niepoprawna lista kategorii API; zapis zablokowany.") from exc
 
     logger.info("Znaleziono %d istniejących kategorii w PrestaShop.", len(cleaned))
     return cleaned
@@ -141,7 +117,7 @@ def fetch_existing_categories(client: PrestaShopClient) -> List[Dict[str, Any]]:
 
 def build_prestashop_hierarchy_index(
     existing_categories: List[Dict[str, Any]],
-) -> Tuple[Dict[Tuple[str, ...], int], Dict[Tuple[int, str], int], Dict[int, Dict[str, Any]]]:
+) -> Tuple[Dict[Tuple[str, ...], Optional[int]], Dict[Tuple[int, str], Optional[int]], Dict[int, Dict[str, Any]]]:
     """
     Buduje indeksy wyszukiwania istniejących kategorii:
     1. path_index: mapowanie pełnej ścieżki od korzenia (id=2) na ID kategorii.
@@ -150,15 +126,18 @@ def build_prestashop_hierarchy_index(
     Zabezpieczone przed pętlami cyklicznymi w relacji rodzic-dziecko.
     """
     existing_by_id: Dict[int, Dict[str, Any]] = {c["id"]: c for c in existing_categories}
-    path_index: Dict[Tuple[str, ...], int] = {}
-    parent_child_index: Dict[Tuple[int, str], int] = {}
+    path_index: Dict[Tuple[str, ...], Optional[int]] = {}
+    parent_child_index: Dict[Tuple[int, str], Optional[int]] = {}
 
     for c in existing_categories:
         cid = c["id"]
         pid = c["id_parent"]
         name = c["name"]
-        parent_child_index[(pid, name.lower())] = cid
-        parent_child_index[(pid, name)] = cid
+        for key in {(pid, name.lower()), (pid, name)}:
+            if key in parent_child_index and parent_child_index[key] != cid:
+                parent_child_index[key] = None
+            else:
+                parent_child_index[key] = cid
 
         if cid in (1, PRESTASHOP_HOME_CATEGORY_ID):
             continue
@@ -186,8 +165,11 @@ def build_prestashop_hierarchy_index(
 
         if is_under_home and path_segments:
             full_path = tuple(reversed(path_segments))
-            path_index[full_path] = cid
-            path_index[tuple(p.lower() for p in full_path)] = cid
+            for key in {full_path, tuple(p.lower() for p in full_path)}:
+                if key in path_index and path_index[key] != cid:
+                    path_index[key] = None
+                else:
+                    path_index[key] = cid
 
     return path_index, parent_child_index, existing_by_id
 
@@ -195,40 +177,28 @@ def build_prestashop_hierarchy_index(
 def fetch_active_languages(client: PrestaShopClient) -> List[str]:
     """
     Pobiera identyfikatory wszystkich aktywnych języków w sklepie PrestaShop.
-    W przypadku braku uprawnień (Least Privilege) lub błędu, zwraca domyślnie ["1"].
+    Brak uprawnień lub błędna odpowiedź blokuje zapis zamiast zgadywać język.
     """
-    try:
-        res = client.get("languages", params={"display": "[id]", "filter[active]": "1"})
-        if isinstance(res, dict):
-            raw = res.get("languages", [])
-        elif isinstance(res, list):
-            raw = res
-        else:
-            raw = []
+    res = client.get("languages", params={"display": "[id]", "filter[active]": "1"})
+    languages = resource_records(res, "languages", "language")
+    ids = [str(record.get("id", "")) for record in languages]
+    if not ids or any(not value.isdigit() or int(value) <= 0 for value in ids) or len(set(ids)) != len(ids):
+        raise PrestaShopAPIError("Brak poprawnej listy aktywnych języków; zapis zablokowany.")
+    return ids
 
+
+def resource_records(response: Any, plural: str, singular: str) -> List[Dict[str, Any]]:
+    """Nie myli błędu protokołu z pustym wynikiem. PS zwraca {} dla pustych list."""
+    if not isinstance(response, dict) or (response and plural not in response):
+        raise PrestaShopAPIError(f"Niepoprawna odpowiedź listy {plural}.")
+    raw = response.get(plural, [])
+    if isinstance(raw, dict) and singular in raw:
+        raw = raw[singular]
         if isinstance(raw, dict):
-            if "language" in raw:
-                lang_list = raw["language"]
-                langs = lang_list if isinstance(lang_list, list) else [lang_list]
-            else:
-                langs = [raw]
-        elif isinstance(raw, list):
-            langs = raw
-        else:
-            langs = []
-
-        lang_ids = [
-            str(language["id"])
-            for language in langs
-            if isinstance(language, dict) and "id" in language
-        ]
-        return lang_ids if lang_ids else ["1"]
-    except PrestaShopAuthError:
-        logger.debug("Brak uprawnień Webservice do zasobu 'languages' (Least Privilege). Użyto domyślnego ID języka '1'.")
-        return ["1"]
-    except Exception as exc:
-        logger.warning("Nie udało się pobrać listy aktywnych języków (%s), użyto ID domyślnego '1'.", exc)
-        return ["1"]
+            raw = [raw]
+    if not isinstance(raw, list) or any(not isinstance(record, dict) for record in raw):
+        raise PrestaShopAPIError(f"Niepoprawna struktura listy {plural}.")
+    return raw
 
 
 def build_category_payload(
