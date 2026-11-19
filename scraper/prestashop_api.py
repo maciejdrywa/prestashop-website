@@ -5,10 +5,14 @@ Służy do wymuszenia formatu JSON, obsługi błędów, Basic AUTH oraz konwersj
 
 from __future__ import annotations
 
+import math
 import os
+import re
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+from urllib.parse import urlsplit
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -18,29 +22,39 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 class PrestaShopAPIError(Exception):
     """Bazowy wyjątek dla błędów API PrestaShop."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, response_text: str = ""):
+    def __init__(
+        self, message: str, status_code: Optional[int] = None, response_text: str = ""
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.response_text = response_text
 
 
+class PrestaShopProtocolError(PrestaShopAPIError):
+    """Odpowiedź nie spełnia kontraktu API; nie wolno uznać jej za pusty katalog."""
+
+
 class PrestaShopAuthError(PrestaShopAPIError):
     """Błąd uwierzytelniania lub brak uprawnień (HTTP 401 / 403)."""
+
     pass
 
 
 class PrestaShopNotFoundError(PrestaShopAPIError):
     """Zasób nie został odnaleziony (HTTP 404)."""
+
     pass
 
 
 class PrestaShopValidationError(PrestaShopAPIError):
     """Błąd walidacji danych przez PrestaShop (HTTP 400)."""
+
     pass
 
 
 class PrestaShopConnectionError(PrestaShopAPIError):
     """Problem z połączeniem sieciowym lub certyfikatem SSL."""
+
     pass
 
 
@@ -84,11 +98,17 @@ MULTILANG_FIELDS = {
 }
 
 
-def _append_xml_subelements(parent: ET.Element, data: Any, key_name: Optional[str] = None) -> None:
+def _append_xml_subelements(
+    parent: ET.Element, data: Any, key_name: Optional[str] = None
+) -> None:
     if isinstance(data, dict):
         for k, v in data.items():
             # Obsługa struktury wielojęzycznej: { "1": "Wartość PL", "2": "Value EN" }
-            if isinstance(v, dict) and v and all(str(sub_k).isdigit() for sub_k in v.keys()):
+            if (
+                isinstance(v, dict)
+                and v
+                and all(str(sub_k).isdigit() for sub_k in v.keys())
+            ):
                 sub_el = ET.SubElement(parent, k)
                 for lang_id, lang_text in v.items():
                     lang_el = ET.SubElement(sub_el, "language", {"id": str(lang_id)})
@@ -111,7 +131,9 @@ def _append_xml_subelements(parent: ET.Element, data: Any, key_name: Optional[st
                                 _append_xml_subelements(sub_el, item, k)
                             else:
                                 item_el = ET.SubElement(sub_el, singular_item_tag)
-                                _append_xml_subelements(item_el, item, singular_item_tag)
+                                _append_xml_subelements(
+                                    item_el, item, singular_item_tag
+                                )
                         elif isinstance(item, (int, str)):
                             item_el = ET.SubElement(sub_el, singular_item_tag)
                             id_el = ET.SubElement(item_el, "id")
@@ -130,7 +152,9 @@ def _append_xml_subelements(parent: ET.Element, data: Any, key_name: Optional[st
         parent.text = "" if data is None else str(data)
 
 
-def dict_to_prestashop_xml(resource: str, data: Dict[str, Any], root_tag: Optional[str] = None) -> str:
+def dict_to_prestashop_xml(
+    resource: str, data: Dict[str, Any], root_tag: Optional[str] = None
+) -> str:
     """
     Konwertuje słownik Pythona na format XML wymagany przez PrestaShop Webservice.
     """
@@ -196,37 +220,86 @@ class PrestaShopClient:
         api_url: Optional[str] = None,
         api_key: Optional[str] = None,
         verify_ssl: Optional[bool] = None,
-        timeout: int = 15,
+        timeout: float = 15,
+        get_retries: int = 2,
     ):
         _load_env_file()
 
         # Pobieranie konfiguracji ze zmiennych środowiskowych jeśli nie podano wprost
-        self.api_url = (api_url or os.getenv("PRESTASHOP_API_URL", "https://localhost/api")).rstrip("/")
-        self.api_key = api_key or os.getenv("PRESTASHOP_API_KEY", "")
+        self.api_url = (
+            api_url
+            if api_url is not None
+            else os.getenv("PRESTASHOP_API_URL", "https://localhost/api")
+        ).rstrip("/")
+        parsed = urlsplit(self.api_url)
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("Niepoprawny port PRESTASHOP_API_URL.") from exc
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or not parsed.path.endswith("/api")
+            or any(ch.isspace() for ch in self.api_url)
+        ):
+            raise ValueError(
+                "PRESTASHOP_API_URL musi być adresem HTTP(S) zakończonym /api, bez danych logowania i parametrów."
+            )
+        if port == 0:
+            raise ValueError("Niepoprawny port PRESTASHOP_API_URL.")
+        self.api_key = api_key if api_key is not None else os.getenv("PRESTASHOP_API_KEY", "")
 
         if verify_ssl is not None:
+            if not isinstance(verify_ssl, bool):
+                raise ValueError("verify_ssl musi być wartością bool.")
             self.verify_ssl = verify_ssl
         else:
             env_verify = os.getenv("PRESTASHOP_API_VERIFY_SSL", "true").lower()
-            self.verify_ssl = env_verify not in ("0", "false", "no")
+            if env_verify not in {"0", "1", "true", "false", "yes", "no"}:
+                raise ValueError(
+                    "PRESTASHOP_API_VERIFY_SSL musi mieć wartość true/false."
+                )
+            self.verify_ssl = env_verify in {"1", "true", "yes"}
 
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ValueError("Timeout musi być dodatnią, skończoną liczbą.")
+        if (
+            isinstance(get_retries, bool)
+            or not isinstance(get_retries, int)
+            or not 0 <= get_retries <= 5
+        ):
+            raise ValueError("get_retries musi być liczbą całkowitą 0–5.")
         self.timeout = timeout
+        self.get_retries = get_retries
+        self.instance_identity = None
 
-        if not self.api_key:
-            raise ValueError("Klucz API PrestaShop nie został ustawiony (brak PRESTASHOP_API_KEY w .env).")
+        if not re.fullmatch(r"[A-Za-z0-9]{32}", self.api_key):
+            raise ValueError("PRESTASHOP_API_KEY musi mieć 32 znaki alfanumeryczne.")
 
         # Basic Auth: login = klucz API, hasło = puste
         self.auth = HTTPBasicAuth(self.api_key, "")
 
         self.session = requests.Session()
         self.session.auth = self.auth
-        self.session.headers.update({
-            "Accept": "application/json",
-            "User-Agent": "PrestaShop-Import-Client/1.0",
-        })
+        self.session.headers.update(
+            {
+                "Accept": "application/json",
+                "User-Agent": "PrestaShop-Import-Client/1.0",
+            }
+        )
 
         if not self.verify_ssl:
             import urllib3
+
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def _build_url(self, endpoint: str) -> str:
@@ -252,67 +325,110 @@ class PrestaShopClient:
         if xml_data:
             headers["Content-Type"] = "application/xml; charset=utf-8"
 
-        try:
-            response = self.session.request(
-                method=method,
-                url=url,
-                params=query_params,
-                json=json_data,
-                data=xml_data.encode("utf-8") if xml_data else None,
-                headers=headers if headers else None,
-                verify=self.verify_ssl,
-                timeout=self.timeout,
-            )
-        except (ConnectionError, Timeout) as exc:
-            raise PrestaShopConnectionError(
-                f"Nie udało się połączyć z API PrestaShop pod adresem {url}: {exc}"
-            ) from exc
-        except RequestException as exc:
-            raise PrestaShopConnectionError(f"Błąd zapytania HTTP: {exc}") from exc
-
-        # Obsługa kodów błędów HTTP
-        if response.status_code in (401, 403):
-            raise PrestaShopAuthError(
-                f"Błąd autoryzacji API ({response.status_code}). Sprawdź poprawność klucza i jego uprawnienia.",
-                status_code=response.status_code,
-                response_text=response.text,
-            )
-
-        if response.status_code == 404:
-            raise PrestaShopNotFoundError(
-                f"Nie znaleziono zasobu pod adresem {url} (HTTP 404).",
-                status_code=404,
-                response_text=response.text,
-            )
-
-        if response.status_code == 400:
-            raise PrestaShopValidationError(
-                f"Błąd walidacji żądania przez PrestaShop (HTTP 400): {response.text}",
-                status_code=400,
-                response_text=response.text,
-            )
-
-        if not response.ok:
-            raise PrestaShopAPIError(
-                f"Błąd API PrestaShop ({response.status_code}): {response.text}",
-                status_code=response.status_code,
-                response_text=response.text,
-            )
-
+        response = self._send(
+            method,
+            url,
+            params=query_params,
+            json=json_data,
+            data=xml_data.encode("utf-8") if xml_data else None,
+            headers=headers or None,
+        )
         if not response.content.strip():
-            return {}
-
+            if method == "DELETE" or response.status_code == 204:
+                return {}
+            raise PrestaShopProtocolError("API zwróciło pustą odpowiedź.")
         try:
-            return response.json()
-        except Exception:
-            return {"raw_response": response.text}
+            result = response.json()
+        except ValueError as exc:
+            raise PrestaShopProtocolError("API nie zwróciło poprawnego JSON.") from exc
+        if not isinstance(result, dict) or "errors" in result:
+            raise PrestaShopProtocolError("Niepoprawna struktura odpowiedzi JSON API.")
+        return result
 
-    def get(self, resource: str, resource_id: Optional[int] = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _send(self, method: str, url: str, **kwargs):
+        """Ponawia wyłącznie GET. Nie loguje treści odpowiedzi ani danych uwierzytelnienia."""
+        retries = self.get_retries if method == "GET" else 0
+        for attempt in range(retries + 1):
+            try:
+                response = self.session.request(
+                    method,
+                    url,
+                    verify=self.verify_ssl,
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    **kwargs,
+                )
+            except (ConnectionError, Timeout):
+                if attempt < retries:
+                    time.sleep(2**attempt)
+                    continue
+                raise PrestaShopConnectionError(
+                    "Nie udało się połączyć z API PrestaShop."
+                ) from None
+            except RequestException:
+                raise PrestaShopConnectionError("Błąd transportu HTTP API.") from None
+            if response.status_code in {429, 500, 502, 503, 504} and attempt < retries:
+                time.sleep(2**attempt)
+                continue
+            self._check_response(response)
+            return response
+        raise AssertionError("Unreachable")
+
+    def _check_response(self, response):
+        status = response.status_code
+        error_type = {
+            400: PrestaShopValidationError,
+            401: PrestaShopAuthError,
+            403: PrestaShopAuthError,
+            404: PrestaShopNotFoundError,
+        }.get(status, PrestaShopAPIError)
+        if not 200 <= status < 300:
+            raise error_type(
+                f"API PrestaShop zwróciło HTTP {status}.", status_code=status
+            )
+        if (
+            self.instance_identity is not None
+            and response.headers.get("X-PrestaShop-Import-Instance")
+            != self.instance_identity
+        ):
+            raise PrestaShopProtocolError(
+                "Zmieniła się tożsamość instalacji API lub brakuje nagłówka instancji."
+            )
+
+    def get_instance_identity(self) -> str:
+        """Odczytuje publiczny odcisk instalacji ustawiany przez konfigurator Webservice."""
+        response = self._send("GET", self.api_url)
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError as exc:
+            raise PrestaShopProtocolError(
+                "Punkt wejścia API nie zwrócił XML PrestaShop."
+            ) from exc
+        identity = response.headers.get("X-PrestaShop-Import-Instance", "")
+        if (
+            root.tag != "prestashop"
+            or root.find("api") is None
+            or not re.fullmatch(r"[a-f0-9]{64}", identity)
+        ):
+            raise PrestaShopProtocolError(
+                "Brak tożsamości instalacji. Uruchom configure-webservice.php."
+            )
+        self.instance_identity = identity
+        return identity
+
+    def get(
+        self,
+        resource: str,
+        resource_id: Optional[int] = None,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Pobiera listę zasobów lub pojedynczy rekord wg ID."""
         endpoint = f"{resource}/{resource_id}" if resource_id is not None else resource
         return self._request("GET", endpoint, params=params)
 
-    def post(self, resource: str, data: Dict[str, Any] | str, root_tag: Optional[str] = None) -> Dict[str, Any]:
+    def post(
+        self, resource: str, data: Dict[str, Any] | str, root_tag: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Tworzy nowy zasób w API.
         Przyjmuje słownik Pythona (automatycznie konwertowany na XML) lub gotowy ciąg XML.
@@ -321,36 +437,64 @@ class PrestaShopClient:
             xml_payload = dict_to_prestashop_xml(resource, data, root_tag=root_tag)
         elif isinstance(data, str):
             if "<prestashop" not in data:
-                tag = root_tag or RESOURCE_SINGULAR_MAP.get(resource, resource.rstrip("s"))
+                tag = root_tag or RESOURCE_SINGULAR_MAP.get(
+                    resource, resource.rstrip("s")
+                )
                 xml_payload = f'<?xml version="1.0" encoding="UTF-8"?><prestashop xmlns:xlink="http://www.w3.org/1999/xlink"><{tag}>{data}</{tag}></prestashop>'
             else:
                 xml_payload = data
         else:
-            raise TypeError("Dane do metody post() muszą być słownikiem lub ciągiem znaków XML.")
+            raise TypeError(
+                "Dane do metody post() muszą być słownikiem lub ciągiem znaków XML."
+            )
 
         return self._request("POST", resource, xml_data=xml_payload)
 
-    def put(self, resource: str, resource_id: int, data: Dict[str, Any] | str, root_tag: Optional[str] = None) -> Dict[str, Any]:
+    def put(
+        self,
+        resource: str,
+        resource_id: int,
+        data: Dict[str, Any] | str,
+        root_tag: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Aktualizuje istniejący zasób o danym ID.
         Przyjmuje słownik Pythona (automatycznie uzupełniający pole id i konwertowany na XML) lub gotowy ciąg XML.
         """
         endpoint = f"{resource}/{resource_id}"
         if isinstance(data, dict):
-            payload_dict = dict(data)
-            if "id" not in payload_dict:
-                payload_dict["id"] = resource_id
-            xml_payload = dict_to_prestashop_xml(resource, payload_dict, root_tag=root_tag)
+            singular = root_tag or RESOURCE_SINGULAR_MAP.get(
+                resource, resource.rstrip("s")
+            )
+            wrapped = singular in data and len(data) == 1
+            payload_dict = dict(data[singular] if wrapped else data)
+            if "id" in payload_dict and str(payload_dict["id"]) != str(resource_id):
+                raise ValueError("ID w danych PUT nie odpowiada ID zasobu.")
+            payload_dict["id"] = resource_id
+            xml_payload = dict_to_prestashop_xml(
+                resource, payload_dict, root_tag=root_tag
+            )
         elif isinstance(data, str):
             if "<prestashop" not in data:
-                tag = root_tag or RESOURCE_SINGULAR_MAP.get(resource, resource.rstrip("s"))
+                tag = root_tag or RESOURCE_SINGULAR_MAP.get(
+                    resource, resource.rstrip("s")
+                )
                 xml_payload = f'<?xml version="1.0" encoding="UTF-8"?><prestashop xmlns:xlink="http://www.w3.org/1999/xlink"><{tag}>{data}</{tag}></prestashop>'
             else:
                 xml_payload = data
         else:
-            raise TypeError("Dane do metody put() muszą być słownikiem lub ciągiem znaków XML.")
+            raise TypeError(
+                "Dane do metody put() muszą być słownikiem lub ciągiem znaków XML."
+            )
 
-        return self._request("PUT", endpoint, xml_data=xml_payload)
+        result = self._request("PUT", endpoint, xml_data=xml_payload)
+        singular = root_tag or RESOURCE_SINGULAR_MAP.get(resource, resource.rstrip("s"))
+        record = result.get(singular)
+        if not isinstance(record, dict) or str(record.get("id")) != str(resource_id):
+            raise PrestaShopProtocolError(
+                "PUT nie potwierdził ID zapisanego zasobu; wymagane uzgodnienie wyniku."
+            )
+        return result
 
     def delete(self, resource: str, resource_id: int) -> bool:
         """Usuwa zasób o danym ID."""
@@ -382,64 +526,29 @@ class PrestaShopClient:
             raise ValueError("Należy podać image_path lub image_bytes.")
 
         files = {"image": (fname, content, mime_type)}
+        response = self._send(
+            "POST", url, files=files, params={"output_format": "JSON"}
+        )
         try:
-            response = self.session.post(
-                url,
-                files=files,
-                verify=self.verify_ssl,
-                timeout=self.timeout,
-            )
-        except (ConnectionError, Timeout) as exc:
-            raise PrestaShopConnectionError(
-                f"Nie udało się połączyć z API PrestaShop przy wysyłaniu zdjęcia: {exc}"
-            ) from exc
-        except RequestException as exc:
-            raise PrestaShopConnectionError(f"Błąd zapytania HTTP: {exc}") from exc
-
-        if response.status_code in (401, 403):
-            raise PrestaShopAuthError(
-                f"Błąd autoryzacji podczas przesyłania zdjęcia ({response.status_code}).",
-                status_code=response.status_code,
-                response_text=response.text,
-            )
-        if not response.ok:
-            raise PrestaShopAPIError(
-                f"Błąd przesyłania zdjęcia ({response.status_code}): {response.text}",
-                status_code=response.status_code,
-                response_text=response.text,
-            )
+            result = response.json()
+            if isinstance(result, dict) and "errors" not in result:
+                return result
+        except ValueError:
+            pass
+        # Endpoint zdjęć w PS 8 może zwracać XML niezależnie od output_format.
         try:
-            return response.json()
-        except Exception:
-            return {"raw_response": response.text}
+            root = ET.fromstring(response.content)
+            image = root.find("image")
+            if root.tag == "prestashop" and image is not None and image.findtext("id"):
+                return {"image": {"id": image.findtext("id")}}
+        except ET.ParseError:
+            pass
+        raise PrestaShopProtocolError("Niepoprawna odpowiedź po przesłaniu zdjęcia.")
 
     def check_connection(self) -> bool:
         """
         Sprawdza czy API jest dostępne i czy klucz jest poprawny.
         Odpytuje punkt wejścia /api bez wymuszania JSON (unika błędu PrestaShop 8.2).
         """
-        try:
-            response = self.session.get(
-                self.api_url,
-                verify=self.verify_ssl,
-                timeout=self.timeout,
-            )
-            if response.status_code in (401, 403):
-                raise PrestaShopAuthError(
-                    f"Błąd autoryzacji API ({response.status_code}). Błędny klucz API lub brak dostępu.",
-                    status_code=response.status_code,
-                    response_text=response.text,
-                )
-            if not response.ok:
-                raise PrestaShopAPIError(
-                    f"Błąd API PrestaShop ({response.status_code}): {response.text}",
-                    status_code=response.status_code,
-                    response_text=response.text,
-                )
-            return True
-        except (ConnectionError, Timeout) as exc:
-            raise PrestaShopConnectionError(
-                f"Nie udało się połączyć z API PrestaShop pod adresem {self.api_url}: {exc}"
-            ) from exc
-        except RequestException as exc:
-            raise PrestaShopConnectionError(f"Błąd zapytania HTTP: {exc}") from exc
+        self.get_instance_identity()
+        return True
