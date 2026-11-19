@@ -125,8 +125,8 @@ def read_checkout_total(page: Page) -> Decimal:
     return amount
 
 
-def confirm_order(page: Page, customer: Customer) -> None:
-    """Zatwierdza zakup i sprawdza komunikat sukcesu, e-mail klienta oraz referencję zamówienia."""
+def confirm_order(page: Page, customer: Customer) -> str:
+    """Zatwierdza zakup, sprawdza komunikat sukcesu i e-mail klienta oraz zwraca referencję zamówienia."""
     page.locator('#payment-confirmation button[type="submit"]').click()
     expect(page.locator("body#order-confirmation")).to_be_attached(timeout=15_000)
     expect(page.locator("#content-hook_order_confirmation h3")).to_contain_text(
@@ -136,6 +136,9 @@ def confirm_order(page: Page, customer: Customer) -> None:
     reference = page.locator("#order-reference-value")
     expect(reference).to_contain_text(re.compile(r":\s*\S+"))
     print(f"Confirmation: {reference.inner_text()}", flush=True)
+    match = re.search(r":\s*([A-Z0-9]+)\s*$", reference.inner_text())
+    assert match, f"Order reference not found in: {reference.inner_text()!r}"
+    return match.group(1)
 
 
 def assert_order_contents(page: Page, products: list[Product], expected_total: Decimal) -> None:
