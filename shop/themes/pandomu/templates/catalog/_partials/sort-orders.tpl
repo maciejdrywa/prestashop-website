@@ -10,7 +10,7 @@
   <span class="col-sm-3 col-md-3 hidden-sm-down sort-by">{l s='Sort by:' d='Shop.Theme.Global'}</span>
   <div class="{if !empty($listing.rendered_facets)}col-xs-8{else}col-xs-12{/if} col-sm-9 col-md-9 products-sort-order dropdown">
     <button type="button" class="btn-unstyle select-title" data-toggle="dropdown"
-            aria-label="{l s='Sort by selection' d='Shop.Theme.Global'}"
+            aria-label="{l s='Sort by:' d='Shop.Theme.Global'} {$selected_label|escape:'html':'UTF-8'}"
             aria-haspopup="true" aria-expanded="false">
       <span>{if $selected_label}{$selected_label|escape:'html':'UTF-8'}{else}{l s='Choose' d='Shop.Theme.Actions'}{/if}</span>
       <i class="material-icons" aria-hidden="true">arrow_drop_down</i>
