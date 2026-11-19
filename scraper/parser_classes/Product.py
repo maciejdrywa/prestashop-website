@@ -4,6 +4,11 @@ from parser_classes.ProductVariant import ProductVariant
 from pydantic import BaseModel, Field
 
 
+class ProductFeature(BaseModel):
+    name: str
+    value: str
+
+
 class Product(BaseModel):
     """Opisuje eksport produktu zgodny z kontraktem importera PrestaShop."""
     product_id: str
@@ -22,3 +27,4 @@ class Product(BaseModel):
     cover_image: Optional[str] = None
     variants: List[ProductVariant] = Field(default_factory=list)
     stock: Optional[int] = None
+    features: List[ProductFeature] = Field(default_factory=list)

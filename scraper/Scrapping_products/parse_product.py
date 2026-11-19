@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from parser_classes.Product import Product
 from scraper_elements.scrap_catalog import scrap_catalog
 from scraper_elements.scrap_description import scrap_descriptions
+from scraper_elements.scrap_features import scrap_features
 from scraper_elements.scrap_id import scrap_id
 from scraper_elements.scrap_images import scrap_cover_image, scrap_images
 from scraper_elements.scrap_name import scrap_name
@@ -62,6 +63,7 @@ def parse_product(html_content: str, source_url: str) -> Product | None:
             images=images,
             cover_image=scrap_cover_image(soup, images),
             variants=variants,
+            features=scrap_features(soup),
             stock=stock
         )
     except Exception as e:
