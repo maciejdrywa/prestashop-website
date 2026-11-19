@@ -22,4 +22,6 @@ docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data sh
 
 Konfigurator treści korzysta z zaimportowanych kategorii i już istniejącej strony CMS „O sklepie”. Ustawia też drzewo kategorii na bieżącą kategorię. Podczas świeżego startu wykonuje się automatycznie po aktywacji produktów.
 
+Baner strony głównej korzysta z bloku „Kategorie” tworzonego przez ten konfigurator. Pobiera adres kategorii „Klamki do drzwi” z istniejącego kafla, a grafikę WebP z motywu. Na sklepie z już skonfigurowanym blokiem do wdrożenia banera wystarczy synchronizacja motywu.
+
 Natywna aktywacja motywu odtwarza typy miniatur. Konfigurator sprawdza ich identyfikatory i definicje przed pierwszą aktywacją, ponieważ wchodzą do odcisków galerii. Instalacja z innymi typami wymaga uzgodnienia ich przed aktywacją.

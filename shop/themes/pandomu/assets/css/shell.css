@@ -194,6 +194,62 @@
     color: var(--pd-link);
 }
 
+/* Baner korzysta z tej samej szerokości kontenera co kafle kategorii. */
+.pd-home-banner {
+    --pd-banner-accent: #f6e2a3;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, max-content));
+    justify-content: center;
+    align-items: center;
+    gap: clamp(1.25rem, 5vw, 6rem);
+    min-height: 5.25rem;
+    margin-bottom: var(--pd-gap);
+    padding: .5rem clamp(1rem, 2.5vw, 2rem);
+    background: #655646;
+    color: var(--pd-white);
+    line-height: 1.35;
+}
+
+.pd-home-banner-intro,
+.pd-home-banner-help {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.pd-home-banner img { display: block; width: 4.25rem; height: auto; flex: 0 0 auto; }
+.pd-home-banner h2,
+.pd-home-banner strong { margin: 0; font-size: 1rem; font-weight: 600; }
+.pd-home-banner p { margin: .15rem 0 0; color: var(--pd-banner-accent); }
+.pd-home-banner-help > .material-icons { color: var(--pd-banner-accent); font-size: 2rem; }
+
+.pd-home-banner-link {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: .5rem;
+    min-height: 2.75rem;
+    padding: .5rem .9rem;
+    background: var(--pd-banner-accent);
+    color: #33271d;
+    font-weight: 600;
+}
+
+.pd-home-banner-link .material-icons { font-size: 1.25rem; }
+.pd-home-banner-link:is(:hover, :focus-visible) { background: var(--pd-white); color: #33271d; }
+.pd-home-banner-link:focus-visible { outline-color: var(--pd-white); }
+
+@media (max-width: 767px) {
+    .pd-home-banner {
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: start;
+        gap: .75rem;
+        padding-block: .85rem;
+    }
+
+    .pd-home-banner img { width: 3.5rem; }
+}
+
 /* Kafle kategorii i stopka są osobnymi sekcjami w układzie sklepu. */
 .pd-category-tiles {
     display: grid;
