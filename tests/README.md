@@ -179,7 +179,7 @@ Kontrola połączenia Webservice jest tylko do odczytu:
 python scraper/test_api_client.py
 ```
 
-Testy zapisu Webservice, kategorii i produktów są oznaczone `integration`. Wymagają przygotowanej odrębnej instancji tego samego `deploy/compose.yaml`: projekt `prestashop-d21-tests`, osobne wolumeny, aktywne API oraz PLN, kg i polska reguła VAT. W konfiguracji testowej ustaw porty `HTTP_PORT=18080`, `HTTPS_PORT=18443`, `MAILPIT_PORT=18025`. Używaj istniejącego `.env.example` jako podstawy prywatnej konfiguracji; nie zapisuj haseł i klucza w repozytorium. Nie wskazuj wolumenów zwykłego sklepu przez `DB_VOLUME_NAME` lub `SHOP_VOLUME_NAME`.
+Testy zapisu Webservice, kategorii i produktów są oznaczone `integration`. Wymagają przygotowanej odrębnej instancji tego samego `deploy/compose.yaml`: projekt `prestashop-d21-tests`, osobne wolumeny, aktywne API oraz PLN, kg i polska reguła VAT. W konfiguracji testowej ustaw porty `HTTP_PORT=18080`, `HTTPS_PORT=18443`, `MAILPIT_PORT=18025`. Używaj istniejącego `deploy/api-test.env.example` jako podstawy prywatnej konfiguracji testowej; nie zapisuj haseł i klucza w repozytorium. Nie wskazuj wolumenów zwykłego sklepu przez `DB_VOLUME_NAME` lub `SHOP_VOLUME_NAME`.
 
 Po ustawieniu w środowisku `PRESTASHOP_API_KEY` instancji testowej oraz `REQUESTS_CA_BUNDLE` na jej zaufany certyfikat:
 

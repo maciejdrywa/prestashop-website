@@ -49,11 +49,11 @@ Samo `up` przygotowuje certyfikat, sprawdza dane źródłowe i uruchamia usługi
 
 ## Jedna definicja dla sklepu i testów
 
-Wszystkie wywołania korzystają wyłącznie z `deploy/compose.yaml`. Plik `.env` określa właściwy sklep. Odrębny plik na podstawie `deploy/api-test.env.example` określa testy, z inną nazwą projektu, portami i hasłami. Instrukcję uruchomienia testów zawiera [odbiór D2.1–D2.2](D2_1-D2_2.md).
+Wszystkie wywołania korzystają wyłącznie z `deploy/compose.yaml`. Plik `.env` określa właściwy sklep. Odrębny plik na podstawie `deploy/api-test.env.example` określa testy, z inną nazwą projektu, portami i hasłami.
 
 Porty można zmienić przez `HTTP_PORT`, `HTTPS_PORT` i `MAILPIT_PORT`, źródła przez `SCRAPER_RESULTS_DIR`, a konfigurację proxy przez `NGINX_CONFIG`. Pełny bootstrap pozostaje przeznaczony dla standardowego lokalnego sklepu `localhost` na portach 80/443; testy API na portach 18080/18443 uruchamia się przez `up` i jawne skrypty odbiorcze.
 
-Nazwy wolumenów domyślnie wynikają z projektu Compose. Dla istniejącego sklepu pozostają `prestashop-website_db_data` i `prestashop-website_shop_data`. `DB_VOLUME_NAME` i `SHOP_VOLUME_NAME` umożliwiają zachowanie starszych nazw przy migracji, np. testowych `api_test_db` i `api_test_shop`. Nie wskazuj w testach wolumenów zwykłego sklepu.
+Nazwy wolumenów domyślnie wynikają z projektu Compose. Dla istniejącego sklepu pozostają `prestashop-website_db_data` i `prestashop-website_shop_data`. `DB_VOLUME_NAME` i `SHOP_VOLUME_NAME` umożliwiają zachowanie starszych nazw przy migracji, np. testowych `prestashop-d21-tests_api_test_db` i `prestashop-d21-tests_api_test_shop`. Nie wskazuj w testach wolumenów zwykłego sklepu.
 
 ## Platformy i zatrzymanie
 
