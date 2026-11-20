@@ -71,4 +71,4 @@ Sklep odtwarza się z archiwum jedną komendą:
 bash deploy/restore.sh --latest
 ```
 
-Skrypt sprawdza kompletność i sumy kontrolne archiwum, wykonuje kopię bezpieczeństwa bieżącego stanu, prosi o potwierdzenie, podmienia bazę, zdjęcia produktów i konfigurację, a na końcu sprawdza działanie sklepu. Błąd cofa zmiany. Opcje i ograniczenia opisuje [dokumentacja deploy](../deploy/BACKUP.md#odtwarzanie-sklepu-restoresh).
+Skrypt sprawdza kompletność i sumy kontrolne archiwum, prosi o potwierdzenie, wykonuje kopię bezpieczeństwa bieżącego stanu, podmienia bazę, zdjęcia produktów i konfigurację, a na końcu sprawdza działanie sklepu. Błąd cofa zmiany. Odtwarzaj wyłącznie zaufane archiwa. Opcje i ograniczenia opisuje [dokumentacja deploy](../deploy/BACKUP.md#odtwarzanie-sklepu-restoresh).

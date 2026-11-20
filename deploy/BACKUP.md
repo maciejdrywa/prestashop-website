@@ -58,7 +58,7 @@ Na maszynach deweloperskich z systemem Windows korzystających z systemów plik�
 
 ## Odtwarzanie sklepu (restore.sh)
 
-Skrypt `deploy/restore.sh` odtwarza sklep z archiwum utworzonego przez `backup.sh`: bazę MariaDB, zdjęcia produktów (`img/p`) i pliki konfiguracyjne.
+Skrypt `deploy/restore.sh` odtwarza sklep z archiwum utworzonego przez `backup.sh`. Przywraca bazę MariaDB, zdjęcia produktów (`img/p`) i pliki konfiguracyjne.
 
 ```sh
 # Odtworzenie z najnowszego archiwum w deploy/backups
@@ -71,48 +71,95 @@ bash deploy/restore.sh deploy/backups/backup_YYYYMMDD_HHMMSS.tar.gz
 bash deploy/restore.sh deploy/backups/backup_YYYYMMDD_HHMMSS.tar.gz --verify-only
 ```
 
+> **Odtwarzaj wyłącznie archiwa z zaufanego źródła.** Sumy SHA-256 z `manifest.json` wykrywają uszkodzenie archiwum, ale nie celową modyfikację, bo manifest jest częścią tego samego archiwum. Skrypt ogranicza skutki spreparowanej kopii:
+> - zrzut importuje tymczasowe konto MariaDB z uprawnieniami wyłącznie do bazy tymczasowej, w trybie `--sandbox`; SQL ze zrzutu nie zmieni bazy produkcyjnej ani kont,
+> - w `images/p` dopuszczone są tylko obrazy, pliki `fileType` i standardowy `index.php` PrestaShopa (sprawdzany po sumie SHA-256),
+> - `parameters.php` jest sprawdzany tokenizerem PHP przed wczytaniem.
+>
+> Treść odtworzonej bazy (np. opisy produktów, konta) pochodzi jednak w całości z archiwum.
+
 ### Przebieg
 
-1. **Walidacja archiwum przed jakąkolwiek zmianą**: poprawność gzip/tar, dokładnie jeden katalog `backup_*`, brak ścieżek bezwzględnych, `..` i dowiązań, obecność `database.sql`, `manifest.json`, `config/parameters.php`, `images/p/`, zgodność listy plików z manifestem (brakujące i nadmiarowe), sumy SHA-256 każdego pliku, znacznik `Dump completed`, obecność tabel `configuration`, `shop_url`, `product` i kluczy `cookie_key`, `cookie_iv`, `secret`.
-2. **Środowisko**: gdy `db` lub `shop` nie działają, skrypt uruchamia `docker compose up -d` i czeka na bazę oraz zakończenie instalatora PrestaShop. Wersja PrestaShop kopii musi odpowiadać wersji w kontenerze.
-3. **Ochrona danych**: skrypt pokazuje stan bieżącego sklepu i wymaga wpisania nazwy bazy. Bez terminala wymaga `--yes`. Następnie wykonuje kopię bezpieczeństwa bieżącego stanu przez `backup.sh`. Blokada `deploy/backups/.restore.lock` uniemożliwia równoległe odtwarzanie.
-4. **Baza**: nginx jest zatrzymywany na czas odtwarzania. Zrzut trafia do bazy tymczasowej `<DB_NAME>_restore_tmp`. Po sprawdzeniu liczby tabel tabele są podmieniane jedną instrukcją `RENAME TABLE`. Błąd importu pozostawia bieżącą bazę bez zmian.
-5. **Zdjęcia i konfiguracja**: `img/p` jest przesyłane do katalogu tymczasowego i podmieniane z zachowaniem poprzedniej wersji. `parameters.php` zachowuje z kopii `cookie_key`, `cookie_iv`, `secret` i klucze API, czyli hasła klientów i administratora działają. Dane połączenia z bazą pochodzą z bieżącego środowiska kontenera `shop`. Przywracane są też `parameters.yml`, `defines_custom.inc.php` i `.htaccess`.
-6. **Dopasowanie do środowiska**: domena z `PS_DOMAIN` jest ustawiana w `ps_shop_url` i `PS_SHOP_DOMAIN(_SSL)`. Motyw i moduły projektu są synchronizowane z obrazu (`/opt/shop-themes`, `/opt/shop-modules`), bo nie są częścią kopii. Kopia wykonana z `--maintenance` zawiera `PS_SHOP_ENABLE=0`, dlatego skrypt włącza sklep. Na końcu czyszczony jest cache, generowany `.htaccess` i restartowany kontener `shop`.
-7. **Kontrola**: liczba produktów i zdjęć musi odpowiadać kopii, a `https://<PS_DOMAIN>/` musi zwrócić HTTP 200. Błąd na dowolnym etapie po podmianie przywraca poprzednią bazę, zdjęcia i konfigurację.
+1. **Walidacja archiwum, zanim cokolwiek się zmieni:**
+   - poprawność gzip/tar i dokładnie jeden katalog `backup_*`,
+   - brak ścieżek bezwzględnych, `..` i dowiązań,
+   - obecność `database.sql`, `manifest.json`, `config/parameters.php` i `images/p/`,
+   - zgodność listy plików z manifestem (brakujące i nadmiarowe) oraz sumy SHA-256 każdego pliku,
+   - znacznik `Dump completed`, tabele `configuration`, `shop_url` i `product` oraz klucze `cookie_key`, `cookie_iv`, `secret`.
+2. **Środowisko:**
+   - gdy `db` lub `shop` nie działają, skrypt uruchamia `docker compose up -d`, potem czeka na gotowość bazy i koniec pracy instalatora PrestaShop,
+   - wersja PrestaShop w kopii musi być taka sama jak w kontenerze.
+3. **Ochrona danych:**
+   - skrypt pokazuje stan bieżącego sklepu i prosi o wpisanie nazwy bazy; bez terminala wymaga `--yes`,
+   - po potwierdzeniu robi kopię bezpieczeństwa bieżącego stanu przez `backup.sh` do `deploy/backups/pre-restore/`; `--latest` nie bierze kopii z tego katalogu,
+   - blokada `deploy/backups/.restore.lock` uniemożliwia dwa odtwarzania naraz,
+   - skrypt odmawia działania, gdy zostały dane po poprzednim odtwarzaniu (bazy `_restore_tmp`/`_pre_restore`, `img/p.pre-restore`, `var/restore-previous/`).
+4. **Baza:**
+   - nginx zostaje zatrzymany na czas odtwarzania,
+   - zrzut trafia do bazy tymczasowej `<DB_NAME>_restore_tmp`; po sprawdzeniu liczby tabel jedna instrukcja `RENAME TABLE` podmienia tabele, a poprzednie przenosi do `<DB_NAME>_pre_restore`,
+   - jeśli import się nie uda, bieżąca baza zostaje bez zmian,
+   - przerwanie (Ctrl+C, `kill`, zamknięcie okna terminala) na dowolnym etapie po imporcie kończy się rollbackiem; gdy przerwanie trafi w podmianę tabel, skrypt czeka, aż MariaDB zakończy `RENAME TABLE`, i dopiero wtedy ustala, czy podmiana nastąpiła.
+5. **Zdjęcia i konfiguracja:**
+   - `img/p` trafia najpierw do katalogu tymczasowego, a poprzednia wersja zostaje jako `img/p.pre-restore`,
+   - z kopii pochodzą `cookie_key`, `cookie_iv`, `secret` i klucze API z `parameters.php`, więc hasła klientów i administratora z kopii działają,
+   - dane połączenia z bazą pochodzą z bieżącego środowiska kontenera `shop`,
+   - przywracane są też `parameters.yml`, `defines_custom.inc.php` i `.htaccess`,
+   - poprzednie wersje tych plików trafiają do `var/restore-previous/` (właściciel root, uprawnienia `0600`).
+6. **Dopasowanie do środowiska:**
+   - domena z `PS_DOMAIN` jest wpisywana do `ps_shop_url` i `PS_SHOP_DOMAIN(_SSL)`,
+   - klucz konta Webservice dostaje wartość `PRESTASHOP_API_KEY` z bieżącego `.env`,
+   - motyw i moduły projektu są kopiowane z obrazu (`/opt/shop-themes`, `/opt/shop-modules`), bo kopia ich nie zawiera,
+   - skrypt zawsze włącza sklep (`PS_SHOP_ENABLE=1`): kopia z `backup.sh --maintenance` ma ten parametr ustawiony na 0. Jeśli sklep był wyłączony celowo, wyłącz go ponownie w panelu,
+   - na końcu skrypt czyści cache, generuje `.htaccess` i restartuje kontener `shop`.
+7. **Kontrola:**
+   - nginx jest uruchamiany (także gdy wcześniej nie działał),
+   - liczba produktów i zdjęć musi zgadzać się z kopią, a `https://<PS_DOMAIN>/` musi zwrócić HTTP 200 w czasie `RESTORE_TIMEOUT`,
+   - błąd na dowolnym etapie po podmianie przywraca poprzednią bazę, zdjęcia i konfigurację.
 
 ### Opcje i zmienne środowiskowe
 
 | Opcja | Znaczenie |
 |---|---|
-| `--latest` | Najnowsze `backup_*.tar.gz` z katalogu kopii |
+| `--latest` | Najnowsze `backup_*.tar.gz` z katalogu kopii (bez podkatalogu `pre-restore/`) |
 | `--verify-only` | Tylko walidacja archiwum |
 | `-y`, `--yes` | Bez interaktywnego potwierdzenia (także `RESTORE_ASSUME_YES=1`) |
 | `--no-safety-backup` | Bez kopii bezpieczeństwa bieżącego stanu |
 | `--use-backup-env` | Tworzy brakujący `.env` z kopii (uprawnienia `0600`) |
-| `--keep-previous` | Zachowuje `<DB_NAME>_pre_restore`, `img/p.pre-restore` i pliki `*.pre-restore` |
+| `--keep-previous` | Po udanym odtworzeniu zachowuje `<DB_NAME>_pre_restore`, `img/p.pre-restore` i `var/restore-previous/` |
 | `--ignore-version` | Dopuszcza różnicę wersji PrestaShop |
 
 | Zmienna | Domyślnie |
 |---|---|
 | `ENV_FILE` | `<repo>/.env` |
 | `COMPOSE_FILE_PATH` | `<repo>/deploy/compose.yaml` |
-| `BACKUP_DIR` | `deploy/backups` |
-| `RESTORE_TIMEOUT` | `900` sekund oczekiwania na bazę i sklep |
+| `BACKUP_DIR` | `deploy/backups` (kopie bezpieczeństwa: `BACKUP_DIR/pre-restore`) |
+| `RESTORE_TIMEOUT` | `900` sekund oczekiwania na bazę, sklep i odpowiedź HTTP |
 | `SHOP_URL` | `https://<PS_DOMAIN>/` |
 
-Bieżący `.env` nie jest nadpisywany. Gdy różni się od `.env` z kopii, skrypt wypisuje tylko nazwy różniących się zmiennych. Kopia bezpieczeństwa wymaga domyślnych `ENV_FILE` i `COMPOSE_FILE_PATH`, ponieważ `backup.sh` korzysta z tych ścieżek.
+- Bieżący `.env` nie jest nadpisywany. Gdy różni się od `.env` z kopii, skrypt wypisuje tylko nazwy różniących się zmiennych, bez wartości.
+- Konto administratora i jego hasło pochodzą z kopii, a nie z `ADMIN_PASSWORD` w bieżącym `.env`.
+- Kopia bezpieczeństwa wymaga domyślnych `ENV_FILE` i `COMPOSE_FILE_PATH`, bo `backup.sh` używa tych ścieżek.
+- **Windows:** skrypt uruchamiaj w PowerShellu poleceniem `bash deploy/restore.sh …` (WSL) lub w Git Bash. W Git Bash ścieżki dla `docker` są zamieniane przez `cygpath -m`. W WSL `TLS_CERT_DIR=C:/…` z `.env` jest przekazywany jako `/mnt/c/…`. Skrypt nie przebudowuje istniejących kontenerów (`start`, `up --no-recreate`), ale polecenia `docker compose up` wykonuj w tym samym środowisku, w którym kontenery zostały utworzone (np. PowerShell), bo inna ścieżka projektu powoduje ich przebudowę.
 
 ### Odtworzenie na nowym komputerze
 
-1. Sklonuj repozytorium, utwórz `.env` (lub użyj `--use-backup-env`) i przygotuj certyfikat (`deploy/generate-cert.sh` / `.ps1`).
+1. Sklonuj repozytorium, utwórz `.env` (albo użyj `--use-backup-env`) i przygotuj certyfikat (`deploy/generate-cert.sh` lub `.ps1`).
 2. Skopiuj archiwum do `deploy/backups/`.
-3. Wykonaj `bash deploy/restore.sh --latest`. Skrypt uruchomi środowisko, poczeka na instalację pustego sklepu i zastąpi go kopią.
+3. Uruchom `bash deploy/restore.sh --latest`. Skrypt uruchomi środowisko, poczeka na instalację pustego sklepu i zastąpi go kopią.
 
-Po odtworzeniu na nowym wolumenie nie uruchamiaj bootstrapu z importem (`run bootstrap`), ponieważ kopia nie zawiera dziennika inicjalizacji `var/import/`.
+Kopia nie zawiera dziennika inicjalizacji `var/import/`. Po odtworzeniu nie uruchamiaj bootstrapu z importem (`run bootstrap`, `init-shop.php --resume`). Na nowym wolumenie dziennika nie ma wcale, a na istniejącym opisuje dane sprzed odtworzenia.
+
+### Ręczne odzyskanie po przerwanym rollbacku
+
+Gdy rollback sam się nie powiedzie (np. Docker przestał odpowiadać), skrypt wypisze, gdzie leżą poprzednie dane:
+
+- **Baza:** poprzednie tabele są w `<DB_NAME>_pre_restore`. Najprościej przywrócić stan kopią bezpieczeństwa: `bash deploy/restore.sh deploy/backups/pre-restore/backup_….tar.gz`. Wcześniej usuń `<DB_NAME>_pre_restore`, gdy jego zawartość nie jest już potrzebna.
+- **Zdjęcia:** w kontenerze `shop` wykonaj `cd /var/www/html/img && rm -rf p && mv p.pre-restore p`.
+- **Konfiguracja:** poprzednie pliki są w `/var/www/html/var/restore-previous/`. Ścieżka pliku jest zapisana w nazwie, z `/` zamienionym na `_`.
 
 ### Ograniczenia
 
-- Kopia obejmuje tylko `img/p`. Zdjęcia kategorii, producentów i logo (`img/c`, `img/m`, `img/*.jpg`) oraz `upload/` i `download/` nie są przywracane.
-- Moduły zainstalowane ręcznie z panelu (spoza obrazu) nie są częścią kopii.
-- Po nieudanym przebiegu z `--keep-previous` kolejne odtwarzanie wymaga usunięcia bazy `<DB_NAME>_pre_restore`. Skrypt to wskazuje.
+- Kopia obejmuje tylko `img/p`. Zdjęcia kategorii, producentów i logo (`img/c`, `img/m`, `img/*.jpg`) oraz katalogi `upload/` i `download/` nie są przywracane.
+- Moduły zainstalowane ręcznie z panelu, spoza obrazu, nie są częścią kopii.
+- Po udanym odtworzeniu z `--keep-previous` kolejne odtwarzanie wymaga usunięcia bazy `<DB_NAME>_pre_restore` oraz katalogów `img/p.pre-restore` i `var/restore-previous/` w kontenerze `shop`. Skrypt o tym przypomina.
+- **Git Bash na Windows:** `backup.sh` przekazuje do `docker` ścieżki w formacie `/c/...` przy `MSYS_NO_PATHCONV=1`, więc kopia bezpieczeństwa może się nie udać. Nic nie zostaje wtedy zmienione. Do czasu poprawki w `backup.sh` wykonaj kopię ręcznie i uruchom odtwarzanie z `--no-safety-backup`.

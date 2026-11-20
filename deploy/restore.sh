@@ -24,6 +24,8 @@ umask 077
 # Wyłączenie automatycznej konwersji ścieżek POSIX->Windows w Git Bash (MSYS2)
 export MSYS_NO_PATHCONV=1
 export LC_ALL=C
+# macOS bsdtar: bez plików AppleDouble/xattr w strumieniu wysyłanym do kontenera
+export COPYFILE_DISABLE=1
 
 if [[ -t 1 ]]; then
     COLOR_INFO="\033[1;34m"
@@ -67,14 +69,15 @@ Opcje:
   --no-safety-backup    Pomija kopię bezpieczeństwa bieżącego stanu przed odtworzeniem
   --use-backup-env      Gdy brak pliku .env, tworzy go z .env zapisanego w archiwum
   --keep-previous       Zachowuje poprzednie dane (baza <DB>_pre_restore, img/p.pre-restore,
-                        pliki *.pre-restore) po udanym odtworzeniu
+                        var/restore-previous/) po udanym odtworzeniu
   --ignore-version      Pozwala odtworzyć kopię z inną wersją PrestaShop niż w kontenerze
   -h, --help            Wyświetla tę pomoc i kończy działanie
 
 Zmienne środowiskowe:
   ENV_FILE              Plik zmiennych Compose (domyślnie: <repo>/.env)
   COMPOSE_FILE_PATH     Plik Compose (domyślnie: <repo>/deploy/compose.yaml)
-  BACKUP_DIR            Katalog kopii dla --latest i kopii bezpieczeństwa (domyślnie: deploy/backups)
+  BACKUP_DIR            Katalog kopii dla --latest (domyślnie: deploy/backups);
+                        kopie bezpieczeństwa trafiają do BACKUP_DIR/pre-restore
   RESTORE_TIMEOUT       Limit oczekiwania na bazę i sklep w sekundach (domyślnie: 900)
   SHOP_URL              Adres kontroli działania sklepu (domyślnie: https://<PS_DOMAIN>/)
   RESTORE_ASSUME_YES=1  Odpowiednik --yes (np. w CI)
@@ -123,13 +126,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Ścieżka hosta w formacie POSIX dla narzędzi Bash (Git Bash: C:/x -> /c/x).
 abs_path() {
-    if [[ "$1" == /* || "$1" =~ ^[A-Za-z]:[/\\] ]]; then echo "$1"; else echo "$PWD/$1"; fi
+    local path="$1"
+    if [[ "$path" =~ ^[A-Za-z]:[/\\] ]]; then
+        command -v cygpath >/dev/null 2>&1 || die "Ścieżka z literą dysku wymaga cygpath (Git Bash): $path"
+        path=$(cygpath -u "$path")
+    fi
+    if [[ "$path" == /* ]]; then echo "$path"; else echo "$PWD/$path"; fi
+}
+
+# Ścieżka hosta przekazywana do docker.exe. MSYS_NO_PATHCONV wyłącza automatyczną
+# konwersję, więc w Git Bash /c/Users/... jest jawnie zamieniane na C:/Users/...
+host_path() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
 }
 
 env_file="$(abs_path "${ENV_FILE:-$repo_dir/.env}")"
 compose_file="$(abs_path "${COMPOSE_FILE_PATH:-$repo_dir/deploy/compose.yaml}")"
 backup_dir="$(abs_path "${BACKUP_DIR:-$repo_dir/deploy/backups}")"
+# Kopie bezpieczeństwa trafiają do podkatalogu, więc --latest nigdy ich nie wybierze.
+safety_dir="$backup_dir/pre-restore"
 restore_timeout="${RESTORE_TIMEOUT:-900}"
 [[ "$restore_timeout" =~ ^[0-9]+$ ]] || die "RESTORE_TIMEOUT musi być liczbą sekund."
 
@@ -162,11 +179,42 @@ compute_sha256_check() {
     fi
 }
 
-dc() { "${compose[@]}" "$@"; }
+dc() {
+    [[ ${#compose[@]} -gt 0 ]] || return 1
+    "${compose[@]}" "$@"
+}
 
 # Polecenie SQL jako root bazy. Hasło pochodzi ze środowiska kontenera db.
 db_sql() {
     dc exec -T db sh -c 'exec env MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb -uroot --default-character-set=utf8mb4 -N -B "$@"' sh "$@"
+}
+
+# Import zrzutu tymczasowym kontem z uprawnieniami wyłącznie do bazy tymczasowej:
+# SQL ze zrzutu nie może zmienić bazy produkcyjnej ani kont MariaDB.
+# --sandbox dodatkowo blokuje polecenia klienta (\\!, system, source).
+import_user="restore_import"
+db_import() {
+    local password
+    password=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+    # SQL przez stdin: bez cudzysłowów i nowych linii w argumentach (WSL, Git Bash).
+    if ! db_sql << SQL
+DROP USER IF EXISTS '$import_user'@'localhost';
+CREATE USER '$import_user'@'localhost' IDENTIFIED BY '$password';
+GRANT ALL PRIVILEGES ON \`$1\`.* TO '$import_user'@'localhost';
+SQL
+    then
+        log_error "Nie udało się utworzyć tymczasowego konta importu w MariaDB."
+        return 1
+    fi
+    local rc=0
+    dc exec -T -e "RESTORE_IMPORT_PWD=$password" -e "RESTORE_IMPORT_USER=$import_user" -e "RESTORE_IMPORT_DB=$1" db sh -c \
+        'exec env MYSQL_PWD="$RESTORE_IMPORT_PWD" mariadb -u "$RESTORE_IMPORT_USER" --sandbox --default-character-set=utf8mb4 "$RESTORE_IMPORT_DB"' || rc=$?
+    drop_import_user
+    [[ $rc -eq 0 ]] || log_error "Klient MariaDB przerwał import zrzutu (kod $rc)."
+    return $rc
+}
+drop_import_user() {
+    db_sql -e "DROP USER IF EXISTS '$import_user'@'localhost';" >/dev/null 2>&1 || true
 }
 
 shop_sh() { dc exec -T shop sh -c "$1"; }
@@ -174,7 +222,7 @@ shop_sh() { dc exec -T shop sh -c "$1"; }
 # Atomowo przenosi tabele: <a> -> <b> oraz <c> -> <a> w jednej instrukcji RENAME TABLE.
 atomic_move_tables() {
     local a="$1" b="$2" c="$3" statement
-    db_sql -e "CREATE DATABASE IF NOT EXISTS \`$b\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
+    db_sql -e "CREATE DATABASE IF NOT EXISTS \`$b\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;" || return 1
     statement=$(db_sql << SQL
 SET SESSION group_concat_max_len = 4194304;
 SELECT CONCAT('RENAME TABLE ', GROUP_CONCAT(x ORDER BY ord, x SEPARATOR ', '))
@@ -187,11 +235,59 @@ FROM (
 ) moves;
 SQL
 )
-    [[ -n "$statement" && "$statement" != "NULL" ]] || die "Brak tabel do przeniesienia między bazami $a, $b, $c."
-    db_sql -e "$statement;"
+    if [[ -z "$statement" || "$statement" == "NULL" ]]; then
+        log_error "Brak tabel do przeniesienia między bazami $a, $b, $c."
+        return 1
+    fi
+    # Instrukcja ma kilkadziesiąt tysięcy znaków: stdin zamiast argumentu (limit CLI w Windows).
+    # Komunikat błędu klienta zawiera całą instrukcję, więc wypisujemy tylko jego początek.
+    local err_file rc=0
+    err_file=$(mktemp)
+    printf 'SET SESSION lock_wait_timeout = 60;\n%s;\n' "$statement" | db_sql 2> "$err_file" || rc=$?
+    [[ $rc -eq 0 ]] || head -c 300 "$err_file" >&2
+    rm -f "$err_file"
+    return $rc
+}
+
+# Klient (docker compose exec) mógł zginąć od Ctrl+C, a serwer nadal wykonywać RENAME.
+# Stan bazy oceniamy dopiero, gdy żadne RENAME TABLE nie jest w toku.
+wait_rename_done() {
+    for _ in $(seq 1 60); do
+        [[ "$(db_sql -e "SELECT COUNT(*) FROM information_schema.processlist WHERE info LIKE 'RENAME TABLE%' AND id <> CONNECTION_ID();" 2>/dev/null | tr -d '\r')" == "0" ]] && return 0
+        sleep 1
+    done
+    return 1
+}
+
+# Podmiana nastąpiła, gdy baza tymczasowa jest pusta, a baza na poprzednie tabele nie.
+swap_happened() {
+    [[ "$(table_count "$old_db" 2>/dev/null)" =~ ^[1-9] && "$(table_count "$tmp_db" 2>/dev/null)" == "0" ]]
+}
+
+table_count() {
+    db_sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$1';" | tr -d '\r'
+}
+
+# Pliki konfiguracyjne i katalog z ich poprzednimi wersjami (poza katalogami publicznymi, 0600, root).
+config_files_sh='CONFIG_FILES="app/config/parameters.php app/config/parameters.yml config/defines_custom.inc.php .htaccess"; PREV=/var/www/html/var/restore-previous;'
+
+# Usuwanie cache odporne na równoległe tworzenie plików (healthcheck bootstrapu co 5 s).
+clear_cache() {
+    shop_sh 'cd /var/www/html
+        for d in var/cache/prod var/cache/dev; do
+            if [ -d "$d" ]; then mv "$d" "$d.old-$$" && rm -rf "$d.old-$$" || rm -rf "$d" || true; fi
+        done
+        find img/tmp -mindepth 1 ! -name index.php -delete 2>/dev/null || true
+        mkdir -p var/cache && chown -R www-data:www-data var/cache'
 }
 
 rollback() {
+    # Sygnał mógł przerwać skrypt w trakcie lub tuż po RENAME, przed ustawieniem flagi: stan ustalany z bazy.
+    if [[ "$db_swapped" != "true" && "${db_import_started:-false}" == "true" ]]; then
+        drop_import_user
+        wait_rename_done || log_warn "RENAME TABLE nadal trwa w MariaDB. Stan bazy może być niepewny."
+        swap_happened && db_swapped=true
+    fi
     if [[ "$config_swapped" != "true" && "$images_swapped" != "true" && "$db_swapped" != "true" ]]; then
         if [[ "${db_import_started:-false}" == "true" ]]; then
             log_info "Bieżąca baza, zdjęcia i konfiguracja sklepu nie zostały zmienione."
@@ -199,13 +295,24 @@ rollback() {
     else
         log_warn "Wycofywanie zmian wprowadzonych przez odtwarzanie..."
     fi
+    if [[ "$config_swapped" == "true" || "$images_swapped" == "true" || "${images_upload_started:-false}" == "true" ]]; then
+        # Operacje na plikach wymagają działającego kontenera shop.
+        if ! shop_sh 'true' >/dev/null 2>&1; then
+            dc start shop >/dev/null 2>&1 || true
+            for _ in $(seq 1 30); do shop_sh 'true' >/dev/null 2>&1 && break; sleep 2; done
+        fi
+    fi
     if [[ "$config_swapped" == "true" ]]; then
-        shop_sh 'cd /var/www/html
-            for f in app/config/parameters.php app/config/parameters.yml config/defines_custom.inc.php .htaccess; do
-                if [ -f "$f.pre-restore" ]; then mv -f "$f.pre-restore" "$f"
-                elif [ -f "$f.restore-absent" ]; then rm -f "$f" "$f.restore-absent"; fi
+        shop_sh "cd /var/www/html; $config_files_sh"'
+            for f in $CONFIG_FILES; do
+                saved="$PREV/$(echo "$f" | tr / _)"
+                if [ -f "$saved" ]; then cp -p "$saved" "$f" && chown www-data:www-data "$f"
+                elif [ -f "$saved.absent" ]; then rm -f "$f"; fi
             done' && log_info "Przywrócono poprzednie pliki konfiguracyjne." \
-            || log_error "Nie udało się przywrócić plików konfiguracyjnych (*.pre-restore w kontenerze shop)."
+            || log_error "Nie udało się przywrócić plików konfiguracyjnych (kopie w var/restore-previous w kontenerze shop)."
+    fi
+    if [[ "${images_upload_started:-false}" == "true" ]]; then
+        shop_sh 'rm -rf /var/www/html/img/p.restore-new' >/dev/null 2>&1 || true
     fi
     if [[ "$images_swapped" == "true" ]]; then
         shop_sh 'cd /var/www/html/img && if [ -d p.pre-restore ]; then rm -rf p && mv p.pre-restore p; fi' \
@@ -226,8 +333,11 @@ rollback() {
             log_error "Nie udało się przywrócić bazy. Poprzednie tabele mogą znajdować się w bazie $old_db."
         fi
     fi
+    if [[ "$config_swapped" == "true" ]]; then
+        shop_sh 'rm -rf /var/www/html/var/restore-previous' || true
+    fi
     if [[ "$config_swapped" == "true" || "$images_swapped" == "true" || "$db_swapped" == "true" ]]; then
-        shop_sh 'rm -rf /var/www/html/var/cache/prod /var/www/html/var/cache/dev' || true
+        clear_cache || true
         dc restart shop >/dev/null 2>&1 || true
     fi
 }
@@ -236,7 +346,11 @@ cleanup() {
     local exit_code=${1:-$?}
     trap - EXIT INT TERM ERR
     set +e
-    if [[ $exit_code -ne 0 && "$restore_finished" != "true" ]]; then
+    # Katalog tymczasowy zawiera zrzut bazy i sekrety: usuwany jako pierwszy.
+    [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir"
+    # Rollback zawsze, gdy odtwarzanie nie zostało ukończone, także przy kodzie 0 (np. sygnał bez pułapki).
+    if [[ "$restore_finished" != "true" ]]; then
+        [[ $exit_code -ne 0 ]] || exit_code=1
         [[ "$error_already_logged" == "true" ]] || log_error "Odtwarzanie nie powiodło się (kod błędu: $exit_code)."
         rollback
         if [[ -n "${safety_archive:-}" ]]; then
@@ -248,13 +362,15 @@ cleanup() {
         dc start nginx >/dev/null 2>&1 || log_error "Nie udało się uruchomić nginx. Uruchom: docker compose ... start nginx"
     fi
     shop_sh 'rm -rf /tmp/restore-config' >/dev/null 2>&1 || true
-    [[ -n "$temp_dir" && -d "$temp_dir" ]] && rm -rf "$temp_dir"
     [[ -n "$lock_dir" && -d "$lock_dir" ]] && rmdir "$lock_dir" 2>/dev/null
     exit "$exit_code"
 }
 trap cleanup EXIT
 trap 'cleanup 130' INT
 trap 'cleanup 143' TERM
+# Zamknięcie okna terminala (Git Bash) wysyła SIGHUP.
+trap 'cleanup 129' HUP
+trap 'cleanup 131' QUIT
 
 start_time=$(date +%s)
 
@@ -274,8 +390,9 @@ gzip -t "$archive" 2>/dev/null || die "Archiwum jest uszkodzone (błąd kompresj
 
 temp_dir=$(mktemp -d)
 listing="$temp_dir/listing.txt"
-tar -tzvf "$archive" > "$listing" 2>/dev/null || die "Nie można odczytać listy plików archiwum (uszkodzony tar)."
-tar -tzf "$archive" > "$temp_dir/names.txt" 2>/dev/null || die "Nie można odczytać listy plików archiwum."
+# Archiwum czytane ze stdin: GNU tar traktuje "C:" w ścieżce jak zdalny host.
+tar -tzvf - < "$archive" > "$listing" 2>/dev/null || die "Nie można odczytać listy plików archiwum (uszkodzony tar)."
+tar -tzf - < "$archive" > "$temp_dir/names.txt" 2>/dev/null || die "Nie można odczytać listy plików archiwum."
 
 # Dozwolone są wyłącznie zwykłe pliki i katalogi (bez dowiązań i urządzeń).
 if awk '{ t = substr($1, 1, 1); if (t != "-" && t != "d") bad = 1 } END { exit bad ? 0 : 1 }' "$listing"; then
@@ -297,7 +414,7 @@ done
 log_info "Rozpakowywanie archiwum do katalogu tymczasowego..."
 extract_root="$temp_dir/extract"
 mkdir -p "$extract_root"
-tar -xzf "$archive" -C "$extract_root" --no-same-owner 2>/dev/null || die "Rozpakowanie archiwum nie powiodło się (brak miejsca lub uszkodzone dane)."
+tar -xzf - -C "$extract_root" --no-same-owner < "$archive" 2>/dev/null || die "Rozpakowanie archiwum nie powiodło się (brak miejsca lub uszkodzone dane)."
 bdir="$extract_root/$backup_name"
 
 # Manifest: lista "<sha256>  <ścieżka>" z sekcji "files" (format backup.sh, Python i wariant Bash).
@@ -338,16 +455,27 @@ done
 # Porównanie listy plików: brakujące i nadmiarowe
 (cd "$bdir" && find . -type f ! -name manifest.json | sed 's|^\./||' | sort) > "$temp_dir/actual.txt"
 cut -c67- "$temp_dir/checksums.txt" | sort > "$temp_dir/expected.txt"
-missing=$(comm -23 "$temp_dir/expected.txt" "$temp_dir/actual.txt" | head -n 5)
+comm -23 "$temp_dir/expected.txt" "$temp_dir/actual.txt" > "$temp_dir/missing.txt"
+missing=$(sed -n '1,5p' "$temp_dir/missing.txt")
 [[ -z "$missing" ]] || die "Brak plików wymienionych w manifeście, np.: $(echo "$missing" | tr '\n' ' ')"
-extra=$(comm -13 "$temp_dir/expected.txt" "$temp_dir/actual.txt" | head -n 5)
+comm -13 "$temp_dir/expected.txt" "$temp_dir/actual.txt" > "$temp_dir/extra.txt"
+extra=$(sed -n '1,5p' "$temp_dir/extra.txt")
 [[ -z "$extra" ]] || die "Archiwum zawiera pliki spoza manifestu, np.: $(echo "$extra" | tr '\n' ' ')"
 
 log_info "Weryfikacja sum SHA-256 ($manifest_count plików)..."
 (cd "$bdir" && compute_sha256_check "$temp_dir/checksums.txt" > "$temp_dir/sha-errors.txt" 2>&1) || {
-    head -n 5 "$temp_dir/sha-errors.txt" >&2
-    die "Sumy kontrolne nie zgadzają się z manifestem. Archiwum jest uszkodzone lub zmodyfikowane."
+    sed -n '1,5p' "$temp_dir/sha-errors.txt" >&2
+    die "Sumy kontrolne nie zgadzają się z manifestem. Archiwum jest uszkodzone."
 }
+
+# images/p trafia do katalogu publicznego sklepu: dozwolone wyłącznie obrazy, pliki fileType
+# i standardowy index.php PrestaShop (przekierowanie), rozpoznawany po sumie SHA-256.
+ps_index_sha="47a20a732cc9087e6a9a1a15f67c9b5fb03db7e3ce2a840c612538476f477bf9"
+bad_images=$(grep '^images/p/' "$temp_dir/expected.txt" \
+    | grep -viE '\.(jpe?g|png|gif|webp|avif)$|/fileType$|/index\.php$' | sed -n '1,5p' || true)
+[[ -z "$bad_images" ]] || die "Niedozwolone pliki w images/p, np.: $(echo "$bad_images" | tr '\n' ' ')"
+bad_index=$(grep -E '  images/p/(.*/)?index\.php$' "$temp_dir/checksums.txt" | grep -v "^$ps_index_sha " | sed -n '1,3p' | cut -c67- || true)
+[[ -z "$bad_index" ]] || die "Niestandardowy index.php w images/p: $(echo "$bad_index" | tr '\n' ' ')"
 
 images_count=$(grep -c '^images/p/' "$temp_dir/expected.txt" || true)
 [[ -z "$declared_images" || "$declared_images" == "$images_count" ]] \
@@ -410,7 +538,18 @@ if [[ -f "$bdir/config/.env" ]]; then
     fi
 fi
 
-compose=(docker compose --env-file "$env_file" -f "$compose_file")
+compose=(docker compose --env-file "$(host_path "$env_file")" -f "$(host_path "$compose_file")")
+
+# WSL z linuksowym klientem Dockera: TLS_CERT_DIR=C:/... z .env (przygotowanego pod Windows)
+# nie jest dla niego ścieżką bezwzględną. Zmienna środowiskowa ma pierwszeństwo przed .env.
+if grep -qi microsoft /proc/version 2>/dev/null && command -v wslpath >/dev/null 2>&1; then
+    tls_dir=$(grep -m1 -E '^TLS_CERT_DIR=' "$env_file" | cut -d= -f2- | tr -d '\r"' || true)
+    if [[ -z "${TLS_CERT_DIR:-}" && "$tls_dir" =~ ^[A-Za-z]:[/\\] ]]; then
+        TLS_CERT_DIR=$(wslpath -u "$tls_dir")
+        export TLS_CERT_DIR
+        log_info "WSL: TLS_CERT_DIR przekazywany jako $TLS_CERT_DIR."
+    fi
+fi
 
 # backup.sh korzysta zawsze z <repo>/.env i <repo>/deploy/compose.yaml
 if [[ "$safety_backup" == "true" && ( "$env_file" != "$repo_dir/.env" || "$compose_file" != "$repo_dir/deploy/compose.yaml" ) ]]; then
@@ -419,7 +558,7 @@ fi
 
 if [[ -z "$(dc ps --status running -q db 2>/dev/null || true)" || -z "$(dc ps --status running -q shop 2>/dev/null || true)" ]]; then
     log_info "Usługi db/shop nie działają. Uruchamianie środowiska (docker compose up -d)..."
-    dc up -d || die "Nie udało się uruchomić środowiska. Sprawdź .env i certyfikaty (deploy/generate-cert.sh)."
+    dc up -d --no-recreate || die "Nie udało się uruchomić środowiska. Sprawdź .env i certyfikaty (deploy/generate-cert.sh)."
 fi
 
 wait_for() {
@@ -443,6 +582,9 @@ shop_prefix=$(dc exec -T shop printenv DB_PREFIX | tr -d '\r')
 [[ "$live_db" =~ ^[A-Za-z0-9_]{1,40}$ ]] || die "Niepoprawna nazwa bazy danych: '$live_db'."
 [[ "$shop_domain" =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "Niepoprawna wartość PS_DOMAIN: '$shop_domain'."
 [[ "$shop_prefix" == "$backup_prefix" ]] || die "Prefiks tabel kopii ($backup_prefix) różni się od środowiska ($shop_prefix)."
+if grep -qF "\`$live_db\`." "$dump"; then
+    die "Zrzut odwołuje się bezpośrednio do bazy $live_db. Obsługiwane są wyłącznie zrzuty z backup.sh."
+fi
 tmp_db="${live_db}_restore_tmp"
 old_db="${live_db}_pre_restore"
 p="$backup_prefix"
@@ -462,7 +604,8 @@ fi
 # 3. Ochrona przed przypadkowym nadpisaniem
 # ---------------------------------------------------------------------------
 lock_dir="$backup_dir/.restore.lock"
-mkdir -p "$backup_dir"
+mkdir -p "$backup_dir" 2>/dev/null && [[ -w "$backup_dir" ]] \
+    || { lock_dir=""; die "Brak uprawnień do zapisu w katalogu kopii: $backup_dir"; }
 if ! mkdir "$lock_dir" 2>/dev/null; then
     lock_dir=""
     die "Inne odtwarzanie jest w toku (blokada $backup_dir/.restore.lock). Jeśli nie, usuń ten katalog."
@@ -474,13 +617,16 @@ current_images=$(shop_sh 'find /var/www/html/img/p -type f 2>/dev/null | wc -l' 
 leftovers=$(db_sql -e "SELECT GROUP_CONCAT(schema_name) FROM information_schema.schemata WHERE schema_name IN ('$tmp_db', '$old_db');" | tr -d '\r')
 [[ -z "$leftovers" || "$leftovers" == "NULL" ]] \
     || die "Istnieją bazy po poprzednim odtwarzaniu ($leftovers). Sprawdź je i usuń przed ponowieniem."
+leftover_files=$(shop_sh 'cd /var/www/html; for d in img/p.pre-restore var/restore-previous; do [ ! -e "$d" ] || printf "%s " "$d"; done' | tr -d '\r')
+[[ -z "$leftover_files" ]] \
+    || die "W kontenerze shop są dane po poprzednim odtwarzaniu: $leftover_files. Przenieś lub usuń je przed ponowieniem."
 
 echo ""
 echo "--------------------------------------------------------------------------------"
 echo "  Archiwum:           $(basename "$archive")"
 echo "  Sklep docelowy:     https://$shop_domain (baza $live_db)"
 echo "  Obecny stan:        $current_tables tabel, $current_products produktów, $current_images plików img/p"
-echo "  Kopia bezpieczeństwa: $([[ "$safety_backup" == "true" ]] && echo "tak, w $backup_dir" || echo "NIE (--no-safety-backup)")"
+echo "  Kopia bezpieczeństwa: $([[ "$safety_backup" == "true" ]] && echo "tak, w $safety_dir" || echo "NIE (--no-safety-backup)")"
 echo "--------------------------------------------------------------------------------"
 if [[ "$current_tables" -gt 0 || "$current_images" -gt 0 ]]; then
     log_warn "Odtworzenie ZASTĄPI bieżącą bazę, zdjęcia produktów i konfigurację sklepu."
@@ -493,13 +639,14 @@ fi
 
 if [[ "$safety_backup" == "true" ]]; then
     log_info "Tworzenie kopii bezpieczeństwa bieżącego stanu (deploy/backup.sh)..."
-    before=$(find "$backup_dir" -maxdepth 1 -name 'backup_*.tar.gz' | sort)
-    bash "$script_dir/backup.sh" --output-dir "$backup_dir" > "$temp_dir/safety-backup.log" 2>&1 || {
+    mkdir -p "$safety_dir"
+    before=$(find "$safety_dir" -maxdepth 1 -name 'backup_*.tar.gz' | sort)
+    bash "$script_dir/backup.sh" --output-dir "$safety_dir" > "$temp_dir/safety-backup.log" 2>&1 || {
         tail -n 15 "$temp_dir/safety-backup.log" >&2
-        die "Kopia bezpieczeństwa nie powiodła się. Nic nie zmieniono. (Pominięcie: --no-safety-backup)"
+        die "Kopia bezpieczeństwa nie powiodła się. Nic nie zmieniono. Jeśli to Git Bash na Windows, zob. BACKUP.md (ograniczenia); pominięcie: --no-safety-backup"
     }
-    safety_archive=$(comm -13 <(printf '%s\n' "$before") <(find "$backup_dir" -maxdepth 1 -name 'backup_*.tar.gz' | sort) | tail -n 1)
-    log_info "Kopia bezpieczeństwa: ${safety_archive:-zob. $backup_dir}"
+    safety_archive=$(comm -13 <(printf '%s\n' "$before") <(find "$safety_dir" -maxdepth 1 -name 'backup_*.tar.gz' | sort) | tail -n 1)
+    log_info "Kopia bezpieczeństwa: ${safety_archive:-zob. $safety_dir}"
 fi
 
 # ---------------------------------------------------------------------------
@@ -514,7 +661,7 @@ fi
 log_info "Import zrzutu bazy do bazy tymczasowej $tmp_db..."
 db_import_started=true
 db_sql -e "DROP DATABASE IF EXISTS \`$tmp_db\`; CREATE DATABASE \`$tmp_db\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
-db_sql "$tmp_db" < "$dump" || die "Import zrzutu bazy nie powiódł się. Bieżąca baza pozostała bez zmian."
+db_import "$tmp_db" < "$dump" || die "Import zrzutu bazy nie powiódł się. Bieżąca baza pozostała bez zmian."
 
 restored_tables=$(db_sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$tmp_db';" | tr -d '\r')
 dump_tables=$(grep -c '^CREATE TABLE ' "$dump" || true)
@@ -525,14 +672,36 @@ log_info "Zaimportowano $restored_tables tabel, $restored_products produktów."
 
 log_info "Atomowa podmiana tabel bazy $live_db..."
 # RENAME TABLE jest atomowe: przy błędzie bieżąca baza pozostaje nietknięta.
-atomic_move_tables "$live_db" "$old_db" "$tmp_db"
+# Sygnał w tej sekcji jest odraczany, aby podmiana i flaga stanu były nierozdzielne.
+pending_signal=""
+trap 'pending_signal=130' INT
+trap 'pending_signal=143' TERM
+trap 'pending_signal=129' HUP
+trap 'pending_signal=131' QUIT
+if ! atomic_move_tables "$live_db" "$old_db" "$tmp_db"; then
+    wait_rename_done || true
+    if swap_happened; then
+        db_swapped=true
+        die "Połączenie z bazą przerwane po wykonaniu podmiany tabel."
+    fi
+    die "Podmiana tabel nie powiodła się. Bieżąca baza pozostała bez zmian."
+fi
 db_swapped=true
+trap 'cleanup 130' INT
+trap 'cleanup 143' TERM
+trap 'cleanup 129' HUP
+trap 'cleanup 131' QUIT
+if [[ -n "$pending_signal" ]]; then
+    log_warn "Przerwano przez użytkownika podczas podmiany bazy."
+    exit "$pending_signal"
+fi
 db_sql -e "DROP DATABASE IF EXISTS \`$tmp_db\`;"
 
 log_info "Ustawianie domeny sklepu na $shop_domain..."
-db_sql "$live_db" -e "
-    UPDATE \`${p}shop_url\` SET domain = '$shop_domain', domain_ssl = '$shop_domain';
-    UPDATE \`${p}configuration\` SET value = '$shop_domain' WHERE name IN ('PS_SHOP_DOMAIN', 'PS_SHOP_DOMAIN_SSL');"
+db_sql "$live_db" << SQL
+UPDATE \`${p}shop_url\` SET domain = '$shop_domain', domain_ssl = '$shop_domain';
+UPDATE \`${p}configuration\` SET value = '$shop_domain' WHERE name IN ('PS_SHOP_DOMAIN', 'PS_SHOP_DOMAIN_SSL');
+SQL
 
 # backup.sh --maintenance wyłącza sklep przed zrzutem, więc kopia może zawierać PS_SHOP_ENABLE=0.
 shop_enabled=$(db_sql "$live_db" -e "SELECT value FROM \`${p}configuration\` WHERE name = 'PS_SHOP_ENABLE' LIMIT 1;" | tr -d '\r')
@@ -541,10 +710,22 @@ if [[ "$shop_enabled" == "0" ]]; then
     db_sql "$live_db" -e "UPDATE \`${p}configuration\` SET value = '1' WHERE name = 'PS_SHOP_ENABLE';"
 fi
 
+# Klucz Webservice w kopii pochodzi z .env środowiska źródłowego. Narzędzia (scraper/API) używają
+# PRESTASHOP_API_KEY z bieżącego .env, więc konto z kluczem z kopii dostaje klucz bieżący.
+backup_api_key=$(grep -m1 -E '^PRESTASHOP_API_KEY=' "$bdir/config/.env" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || true)
+current_api_key=$(dc exec -T shop printenv PRESTASHOP_API_KEY 2>/dev/null | tr -d '\r' || true)
+if [[ "$backup_api_key" =~ ^[A-Za-z0-9]{32}$ && "$current_api_key" =~ ^[A-Za-z0-9]{32}$ && "$backup_api_key" != "$current_api_key" ]]; then
+    if db_sql "$live_db" -e "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${p}webservice_account';" | grep -q 1; then
+        log_info "Ustawianie klucza Webservice z bieżącego .env (PRESTASHOP_API_KEY)..."
+        db_sql "$live_db" -e "UPDATE \`${p}webservice_account\` SET \`key\` = '$current_api_key' WHERE \`key\` = '$backup_api_key';"
+    fi
+fi
+
 # ---------------------------------------------------------------------------
 # 5. Zdjęcia produktów
 # ---------------------------------------------------------------------------
 log_info "Przesyłanie zdjęć produktów do kontenera shop ($images_count plików)..."
+images_upload_started=true
 tar -C "$bdir/images" -cf - p | dc exec -T shop sh -c '
     set -e
     rm -rf /var/www/html/img/p.restore-new
@@ -570,15 +751,29 @@ tar -C "$bdir/config" --exclude=.env -cf - . | dc exec -T shop sh -c '
     tar -C /tmp/restore-config --no-same-owner -xf -'
 
 config_swapped=true
-shop_sh 'set -e; cd /var/www/html
-    for f in app/config/parameters.php app/config/parameters.yml config/defines_custom.inc.php .htaccess; do
-        rm -f "$f.pre-restore" "$f.restore-absent"
-        if [ -f "$f" ]; then cp -p "$f" "$f.pre-restore"; else : > "$f.restore-absent"; fi
+shop_sh "set -e; cd /var/www/html; $config_files_sh"'
+    rm -rf "$PREV"; mkdir -p "$PREV"; chmod 0700 "$PREV"
+    for f in $CONFIG_FILES; do
+        saved="$PREV/$(echo "$f" | tr / _)"
+        if [ -f "$f" ]; then cp "$f" "$saved"; chown root:root "$saved"; chmod 0600 "$saved"; else : > "$saved.absent"; fi
     done'
 
-# parameters.php: cookie_key, cookie_iv, secret i klucze API z kopii, połączenie z bazą z env kontenera
+# parameters.php: cookie_key, cookie_iv, secret i klucze API z kopii, połączenie z bazą z env kontenera.
+# Plik z archiwum jest sprawdzany tokenizerem przed require: dozwolona wyłącznie literalna tablica.
 dc exec -T shop php -r '
-    $p = require "/tmp/restore-config/parameters.php";
+    $file = "/tmp/restore-config/parameters.php";
+    $allowed = [T_OPEN_TAG, T_RETURN, T_ARRAY, T_CONSTANT_ENCAPSED_STRING, T_LNUMBER, T_DNUMBER,
+                T_DOUBLE_ARROW, T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
+    foreach (token_get_all(file_get_contents($file)) as $t) {
+        if (is_string($t)) {
+            if (!in_array($t, ["(", ")", "[", "]", ",", ";", "-"], true)) { fwrite(STDERR, "Niedozwolony element w parameters.php: $t\n"); exit(1); }
+        } elseif ($t[0] === T_STRING) {
+            if (!in_array(strtolower($t[1]), ["true", "false", "null"], true)) { fwrite(STDERR, "Niedozwolony identyfikator w parameters.php: $t[1]\n"); exit(1); }
+        } elseif (!in_array($t[0], $allowed, true)) {
+            fwrite(STDERR, "Niedozwolony element w parameters.php: " . token_name($t[0]) . "\n"); exit(1);
+        }
+    }
+    $p = require $file;
     if (!is_array($p) || !isset($p["parameters"]) || !is_array($p["parameters"])) {
         fwrite(STDERR, "Niepoprawny parameters.php w kopii.\n"); exit(1);
     }
@@ -613,10 +808,7 @@ shop_sh 'set -e; cd /var/www/html
 # 7. Cache, restart i kontrola działania
 # ---------------------------------------------------------------------------
 log_info "Czyszczenie pamięci podręcznej PrestaShop..."
-shop_sh 'set -e; cd /var/www/html
-    rm -rf var/cache/prod var/cache/dev
-    find img/tmp -mindepth 1 ! -name index.php -delete 2>/dev/null || true
-    mkdir -p var/cache; chown -R www-data:www-data var'
+clear_cache
 
 dc exec -T --user www-data shop php -r '
     require "/var/www/html/config/config.inc.php";
@@ -628,10 +820,11 @@ dc restart shop >/dev/null
 wait_for "uruchomienie Apache w kontenerze shop" \
     "dc exec -T shop php -r 'exit(@fsockopen(\"127.0.0.1\", 80) ? 0 : 1);'"
 
-if [[ "$nginx_stopped_by_us" == "true" ]]; then
-    dc start nginx >/dev/null
-    nginx_stopped_by_us=false
-fi
+# nginx jest potrzebny do kontroli HTTP także wtedy, gdy nie działał przed odtwarzaniem.
+# start nie przebudowuje kontenera; up --no-recreate tylko gdy kontenera nie ma.
+dc start nginx >/dev/null 2>&1 || dc up -d --no-deps --no-recreate nginx >/dev/null \
+    || die "Nie udało się uruchomić nginx."
+nginx_stopped_by_us=false
 
 log_info "Kontrola poprawności odtworzenia..."
 live_products=$(db_sql "$live_db" -e "SELECT COUNT(*) FROM \`${p}product\`;" | tr -d '\r')
@@ -641,7 +834,7 @@ live_images=$(shop_sh 'find /var/www/html/img/p -type f | wc -l' | tr -d ' \r')
 
 shop_url="${SHOP_URL:-https://$shop_domain/}"
 http_code=""
-deadline=$(( $(date +%s) + 180 ))
+deadline=$(( $(date +%s) + restore_timeout ))
 while :; do
     if command -v curl >/dev/null 2>&1; then
         http_code=$(curl -k -s -o /dev/null -w '%{http_code}' --max-time 60 "$shop_url" || true)
@@ -658,13 +851,12 @@ log_info "Sklep odpowiada pod $shop_url (HTTP 200)."
 restore_finished=true
 
 if [[ "$keep_previous" == "true" ]]; then
-    log_info "Poprzednie dane zachowano: baza $old_db, img/p.pre-restore, pliki *.pre-restore."
+    log_info "Poprzednie dane zachowano: baza $old_db, img/p.pre-restore, var/restore-previous/."
+    log_info "Kolejne odtwarzanie wymaga wcześniejszego usunięcia bazy $old_db."
 else
     db_sql -e "DROP DATABASE IF EXISTS \`$old_db\`;" || log_warn "Nie usunięto bazy $old_db."
-    shop_sh 'cd /var/www/html && rm -rf img/p.pre-restore &&
-        rm -f app/config/parameters.php.pre-restore app/config/parameters.yml.pre-restore config/defines_custom.inc.php.pre-restore .htaccess.pre-restore &&
-        rm -f app/config/*.restore-absent config/*.restore-absent .htaccess.restore-absent' \
-        || log_warn "Nie usunięto części plików *.pre-restore."
+    shop_sh 'cd /var/www/html && rm -rf img/p.pre-restore var/restore-previous' \
+        || log_warn "Nie usunięto img/p.pre-restore lub var/restore-previous."
 fi
 
 duration=$(( $(date +%s) - start_time ))
