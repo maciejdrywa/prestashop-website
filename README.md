@@ -4,21 +4,21 @@ Sklep edukacyjny na PrestaShop 8.2.8 realizowany w ramach Biznesu elektroniczneg
 
 ## Uruchomienie
 
-Wymagane są Docker Engine z Compose v2, plik `.env` uzupełniony na podstawie `.env.example` oraz `products.json`, `categories.json` i komplet lokalnych zdjęć w `scraper-results/images/`.
+Wymagane są Docker Engine z Compose v2, Python z zależnościami `scraper/requirements.txt`, plik `.env` uzupełniony na podstawie `.env.example` oraz `products.json` i `categories.json`. Brakujące zdjęcia pobiera importer.
 
 Z głównego katalogu repozytorium wykonaj jedną komendę.
 
 ```sh
-docker compose --env-file .env -f deploy/compose.yaml run --build --rm bootstrap
+python scraper/import_catalog.py --bootstrap --resume
 ```
 
-Polecenie przygotowuje certyfikat, uruchamia usługi, instaluje pusty sklep i wznawia import. Przy ponownym wykonaniu zachowuje istniejące produkty, treści, zamówienia i magazyn. Zmienione dane źródłowe wymagają świadomego importu opisanego w dokumentacji.
+Polecenie przygotowuje zdjęcia i certyfikat, uruchamia usługi, instaluje sklep i importuje katalog przez Webservice API. Po kontroli aktywuje nowe produkty. Przy ponownym wykonaniu zachowuje istniejące produkty, treści, zamówienia i magazyn. Zmienione dane źródłowe wymagają świadomego importu opisanego w dokumentacji.
 
 Sklep jest dostępny pod `https://localhost`, panel pod `https://localhost/admin-dev/`, a poczta pod `http://localhost:8025`. Dane administratora określa `.env` podczas pierwszej instalacji. Lokalny certyfikat wymaga dodania do zaufanych zgodnie z instrukcją systemu.
 
 ### Webservice API
 
-Webservice API jest konfigurowane podczas inicjalizacji. Importer Python synchronizuje kategorie oraz produkty, cechy, kombinacje, magazyn i galerie; bootstrap nadal używa natywnych importerów PHP do katalogu. Parametry połączenia określa `.env`:
+Webservice API jest konfigurowane podczas inicjalizacji. Importer Python synchronizuje kategorie oraz produkty, cechy, kombinacje, magazyn i galerie; wspólna komenda używa API, a historyczny bootstrap PHP pozostaje dostępny jako osobny backend. Parametry połączenia określa `.env`:
 - `PRESTASHOP_API_URL` — adres API (domyślnie `https://localhost/api`),
 - `PRESTASHOP_API_KEY` — 32-znakowy klucz alfanumeryczny z uprawnieniami *Least Privilege* (zasoby katalogu, bez dostępu do zamówień i klientów),
 - `PRESTASHOP_API_VERIFY_SSL` — weryfikacja certyfikatu TLS (`false` dla środowiska lokalnego).
@@ -43,6 +43,8 @@ $env:BASE_URL="https://localhost"; python -m pytest -c pytest-e2e.ini
 ```
 
 Instalację, zmienne środowiskowe, scenariusz i raporty opisuje [instrukcja testów](tests/README.md).
+
+Pełny przepływ, tryby `--resume`/`--sync`, raporty i benchmark opisuje [D2.5](docs/CATALOG_IMPORT.md).
 
 ## Sprawdzanie jakości kodu scrapera
 

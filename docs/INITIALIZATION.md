@@ -1,5 +1,7 @@
 # Inicjalizacja i import danych
 
+Domyślna inicjalizacja przez API: `python scraper/import_catalog.py --bootstrap --resume`. Przygotowanie, finalizację i zachowaną ścieżkę PHP opisuje [D2.5](CATALOG_IMPORT.md).
+
 ## Tryby
 
 `init-shop.php --dry-run` sprawdza wejście i wyświetla plan. `--resume` rozpoznaje istniejące rekordy, uzupełnia niedokończoną inicjalizację i zachowuje edycje oraz sprzedaż. Wywołanie bez opcji wykonuje pełne, jawne odtworzenie konfiguracji, danych produktów i początkowych stanów. Ten ostatni tryb może nadpisać zmiany administratora.

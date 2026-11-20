@@ -1,6 +1,6 @@
 # D2.4 — galerie przez Webservice API
 
-Importer dodaje zdjęcia do produktów utworzonych w D2.3, rozpoznawanych po referencji `pandomu-ID`. Obsługuje cache, przypięte wydanie zdjęć, źródło, kolejność i okładki, aktualizację zawartości oraz wznowienie. Zachowuje aktywność produktów i magazyn. Bootstrap nadal używa PHP; uruchomienie pełnego toru API jedną komendą należy do D2.5.
+Importer dodaje zdjęcia do produktów utworzonych w D2.3, rozpoznawanych po referencji `pandomu-ID`. Obsługuje cache, przypięte wydanie zdjęć, źródło, kolejność i okładki, aktualizację zawartości oraz wznowienie. Zachowuje aktywność produktów i magazyn. Wspólna komenda [D2.5](CATALOG_IMPORT.md) uruchamia pełny tor API; historyczny bootstrap PHP pozostaje dostępny.
 
 ## Uruchomienie
 
@@ -87,3 +87,7 @@ Osobna instancja PrestaShop 8.2.8, projekt Compose `prestashop-d21-tests`, bez m
 Raporty wykonania: lokalny, ignorowany katalog `logs/d24-test/`, w szczególności `report-1.json`, `report-2.json` i `native-images-audit.json`. Pomiar nie obejmuje benchmarku 1000 produktów ze zdjęciami; to zakres D2.5. Ręczny odbiór panelu i porównanie ze źródłem pozostają do wykonania według instrukcji powyżej.
 
 Kontrole kodu: 196 testów offline i 11 subtestów przeszło; 14 testów integracyjnych D2.1–D2.4 przeszło zarówno przez HTTP, jak i przez HTTPS z weryfikacją certyfikatu. Ruff oraz PHP lint eksportera bez błędów. Publiczny CLI sprawdzono dla importu i dry run; dry run nie utworzył cache, stanu ani raportu.
+
+Wspólną komendę przygotowania, importu API i finalizacji opisuje [D2.5](CATALOG_IMPORT.md).
+
+Pobieranie publicznych zdjęć i wydania używa niezależnego zestawu zaufanych CA, dzięki czemu prywatny `REQUESTS_CA_BUNDLE` dla lokalnego API nie blokuje źródła ani GitHub Releases.

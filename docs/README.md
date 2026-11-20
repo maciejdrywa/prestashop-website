@@ -8,6 +8,7 @@
 | [Scraper](SCRAPER.md) | CLI, format danych, obrazy i testy Pythona |
 | [Webservice API](WEBSERVICE.md) | Uprawnienia Least Privilege, zmienne środowiskowe i klient Python |
 | [Import zdjęć D2.4](IMAGE_IMPORT.md) | Cache, normalizacja, galerie API i wznowienie uploadu |
+| [Jedna komenda D2.5](CATALOG_IMPORT.md) | Bootstrap API, wznowienie, odbiór, aktywacja i benchmark |
 | [Import produktów D2.3](PRODUCT_IMPORT.md) | Produkty, cechy, kombinacje, magazyn i wyniki testów API |
 | [Konfiguracja](CONFIGURATION.md) | Sprzedaż, statusy, faktury, poczta i treści |
 | [Rozwiązywanie problemów](TROUBLESHOOTING.md) | Diagnoza uruchomienia i importu |
