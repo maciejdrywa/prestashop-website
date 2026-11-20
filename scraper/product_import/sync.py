@@ -8,7 +8,12 @@ from pathlib import Path
 
 from category_import.mapping import load_category_mapping
 from category_import.prestashop_sync import fetch_active_languages
-from import_state import ImportJournal, atomic_json, instance_lock
+from import_state import (
+    ImportJournal,
+    atomic_json,
+    completed_records_protected,
+    instance_lock,
+)
 from prestashop_api import PrestaShopAPIError
 
 from .planning import distribute_stock, number, product_slug, read_catalog, stock_plan
@@ -277,6 +282,10 @@ def seed_stock(store, source, product, owned, combinations, total, reset_stock):
             flagged != [chosen]
             or int(current.get("cache_default_attribute") or 0) != chosen
         ):
+            if not seed and completed_records_protected():
+                raise ValueError(
+                    "Zmieniono ukończony wariant domyślny. Sprawdź zmiany i użyj --sync."
+                )
             store.client.put(
                 "products",
                 pid,

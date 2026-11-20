@@ -172,7 +172,9 @@ class ImageCache:
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = None
         try:
-            with self.session.get(url, stream=True, timeout=(10, 60)) as response:
+            with self.session.get(
+                url, stream=True, timeout=(10, 60), verify=requests.certs.where()
+            ) as response:
                 response.raise_for_status()
                 if int(response.headers.get("Content-Length", 0)) > limit:
                     raise ValueError("Przekroczony limit pobierania.")

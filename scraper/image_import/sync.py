@@ -344,6 +344,9 @@ def import_images(
         importer = GallerySync(store, cache, legacy)
         store.schema("products")
         for index, plan in enumerate(plans, 1):
+            confirmed_before = sum(
+                importer.counts[key] for key in ("created", "updated", "skipped")
+            )
             try:
                 product = store.find("products", {"reference": plan["reference"]})
                 if product is None:
@@ -366,6 +369,14 @@ def import_images(
                     flush=True,
                 )
             except (ValueError, OSError, PrestaShopAPIError) as exc:
+                confirmed = (
+                    sum(
+                        importer.counts[key]
+                        for key in ("created", "updated", "skipped")
+                    )
+                    - confirmed_before
+                )
+                importer.counts["rejected"] += max(0, len(plan["urls"]) - confirmed)
                 report["errors"].append(
                     {
                         "stage": "images",

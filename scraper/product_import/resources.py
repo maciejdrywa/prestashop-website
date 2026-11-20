@@ -223,6 +223,13 @@ class Resources:
         return payload
 
     def sync(self, resource, key, identity, desired, new_defaults=None):
+        try:
+            return self._sync(resource, key, identity, desired, new_defaults)
+        except (ValueError, PrestaShopAPIError):
+            self.counts.setdefault(resource, Counter())["rejected"] += 1
+            raise
+
+    def _sync(self, resource, key, identity, desired, new_defaults=None):
         entry_key = resource + ":" + key
         previous = self.journal.data["records"].get(entry_key)
         current = self.find(resource, identity)

@@ -209,3 +209,7 @@ docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data sh
 Testy zmieniające dane uruchamiaj na osobnych wolumenach. Szczegóły inicjalizacji opisuje [instrukcja](../deploy/init/README.md), a ograniczenia weryfikacji — [audyt](../docs/AUDIT.md).
 
 Testy D2.4 w `scraper/test_image_import.py` sprawdzają ZIP, limity pobierania, JPEG/WebP, EXIF, przezroczystość, cache i uzgadnianie niepewnego POST. `scraper/test_image_import_integration.py` korzysta z tej samej odrębnej instancji D2 i własnych produktów fixture: upload, ponowienie, zmiana pliku pod tym samym URL, zmiana okładki, utrata odpowiedzi POST/PUT, przejęcie eksportu PHP i brak zapisu w dry run. Własne produkty oraz testowe mapowania PHP są sprzątane. Wyniki pełnego katalogu opisuje [D2.4](../docs/IMAGE_IMPORT.md).
+
+## Orkiestrator D2.5
+
+`python -m pytest -q scraper/test_catalog_import.py` sprawdza walidację offline, dry run bez Compose i plików, granice `--resume`/`--sync`, backend i adres stanu, aktywację tylko własnych nowych produktów, wznowienie po utracie odpowiedzi, zachowanie dezaktywacji administratora, blokadę innych procesów, filtrowanie sekretów i izolowany generator benchmarku. W kontenerze odrębnej instalacji API `php /opt/shop/init/tests/api-initialization-test.php` sprawdza podział faz i odmowę uruchomienia backendu PHP. Pełne przebiegi i benchmark są uruchamiane jawnie komendami z [D2.5](../docs/CATALOG_IMPORT.md), poza domyślną suite offline.

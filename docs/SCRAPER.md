@@ -57,3 +57,5 @@ Testy korzystają z lokalnego HTML i atrap odpowiedzi. Polecenia zebrano w [inst
 Import eksportu przez API opisuje [D2.3](PRODUCT_IMPORT.md). Importer nie dopisuje wymyślonych cech do istniejącego eksportu.
 
 Import galerii przez Webservice, pobieranie przypiętego wydania i obsługę placeholdera produktu 539 opisuje [D2.4](IMAGE_IMPORT.md).
+
+Wspólną komendę przygotowania, importu API i finalizacji opisuje [D2.5](CATALOG_IMPORT.md).

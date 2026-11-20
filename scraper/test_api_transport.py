@@ -249,3 +249,24 @@ def test_malformed_image_list_does_not_mean_empty_gallery(client):
     )
     with pytest.raises(PrestaShopProtocolError):
         client.image_ids(1)
+
+
+def test_empty_json_collection_requires_explicit_xml_confirmation(client):
+    client.session.request.side_effect = [
+        response(raw=b"[]"),
+        response(raw=b"<prestashop><products/></prestashop>"),
+    ]
+    assert client.get("products") == {"products": []}
+    assert client.session.request.call_count == 2
+    assert client.session.request.call_args.kwargs["params"]["output_format"] == "XML"
+
+
+def test_empty_json_conflicting_with_xml_is_rejected(client):
+    client.session.request.side_effect = [
+        response(raw=b"[]"),
+        response(
+            raw=b"<prestashop><products><product><id>1</id></product></products></prestashop>"
+        ),
+    ]
+    with pytest.raises(PrestaShopProtocolError):
+        client.get("products")

@@ -1,6 +1,6 @@
 # D2.3 — produkty przez Webservice
 
-Importer Python obsługuje produkty, kategorie produktów, opcjonalne cechy, atrybuty, kombinacje i magazyn. Używa istniejącego klienta API i macierzy uprawnień D2.1. Bootstrap nadal wykonuje import PHP; połączenie etapów w jedną komendę należy do D2.5.
+Importer Python obsługuje produkty, kategorie produktów, opcjonalne cechy, atrybuty, kombinacje i magazyn. Używa istniejącego klienta API i macierzy uprawnień D2.1. Importer jest częścią wspólnej komendy [D2.5](CATALOG_IMPORT.md); dotychczasowa ścieżka bootstrapu PHP pozostaje dostępna.
 
 ## Uruchomienie
 
@@ -76,3 +76,5 @@ Szczegółowe komendy testów są w [instrukcji testów](../tests/README.md). Da
 Weryfikacja kodu: Ruff bez błędów, 159 testów offline i 11 subtestów; 9 testów integracyjnych przez HTTP oraz te same 9 przez HTTPS z weryfikacją certyfikatu; PHP lint eksportera bez błędów. Kontrola obejmowała również publiczny CLI i brak plików stanu/raportu po `--dry-run`.
 
 Ręczny odbiór panelu pozostaje do wykonania: produkt prosty `pandomu-539`, produkt wariantowy `pandomu-5`, produkty z wagą `demo` oraz zerowym stanem wskazane w raporcie. Sprawdź opisy, ceny i ilości kombinacji. Zdjęcia, aktywacja i prezentacja kompletnych galerii na stronie sklepu pozostają poza D2.3.
+
+Wspólną komendę przygotowania, importu API i finalizacji opisuje [D2.5](CATALOG_IMPORT.md).

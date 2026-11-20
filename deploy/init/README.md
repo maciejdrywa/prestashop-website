@@ -1,5 +1,7 @@
 # Skrypty inicjalizacji
 
+Domyślna inicjalizacja przez API: `python scraper/import_catalog.py --bootstrap --resume`. Przygotowanie, finalizację i zachowaną ścieżkę PHP opisuje [D2.5](../../docs/CATALOG_IMPORT.md).
+
 Skrypty przygotowują sklep przez natywne klasy PrestaShop. Wszystkie uruchamiamy jako `www-data` w kontenerze `shop`.
 
 ```sh

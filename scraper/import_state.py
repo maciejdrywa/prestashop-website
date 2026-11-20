@@ -7,12 +7,31 @@ import json
 import os
 import tempfile
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 from prestashop_api import PrestaShopAPIError
 
+_protect_completed = ContextVar("prestashop_protect_completed", default=False)
 
-def atomic_json(path: Path, data: dict) -> None:
+
+@contextmanager
+def completed_records_guard(enabled):
+    token = _protect_completed.set(enabled)
+    try:
+        yield
+    finally:
+        _protect_completed.reset(token)
+
+
+def completed_records_protected():
+    return _protect_completed.get()
+
+
+_held_locks = ContextVar("prestashop_import_locks", default=frozenset())
+
+
+def atomic_json(path: Path, data: dict, *, compact: bool = False) -> None:
     """Zapisuje i synchronizuje plik przed atomową podmianą."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
@@ -21,7 +40,12 @@ def atomic_json(path: Path, data: dict) -> None:
             mode="w", encoding="utf-8", dir=path.parent, delete=False
         ) as stream:
             temporary = Path(stream.name)
-            json.dump(data, stream, ensure_ascii=False, indent=2)
+            if compact:
+                stream.write(
+                    json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+                )
+            else:
+                json.dump(data, stream, ensure_ascii=False, indent=2)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
@@ -33,8 +57,12 @@ def atomic_json(path: Path, data: dict) -> None:
 
 
 @contextmanager
-def instance_lock(identity: str):
+def instance_lock(identity: str, *, reentrant: bool = False):
     """Blokada obejmuje również procesy używające innych plików mapowania."""
+    lock_key = (os.getpid(), identity)
+    if lock_key in _held_locks.get():
+        yield
+        return
     token = hashlib.sha256(identity.encode()).hexdigest()
     path = Path(tempfile.gettempdir()) / f"prestashop-import-{token}.lock"
     with path.open("a+b") as stream:
@@ -68,9 +96,14 @@ def instance_lock(identity: str):
             raise PrestaShopAPIError(
                 "Inny importer tej instancji jest już uruchomiony."
             ) from exc
+        context_token = (
+            _held_locks.set(_held_locks.get() | {lock_key}) if reentrant else None
+        )
         try:
             yield
         finally:
+            if context_token is not None:
+                _held_locks.reset(context_token)
             release()
 
 
@@ -118,9 +151,20 @@ class ImportJournal:
             self.data = data
 
     def put(self, source_url: str, record: dict) -> None:
+        previous = self.data["records"].get(source_url)
+        if (
+            completed_records_protected()
+            and previous
+            and previous["state"] == "done"
+            and record["state"] == "pending"
+            and not source_url.startswith("stock-seed:")
+        ):
+            raise PrestaShopAPIError(
+                "Zmieniono ukończone pola katalogu poza importerem. Sprawdź zmiany i użyj --sync, aby je świadomie nadpisać."
+            )
         self.data["records"][source_url] = record
-        atomic_json(self.path, self.data)
+        atomic_json(self.path, self.data, compact=True)
 
     def discard(self, source_url: str) -> None:
         self.data["records"].pop(source_url, None)
-        atomic_json(self.path, self.data)
+        atomic_json(self.path, self.data, compact=True)

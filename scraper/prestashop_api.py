@@ -283,6 +283,7 @@ class PrestaShopClient:
         self.timeout = timeout
         self.get_retries = get_retries
         self.instance_identity = None
+        self.metrics = {"requests": 0, "retries": 0, "methods": {}}
 
         if not re.fullmatch(r"[A-Za-z0-9]{32}", self.api_key):
             raise ValueError("PRESTASHOP_API_KEY musi mieć 32 znaki alfanumeryczne.")
@@ -343,6 +344,26 @@ class PrestaShopClient:
             result = response.json()
         except ValueError as exc:
             raise PrestaShopProtocolError("API nie zwróciło poprawnego JSON.") from exc
+        if result == [] and method == "GET" and endpoint in RESOURCE_SINGULAR_MAP:
+            # PS 8.2.8 zwraca [] dla pustej kolekcji (także końca paginacji).
+            # Potwierdzenie XML rozróżnia pustkę od uszkodzonej odpowiedzi JSON.
+            confirmation = self._send(
+                "GET", url, params={**query_params, "output_format": "XML"}
+            )
+            try:
+                root = ET.fromstring(confirmation.content)
+                node = root.find(endpoint)
+                if (
+                    root.tag == "prestashop"
+                    and len(root) == 1
+                    and node is not None
+                    and not len(node)
+                    and not (node.text or "").strip()
+                ):
+                    return {endpoint: []}
+            except ET.ParseError:
+                pass
+            raise PrestaShopProtocolError("Niepotwierdzona pusta kolekcja API.")
         if not isinstance(result, dict) or "errors" in result:
             raise PrestaShopProtocolError("Niepoprawna struktura odpowiedzi JSON API.")
         return result
@@ -351,6 +372,12 @@ class PrestaShopClient:
         """Ponawia wyłącznie GET. Nie loguje treści odpowiedzi ani danych uwierzytelnienia."""
         retries = self.get_retries if method == "GET" else 0
         for attempt in range(retries + 1):
+            self.metrics["requests"] += 1
+            self.metrics["retries"] += int(attempt > 0)
+            logical_method = kwargs.get("params", {}).get("ps_method", method)
+            self.metrics["methods"][logical_method] = (
+                self.metrics["methods"].get(logical_method, 0) + 1
+            )
             try:
                 response = self.session.request(
                     method,
