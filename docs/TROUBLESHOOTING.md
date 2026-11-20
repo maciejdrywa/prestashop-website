@@ -2,7 +2,7 @@
 
 ## Compose i instalacja
 
-Uruchom `docker info` oraz `docker compose version`. Sprawdź `.env` przez `docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.bootstrap.yaml config --quiet`. Błąd wymaganej zmiennej wskaże brakującą wartość.
+Uruchom `docker info` oraz `docker compose version`. Sprawdź `.env` przez `docker compose --env-file .env -f deploy/compose.yaml config --quiet`. Błąd wymaganej zmiennej wskaże brakującą wartość.
 
 Stan usług pokaże `docker compose --env-file .env -f deploy/compose.yaml ps`. Logi instalacji odczytaj poleceniem `docker compose --env-file .env -f deploy/compose.yaml logs --tail 100 shop`. Dla problemów HTTPS sprawdź też `nginx`, a dla bazy `db`.
 

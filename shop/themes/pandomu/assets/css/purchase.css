@@ -27,6 +27,12 @@
 body#checkout #header .header-top.pd-header { padding: 0; box-shadow: none; }
 body#checkout section.checkout-step { box-shadow: none; border-color: var(--pd-border); padding: 1rem 1.25rem; }
 body#checkout section.checkout-step .step-title { font-size: .95rem; font-weight: 600; text-transform: uppercase; }
+body#checkout section.checkout-step.-unreachable .step-title { color: var(--pd-muted); opacity: 1; }
+body#checkout section.checkout-step .nav-link,
+body#checkout section.checkout-step .form-informations-subtitle { color: var(--pd-muted); }
+/* Bootstrap nadaje text-muted przez !important, więc zawężamy tę korektę do checkoutu. */
+body#checkout section.checkout-step .text-muted { color: var(--pd-muted) !important; }
+body#checkout #conditions-to-approve a { text-decoration: underline; }
 body#checkout section.checkout-step .step-number { color: var(--pd-link); }
 body#checkout section.checkout-step.-current .step-number { background: #25854d; color: var(--pd-white); border-radius: 50%; }
 body#checkout section.checkout-step .delivery-option { border-color: var(--pd-border); background: var(--pd-surface); }
@@ -53,6 +59,8 @@ body#checkout #footer .js-terms a { color: var(--pd-link); }
 .page-cms .page-content h2 { margin-top: 1.4rem; }
 .page-cms .page-content p, .page-cms .page-content li { color: var(--pd-text); }
 .page-not-found { box-shadow: none; border: 1px solid var(--pd-border); }
+.register-form > p, .page-authentication .forgot-password { color: var(--pd-muted); }
+.register-form > p a { text-decoration: underline; }
 
 @media (max-width: 767px) {
     body#checkout section.checkout-step { padding: .8rem; }
@@ -60,4 +68,9 @@ body#checkout #footer .js-terms a { color: var(--pd-link); }
     body#checkout .cart-grid-right { margin-top: 1rem; }
     .page-authentication #content, .page-registration #content { padding-inline: 0; }
     .page-customer-account .table-responsive { border-color: var(--pd-border); }
+    .cart-grid-body .cart-item .product-line-info a { overflow-wrap: anywhere; }
+    body#checkout .checkout-step .delivery-option { margin-inline: 0; }
+    body#checkout .checkout-step .delivery-option .row { margin-inline: 0; }
+    body#checkout .checkout-step .delivery-option label { display: flex; flex-wrap: wrap; }
+    body#checkout .checkout-step .delivery-option .carrier-name { white-space: normal; }
 }

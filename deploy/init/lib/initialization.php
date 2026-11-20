@@ -182,6 +182,7 @@ function initializationStages(): array
         ['name' => 'Magazyn i aktywacja', 'script' => 'import-stock.php', 'args' => ['--all']],
         ['name' => 'Końcowa kontrola magazynu i aktywacji', 'script' => 'check-stock.php', 'args' => ['--all']],
         ['name' => 'Promocje cenowe produktów', 'script' => 'configure-promotions.php', 'args' => []],
+        ['name' => 'Dyrektywa Omnibus (historia cen i najniższa cena)', 'script' => 'configure-omnibus.php', 'args' => []],
         ['name' => 'Treści motywu i filtry katalogu', 'script' => 'configure-theme-content.php', 'args' => []],
     ];
 }

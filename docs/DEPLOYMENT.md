@@ -19,7 +19,7 @@ Skopiuj `.env.example` do `.env` i uzupełnij hasła bazy oraz administratora. U
 ## Jedna komenda
 
 ```sh
-docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.bootstrap.yaml run --build --rm bootstrap
+docker compose --env-file .env -f deploy/compose.yaml run --build --rm bootstrap
 ```
 
 Compose buduje obraz, wykonuje sprawdzenie danych i certyfikatu, uruchamia bazę, Mailpit, PrestaShop oraz Nginx. Bootstrap czeka na zakończenie instalatora i działający HTTPS z ograniczeniem czasu, następnie wykonuje `init-shop.php --resume`. Na końcu sprawdza HTTPS, przekierowanie HTTP, panel oraz Mailpit. Błąd kończy polecenie kodem różnym od zera. Można poprawić przyczynę i wykonać tę samą komendę.
@@ -45,7 +45,15 @@ docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data sh
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/init-shop.php --resume
 ```
 
-Samo `up` uruchamia usługi. Import danych wykonuje ostatnia komenda. Dane źródłowe i skrypty są montowane tylko do odczytu, a galerie powstają wewnątrz zapisywalnego `shop_data`.
+Samo `up` przygotowuje certyfikat, sprawdza dane źródłowe i uruchamia usługi. Usługa `bootstrap` ma profil `init`, więc zwykłe `up` nie wykonuje importu. Import danych wykonuje ostatnia komenda. Dane źródłowe i skrypty są montowane tylko do odczytu, a galerie powstają wewnątrz zapisywalnego `shop_data`.
+
+## Jedna definicja dla sklepu i testów
+
+Wszystkie wywołania korzystają wyłącznie z `deploy/compose.yaml`. Plik `.env` określa właściwy sklep. Odrębny plik na podstawie `deploy/api-test.env.example` określa testy, z inną nazwą projektu, portami i hasłami.
+
+Porty można zmienić przez `HTTP_PORT`, `HTTPS_PORT` i `MAILPIT_PORT`, źródła przez `SCRAPER_RESULTS_DIR`, a konfigurację proxy przez `NGINX_CONFIG`. Pełny bootstrap pozostaje przeznaczony dla standardowego lokalnego sklepu `localhost` na portach 80/443; testy API na portach 18080/18443 uruchamia się przez `up` i jawne skrypty odbiorcze.
+
+Nazwy wolumenów domyślnie wynikają z projektu Compose. Dla istniejącego sklepu pozostają `prestashop-website_db_data` i `prestashop-website_shop_data`. `DB_VOLUME_NAME` i `SHOP_VOLUME_NAME` umożliwiają zachowanie starszych nazw przy migracji, np. testowych `prestashop-d21-tests_api_test_db` i `prestashop-d21-tests_api_test_shop`. Nie wskazuj w testach wolumenów zwykłego sklepu.
 
 ## Platformy i zatrzymanie
 

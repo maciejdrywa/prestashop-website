@@ -26,7 +26,7 @@ export TLS_CERT_DIR="${TLS_CERT_DIR:-$HOME/.prestashop-website/certs}"
 [[ "$TLS_CERT_DIR" = /* ]] || { echo 'TLS_CERT_DIR musi być ścieżką bezwzględną.' >&2; exit 1; }
 # Tablica zachowuje granice argumentów także przy spacjach w ścieżce projektu.
 # Eksport TLS_CERT_DIR ma pierwszeństwo przed wartością zapisaną w .env.
-compose=(docker compose --env-file "$repo_dir/.env" -f "$repo_dir/deploy/compose.yaml" -f "$repo_dir/deploy/compose.bootstrap.yaml")
+compose=(docker compose --env-file "$repo_dir/.env" -f "$repo_dir/deploy/compose.yaml")
 "${compose[@]}" run --build --rm bootstrap
 if "$trust"; then
     # Zaufanie dotyczy konta bieżącego użytkownika i wymaga natywnego pęku kluczy.

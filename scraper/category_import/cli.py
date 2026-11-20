@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from prestashop_api import (
+    PrestaShopAPIError,
     PrestaShopAuthError,
     PrestaShopClient,
     PrestaShopConnectionError,
@@ -69,7 +70,7 @@ def main() -> int:
     try:
         client = PrestaShopClient()
         client.check_connection()
-    except (PrestaShopAuthError, PrestaShopConnectionError, ValueError) as exc:
+    except (PrestaShopAPIError, PrestaShopAuthError, PrestaShopConnectionError, ValueError) as exc:
         logger.error("Błąd połączenia lub autoryzacji PrestaShop: %s", exc)
         return 1
 

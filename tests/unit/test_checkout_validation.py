@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 from helpers.cart import Product
-from helpers.checkout import assert_order_contents, read_checkout_total
+from helpers.checkout import assert_order_contents, read_checkout_total, select_shipping_method
 from helpers.money import parse_pln_amount
 from playwright.sync_api import Page, expect
 
@@ -92,5 +92,66 @@ def test_reject_missing_or_foreign_confirmation_amount(confirmation_page: Page, 
     try:
         with pytest.raises(AssertionError):
             assert_order_contents(confirmation_page, [Product("1", "Test product", "/product", 2)], Decimal("115.00"))
+    finally:
+        expect.set_options(timeout=5000)
+
+
+@pytest.fixture
+def delivery_page(page: Page):
+    """Tworzy lokalny krok dostawy z InPost i DPD oraz przejściem do płatności po zatwierdzeniu."""
+    page.set_content('''
+        <section id="checkout-delivery-step" class="checkout-step -current">
+          <div class="delivery-options">
+            <div class="delivery-option">
+              <input type="radio" name="delivery_option[1]" id="delivery_option_1" value="1,">
+              <label for="delivery_option_1"><span class="carrier-name">InPost</span> 15,00 zł</label>
+            </div>
+            <div class="delivery-option">
+              <input type="radio" name="delivery_option[1]" id="delivery_option_2" value="2," checked>
+              <label for="delivery_option_2"><span class="carrier-name">DPD</span> 20,00 zł</label>
+            </div>
+          </div>
+          <button type="button" name="confirmDeliveryOption">Dalej</button>
+        </section>
+        <section id="checkout-payment-step" class="checkout-step">Płatność</section>
+        <script>
+          document.querySelector('button[name="confirmDeliveryOption"]').addEventListener('click', () => {
+            document.querySelector('#checkout-delivery-step').classList.replace('-current', '-complete');
+            document.querySelector('#checkout-payment-step').classList.add('-current');
+          });
+        </script>
+    ''')
+    return page
+
+
+def test_select_inpost_when_both_carriers_available(delivery_page: Page):
+    """Sprawdza wybór InPost przy dostępnych obu przewoźnikach projektu."""
+    select_shipping_method(delivery_page)
+    expect(delivery_page.locator("#delivery_option_1")).to_be_checked()
+    expect(delivery_page.locator("#delivery_option_2")).not_to_be_checked()
+
+
+@pytest.mark.parametrize("carrier", ["InPost", "DPD"])
+def test_reject_missing_carrier(delivery_page: Page, carrier: str):
+    """Wykrywa brak jednego z dwóch przewoźników i wskazuje go w komunikacie."""
+    delivery_page.locator(".delivery-option", has=delivery_page.get_by_text(carrier, exact=True)).evaluate(
+        "option => option.remove()"
+    )
+    expect.set_options(timeout=300)
+    try:
+        with pytest.raises(AssertionError, match=f"{carrier} is unavailable"):
+            select_shipping_method(delivery_page)
+    finally:
+        expect.set_options(timeout=5000)
+    expect(delivery_page.locator("#checkout-payment-step.-current")).to_have_count(0)
+
+
+def test_reject_carrier_with_partial_name(delivery_page: Page):
+    """Sprawdza, że nazwa zawierająca DPD, ale inna niż DPD, nie spełnia wymagania."""
+    delivery_page.get_by_text("DPD", exact=True).evaluate("name => name.textContent = 'DPD Pickup'")
+    expect.set_options(timeout=300)
+    try:
+        with pytest.raises(AssertionError, match="DPD is unavailable"):
+            select_shipping_method(delivery_page)
     finally:
         expect.set_options(timeout=5000)
