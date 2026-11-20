@@ -42,9 +42,11 @@ try {
         ShopInit\ensureOmnibusModuleInstalled($context);
     }
 
-    echo "[3/4] Przygotowanie tabeli historii i zasilanie danymi demonstracyjnymi...\n";
-    $result = ShopInit\seedOmnibusDemoData($context, $catalog, $dryRun);
-    echo "      Wpisy historii cen: dodano {$result['inserted']}, pominięto {$result['skipped']}.\n";
+    echo "[3/4] Przygotowanie tabeli historii, zasilanie demo i baseline dla katalogu...\n";
+    $resultDemo = ShopInit\seedOmnibusDemoData($context, $catalog, $dryRun);
+    echo "      Demo (25 promocji): dodano {$resultDemo['inserted']}, pominięto {$resultDemo['skipped']}.\n";
+    $resultBaseline = ShopInit\seedBaselinePricesForAllProducts($context, $dryRun);
+    echo "      Baseline (katalog): dodano {$resultBaseline['inserted']}, pominięto {$resultBaseline['skipped']}.\n";
 
     echo "[4/4] Odświeżanie pamięci podręcznej PrestaShop...\n";
     if (!$dryRun) {

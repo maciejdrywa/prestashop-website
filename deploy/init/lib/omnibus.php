@@ -38,6 +38,9 @@ function installOmnibusModuleFiles(): bool
         $repoSource = __DIR__ . '/../../../shop/modules/shopomnibus/';
         if (is_dir($repoSource)) {
             $source = $repoSource;
+        } elseif (is_file(_PS_MODULE_DIR_ . 'shopomnibus/shopomnibus.php')) {
+            // Pliki modułu są już obecne w katalogu modułów PrestaShop
+            return false;
         } else {
             throw new RuntimeException('Brak katalogu źródłowego modułu shopomnibus.');
         }
@@ -161,6 +164,7 @@ function ensureOmnibusTable(): void
     ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;';
 
     Db::getInstance()->execute($sql);
+    Db::getInstance()->execute('CREATE OR REPLACE VIEW `' . _DB_PREFIX_ . 'omnibus_price_history` AS SELECT * FROM `' . _DB_PREFIX_ . 'shopomnibus_price_history`;');
 }
 
 /**
@@ -189,7 +193,8 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
 
     // Pobierz plan promocji z D3.1 (25 produktów)
     $plan = promotionsPlan($catalog, $context);
-    $now = new DateTimeImmutable('now');
+    // Stała data bazowa (anchor date) zapewnia 100% determinizmu i pełną idempotencję seeda
+    $now = new DateTimeImmutable('2026-11-19 12:00:00');
 
     $inserted = 0;
     $skipped = 0;
@@ -231,14 +236,15 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
     };
 
     foreach ($plan as $item) {
-        $pId = $item['product_id'];
+        $pId = (int) $item['product_id'];
+        $sourceId = (string) ($item['source_id'] ?? '');
         $regGross = $item['regular_gross'];
         $regNet = round($regGross / 1.23, 6);
         $promoGross = $item['expected_promo_gross'];
         $promoNet = round($promoGross / 1.23, 6);
 
         // Upewnij się, że produkt ma date_add odpowiednie do scenariusza
-        if ($pId === 21) {
+        if ($sourceId === '5' || $pId === 21) {
             // SCENARIUSZ 4: Produkt oferowany krócej niż 30 dni (wprowadzony 14 dni temu)
             $dateAdd14 = $now->modify('-14 days')->format('Y-m-d 08:00:00');
             $datePromo2 = $now->modify('-2 days')->format('Y-m-d 10:00:00');
@@ -262,7 +268,7 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
             continue;
         }
 
-        if ($pId === 22) {
+        if ($sourceId === '12' || $pId === 22) {
             // SCENARIUSZ 2: Wahania cen w oknie 30 dni (krótka przecena do 26.00 zł i powrót do 28.00 zł)
             $date40 = $now->modify('-40 days')->format('Y-m-d 09:00:00');
             $date20 = $now->modify('-20 days')->format('Y-m-d 09:00:00');
@@ -280,7 +286,7 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
             continue;
         }
 
-        if ($pId === 43) {
+        if ($sourceId === '444' || $pId === 43) {
             // SCENARIUSZ 3: Sukcesywne obniżki (69.99 -> 59.99 -> 49.99)
             $date45 = $now->modify('-45 days')->format('Y-m-d 09:00:00');
             $date15 = $now->modify('-15 days')->format('Y-m-d 09:00:00');
@@ -295,7 +301,7 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
             continue;
         }
 
-        if ($pId === 32) {
+        if ($sourceId === '944' || $pId === 32) {
             // SCENARIUSZ 5: Wycieraczka z ramą (warianty kombinacji 89 i 90)
             $combos = Product::getProductAttributesIds($pId);
             $date40 = $now->modify('-40 days')->format('Y-m-d 09:00:00');
@@ -316,7 +322,7 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
             continue;
         }
 
-        // SCENARIUSZ 1 (ID 53) oraz pozostałe standardowe produkty (> 30 dni w ofercie)
+        // SCENARIUSZ 1 (ID 53 / source 139) oraz pozostałe standardowe produkty (> 30 dni w ofercie)
         $date40 = $now->modify('-40 days')->format('Y-m-d 09:00:00');
         $date1 = $now->modify('-1 day')->format('Y-m-d 10:00:00');
 
@@ -344,6 +350,113 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
 }
 
 /**
+ * Zapisuje początkowy stan cen (baseline) dla wszystkich aktywnych produktów i kombinacji w sklepie.
+ *
+ * Zapobiega sytuacji, w której nowa promocja dodana w panelu admina dla produktu spoza seeda
+ * nie ma w historii ceny sprzed obniżki i musi posiłkować się fallbackiem.
+ *
+ * @param Context $context
+ * @param bool $dryRun
+ * @return array{inserted: int, skipped: int}
+ */
+function seedBaselinePricesForAllProducts(Context $context, bool $dryRun = false): array
+{
+    ensurePriceContext($context);
+    ensureOmnibusTable();
+
+    $db = Db::getInstance();
+    $tableName = _DB_PREFIX_ . 'shopomnibus_price_history';
+
+    // Pobierz wszystkie aktywne produkty
+    $products = $db->executeS('
+        SELECT p.id_product, p.date_add
+        FROM `' . _DB_PREFIX_ . 'product` p
+        WHERE p.active = 1
+        ORDER BY p.id_product ASC
+    ');
+
+    if (empty($products)) {
+        return ['inserted' => 0, 'skipped' => 0];
+    }
+
+    // Pobierz listę produktów, które mają już jakiekolwiek wpisy w historii
+    $existingProductIds = $db->executeS('SELECT DISTINCT id_product FROM `' . $tableName . '`');
+    $existingMap = [];
+    foreach ($existingProductIds as $row) {
+        $existingMap[(int) $row['id_product']] = true;
+    }
+
+    $inserted = 0;
+    $skipped = 0;
+    $batchValues = [];
+    $batchSize = 100;
+
+    $flushBatch = function () use (&$batchValues, $db, $tableName, $dryRun): void {
+        if (empty($batchValues)) {
+            return;
+        }
+        if (!$dryRun) {
+            $sql = 'INSERT INTO `' . $tableName . '` (`id_product`, `id_product_attribute`, `id_shop`, `price_gross`, `price_net`, `is_promotional`, `date_add`) VALUES '
+                . implode(', ', $batchValues);
+            $db->execute($sql);
+        }
+        $batchValues = [];
+    };
+
+    foreach ($products as $p) {
+        $productId = (int) $p['id_product'];
+        $dateAdd = !empty($p['date_add']) && $p['date_add'] !== '0000-00-00 00:00:00'
+            ? $p['date_add']
+            : '2026-10-10 09:00:00';
+
+        // Jeśli produkt ma już wpisy w historii (np. z seeda 25 promocji), pomijamy go
+        if (isset($existingMap[$productId])) {
+            $skipped++;
+            continue;
+        }
+
+        // 1. Zapis bazowego produktu (id_product_attribute = 0)
+        $gross = (float) Product::getPriceStatic($productId, true, null, 6, null, false, false, 1, false, null, null, null, $dummy, false, false, $context);
+        $net = (float) Product::getPriceStatic($productId, false, null, 6, null, false, false, 1, false, null, null, null, $dummy, false, false, $context);
+
+        if ($gross > 0) {
+            $batchValues[] = '(' . $productId . ', 0, 1, ' . $gross . ', ' . $net . ', 0, "' . pSQL($dateAdd) . '")';
+            $inserted++;
+            if (count($batchValues) >= $batchSize) {
+                $flushBatch();
+            }
+        }
+
+        // 2. Zapis wariantów (kombinacji)
+        $combos = Product::getProductAttributesIds($productId);
+        if (!empty($combos)) {
+            foreach ($combos as $combo) {
+                $attrId = (int) ($combo['id_product_attribute'] ?? 0);
+                if ($attrId > 0) {
+                    $varGross = (float) Product::getPriceStatic($productId, true, $attrId, 6, null, false, false, 1, false, null, null, null, $dummy, false, false, $context);
+                    $varNet = (float) Product::getPriceStatic($productId, false, $attrId, 6, null, false, false, 1, false, null, null, null, $dummy, false, false, $context);
+
+                    if ($varGross > 0) {
+                        $batchValues[] = '(' . $productId . ', ' . $attrId . ', 1, ' . $varGross . ', ' . $varNet . ', 0, "' . pSQL($dateAdd) . '")';
+                        $inserted++;
+                        if (count($batchValues) >= $batchSize) {
+                            $flushBatch();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    $flushBatch();
+
+    return [
+        'inserted' => $inserted,
+        'skipped' => $skipped,
+    ];
+}
+
+/**
  * Sprawdza czy moduł Omnibus jest w pełni skonfigurowany (dla --resume).
  *
  * @param Context $context
@@ -355,6 +468,11 @@ function omnibusConfigured(Context $context): bool
         return false;
     }
 
+    $module = Module::getInstanceByName('shopomnibus');
+    if (!$module || !$module->isRegisteredInHook('displayProductPriceBlock')) {
+        return false;
+    }
+
     $db = Db::getInstance();
     $tableName = _DB_PREFIX_ . 'shopomnibus_price_history';
 
@@ -363,6 +481,7 @@ function omnibusConfigured(Context $context): bool
         return false;
     }
 
-    $count = (int) $db->getValue("SELECT COUNT(*) FROM `{$tableName}`");
-    return ($count >= 25);
+    // Weryfikacja: historia musi obejmować co najmniej 25 unikalnych produktów
+    $uniqueProducts = (int) $db->getValue("SELECT COUNT(DISTINCT id_product) FROM `{$tableName}`");
+    return ($uniqueProducts >= 25);
 }
