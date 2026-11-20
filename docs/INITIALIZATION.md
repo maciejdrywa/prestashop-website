@@ -19,7 +19,9 @@ Zalecana komenda startowa z [instrukcji wdrożenia](DEPLOYMENT.md) korzysta z `-
 | 13–14 | Słownik atrybutów i kombinacje z modyfikatorami netto |
 | 15–17 | Galerie, okładki, miniatury i kontrola katalogu |
 | 18–19 | Początkowe ilości, aktywacja i kontrola magazynu |
-| 20 | Kafle kategorii, odnośnik „O firmie”, popularne produkty, indeks wyszukiwania i filtry |
+| 20–21 | Promocje cenowe i historia cen Dyrektywy Omnibus |
+| 22 | Kafle kategorii, odnośnik „O firmie”, popularne produkty, indeks wyszukiwania i filtry |
+| 23 | Konfiguracja z eksportu `deploy/config/shop-config.json` |
 
 Nowe produkty są nieaktywne do zakończenia kontroli danych i galerii. Produkt bez zdjęć źródłowych jest jawnie zgłaszany. Obecnie dotyczy to ID 539 i wymaga potwierdzonego wyjątku przy odbiorze.
 
@@ -29,7 +31,7 @@ Dziennik `var/import/initialization-state.json` znajduje się w trwałym wolumen
 
 Pierwsze uruchomienie sprawdza istniejące produkty po referencjach i zachowuje je jako zastane rekordy. Własność nowych rekordów zapisuje przed ich utworzeniem. Po przerwaniu kontynuuje niedokończone etapy i produkty. Kontrola potwierdza rzeczywiste powiązania w bazie i pliki galerii także dla ukończonych etapów.
 
-Stan początkowy jest ustawiany wyłącznie podczas przygotowania nowych produktów. Aktywny produkt po przerwanym zapisie jest rozpoznawany jako udostępniony klientom i jego ilość pozostaje zachowana. Późniejsze kontrole sprawdzają spójność sum wariantów, przyjmując bieżące ilości. Edytowane nazwy, ceny, wagi, opisy, strony CMS i statusy istniejących zamówień pozostają zachowane.
+Stan początkowy jest ustawiany wyłącznie podczas przygotowania nowych produktów. Aktywny produkt po przerwanym zapisie jest rozpoznawany jako udostępniony klientom i jego ilość pozostaje zachowana. Późniejsze kontrole sprawdzają spójność sum wariantów, przyjmując bieżące ilości. Edytowane nazwy, ceny, wagi, opisy, strony CMS i statusy istniejących zamówień pozostają zachowane. Etap 23 stosuje eksport konfiguracji tylko po zmianie pliku w repozytorium ([konfiguracja](CONFIGURATION.md#eksport-konfiguracji-w-repozytorium)).
 
 Zmiana odcisków danych, utrata zapisanego rekordu lub konflikt referencji przerywa proces. Wykonaj kopię bazy i wolumenu, sprawdź przyczynę, a następnie zastosuj wybrane importery. Po świadomym zakończeniu aktualizacji zarchiwizuj dziennik, aby kolejne `--resume` ponownie rozpoznało istniejącą instalację. Usunięcie dziennika przy nieukończonym imporcie wymaga ręcznej kontroli nieaktywnych produktów i etapów.
 
@@ -43,7 +45,7 @@ docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data sh
 
 Importery produktów, atrybutów, kombinacji, zdjęć i stanów przyjmują źródłowe ID albo `--all` oraz `--dry-run`. `import-category.php` przygotowuje drzewo kategorii. `check-products.php --all --with-combinations`, `check-images.php --all` i `check-stock.php --all` porównują sklep z początkowym planem. Po sprzedaży lub edycji mogą zgłosić oczekiwane różnice.
 
-`check-environment.php` sprawdza kontekst i bazę. `check-price-settings.php` pokazuje VAT i próbkę przeliczenia. `plan-variants.php` pokazuje źródłowe kombinacje. `audit-sales.php` wypisuje konfigurację sprzedaży z ukryciem szczegółów bankowych. Skrypty `configure-*.php` świadomie odtwarzają wskazany obszar ustawień, zwykle obsługując `--dry-run`. Poczta i cookies są wykonywane bez tej opcji.
+`check-environment.php` sprawdza kontekst i bazę. `check-price-settings.php` pokazuje VAT i próbkę przeliczenia. `plan-variants.php` pokazuje źródłowe kombinacje. `audit-sales.php` wypisuje konfigurację sprzedaży z ukryciem szczegółów bankowych. `export-config.php` zapisuje eksport konfiguracji, a `configure-from-export.php [--dry-run]` go odtwarza. Skrypty `configure-*.php` świadomie odtwarzają wskazany obszar ustawień, zwykle obsługując `--dry-run`. Poczta i cookies są wykonywane bez tej opcji.
 
 ## Zdjęcia i bezpieczeństwo zapisu
 
