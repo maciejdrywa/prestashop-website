@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Union
 
+from import_state import ImportJournal, instance_lock
 from prestashop_api import (
     PrestaShopAPIError,
     PrestaShopClient,
@@ -37,6 +38,24 @@ def import_categories(
     mapping_file: Optional[Union[str, Path]] = None,
     update_existing: bool = True,
 ) -> Tuple[ImportStats, Dict[str, int]]:
+    """Synchronizuje kategorie pod blokadą instancji; zachowuje publiczny interfejs CLI."""
+    client = client if client is not None else PrestaShopClient()
+    identity = client.get_instance_identity()
+    if not isinstance(identity, str) or not identity:
+        raise PrestaShopAPIError("Brak tożsamości instalacji API.")
+    with instance_lock(identity):
+        return _import_categories(
+            client, categories_file, mapping_file, update_existing, identity
+        )
+
+
+def _import_categories(
+    client: PrestaShopClient,
+    categories_file: Optional[Union[str, Path]],
+    mapping_file: Optional[Union[str, Path]],
+    update_existing: bool,
+    identity: str,
+) -> Tuple[ImportStats, Dict[str, int]]:
     """
     Główna funkcja importu i aktualizacji kategorii w PrestaShop.
 
@@ -50,7 +69,9 @@ def import_categories(
     - (ImportStats, category_mapping_dict)
     """
     categories_path = (
-        Path(categories_file) if categories_file else _PROJECT_ROOT / "scraper-results" / "categories.json"
+        Path(categories_file)
+        if categories_file
+        else _PROJECT_ROOT / "scraper-results" / "categories.json"
     )
 
     if client is None:
@@ -65,16 +86,24 @@ def import_categories(
             getattr(client, "api_url", None),
         )
 
+    journal = ImportJournal(
+        mapping_path.with_suffix(".state.json"), client.api_url, identity
+    )
+
     # 2. Wczytanie i walidacja danych ze scrapowania
     validation_errors: List[str] = []
-    items = load_and_validate_categories(categories_path, validation_errors=validation_errors)
+    items = load_and_validate_categories(
+        categories_path, validation_errors=validation_errors
+    )
 
     # 3. Pobranie aktywnych języków oraz istniejących kategorii w celu zachowania pełnej idempotencji
     active_languages = fetch_active_languages(client)
     logger.info("Aktywne języki PrestaShop: %s", ", ".join(active_languages))
 
     existing_categories = fetch_existing_categories(client)
-    path_index, parent_child_index, existing_by_id = build_prestashop_hierarchy_index(existing_categories)
+    path_index, parent_child_index, existing_by_id = build_prestashop_hierarchy_index(
+        existing_categories
+    )
 
     stats = ImportStats(total=len(items) + len(validation_errors))
     if validation_errors:
@@ -88,9 +117,52 @@ def import_categories(
             existing_file_map = load_category_mapping(
                 mapping_path,
                 expected_instance_url=getattr(client, "api_url", None),
+                expected_identity=identity,
             )
-        except Exception as exc:
-            logger.debug("Nie udało się załadować istniejącego pliku mapowania (%s): %s", mapping_path, exc)
+        except (ValueError, OSError) as exc:
+            raise PrestaShopAPIError(
+                "Nie można odczytać mapowania; zapis zablokowany."
+            ) from exc
+
+    # Dziennik odbudowuje powiązanie po awarii między zapisem API a checkpointem mapy.
+    recovery_errors = {}
+    for url, record in journal.data["records"].items():
+        desired = record["desired"]
+        candidate = existing_by_id.get(record.get("id"))
+        if record["state"] == "pending" and record.get("id") is None:
+            matches = [
+                cat
+                for cat in existing_categories
+                if cat["id"] not in record.get("before_ids", [])
+                and all(cat.get(field) == value for field, value in desired.items())
+            ]
+            if len(matches) != 1:
+                recovery_errors[url] = (
+                    "Niepewny wynik POST; wymagane uzgodnienie kategorii z dziennikiem, bez ponownego POST."
+                )
+                continue
+            candidate = matches[0]
+            record["id"] = candidate["id"]
+        if candidate is None:
+            recovery_errors[url] = "Brak zapisanego ID z dziennika; zapis zablokowany."
+            continue
+        matches_desired = all(
+            candidate.get(field) == value for field, value in desired.items()
+        )
+        matches_previous = record.get("previous") == candidate
+        if not matches_desired and not matches_previous:
+            recovery_errors[url] = (
+                "Zapisany rekord zmienił tożsamość lub pola poza importerem; sprawdź konflikt."
+            )
+            continue
+        if record["state"] == "pending" and matches_desired:
+            record["state"] = "done"
+            journal.put(url, record)
+        existing_file_map[url] = candidate["id"]
+        # Faktyczna ścieżka może być nowa, gdy PUT zmienił nazwę rodzica.
+        for path, cid in path_index.items():
+            if cid == candidate["id"]:
+                existing_file_map[" > ".join(path)] = cid
 
     # Wykrywanie kolizji w starej mapie (różne URL-e wskazujące na to samo ID PrestaShop)
     id_to_first_url: Dict[int, str] = {}
@@ -114,14 +186,19 @@ def import_categories(
         stats.errors += len(file_map_collisions)
         stats.error_details.extend(file_map_collisions)
         # Usunięcie ze starej mapy skolidowanych ID, aby zapobiec nadpisaniu obcej kategorii
-        existing_file_map = {k: v for k, v in existing_file_map.items() if v not in collided_ids}
+        existing_file_map = {
+            k: v for k, v in existing_file_map.items() if v not in collided_ids
+        }
 
     # Weryfikacja zapisanych ścieżek na podstawie drzewa sprzed jakichkolwiek zmian.
     verified_ids = {
         cid
         for path, cid in path_index.items()
-        if existing_file_map.get(" > ".join(path)) == cid
-        or existing_file_map.get(" / ".join(path)) == cid
+        if cid is not None
+        and (
+            existing_file_map.get(" > ".join(path)) == cid
+            or existing_file_map.get(" / ".join(path)) == cid
+        )
     }
 
     # Generowanie mapowania dla konkretnej instancji sklepu
@@ -132,12 +209,24 @@ def import_categories(
 
     # 4. Przetwarzanie kategorii z zachowaniem kolejności rodzic -> dzieci
     for item in items:
+        if item.source_url in recovery_errors:
+            stats.errors += 1
+            stats.error_details.append(recovery_errors[item.source_url])
+            failed_parent_paths.add(item.path_key)
+            failed_parent_urls.add(item.source_url)
+            continue
         # Sprawdzenie czy rodzic lub przodek uległ awarii (pominięcie zależnych podkategorii)
         parent_path = tuple(item.category_path[:-1])
         is_parent_failed = (
             parent_path in failed_parent_paths
-            or any(tuple(item.category_path[:i]) in failed_parent_paths for i in range(1, len(item.category_path)))
-            or (item.parent_source_url is not None and item.parent_source_url in failed_parent_urls)
+            or any(
+                tuple(item.category_path[:i]) in failed_parent_paths
+                for i in range(1, len(item.category_path))
+            )
+            or (
+                item.parent_source_url is not None
+                and item.parent_source_url in failed_parent_urls
+            )
         )
         if is_parent_failed:
             err_msg = (
@@ -163,12 +252,7 @@ def import_categories(
         if item.depth == 1:
             target_parent_id = PRESTASHOP_HOME_CATEGORY_ID
         else:
-            lower_parent_path = tuple(p.lower() for p in parent_path)
-            target_parent_id = path_index.get(parent_path) or path_index.get(lower_parent_path)
-
-            # Próba alternatywnego znalezienia po parent_source_url w wygenerowanej mapie
-            if target_parent_id is None and item.parent_source_url and item.parent_source_url in category_mapping:
-                target_parent_id = category_mapping[item.parent_source_url]
+            target_parent_id = category_mapping.get(item.parent_source_url)
 
             if target_parent_id is None:
                 err_msg = (
@@ -193,13 +277,30 @@ def import_categories(
         cat_key = item.path_key
         lower_cat_key = tuple(p.lower() for p in item.category_path)
 
+        if any(
+            key in path_index and path_index[key] is None
+            for key in (cat_key, lower_cat_key)
+        ) or any(
+            key in parent_child_index and parent_child_index[key] is None
+            for key in (
+                (target_parent_id, item.name),
+                (target_parent_id, item.name.lower()),
+            )
+        ):
+            stats.errors += 1
+            stats.error_details.append(
+                f"Niejednoznaczna kategoria '{item.formatted_path}'; zapis gałęzi zablokowany."
+            )
+            failed_parent_paths.add(item.path_key)
+            failed_parent_urls.add(item.source_url)
+            continue
+
         existing_cat_id = path_index.get(cat_key) or path_index.get(lower_cat_key)
         if existing_cat_id is None:
             # Sprawdzenie po (target_parent_id, nazwa)
-            existing_cat_id = (
-                parent_child_index.get((target_parent_id, item.name))
-                or parent_child_index.get((target_parent_id, item.name.lower()))
-            )
+            existing_cat_id = parent_child_index.get(
+                (target_parent_id, item.name)
+            ) or parent_child_index.get((target_parent_id, item.name.lower()))
 
         candidate_id = existing_file_map.get(item.source_url)
         conflict = None
@@ -236,8 +337,16 @@ def import_categories(
             failed_parent_paths.add(item.path_key)
             failed_parent_urls.add(item.source_url)
             # Zachowaj dotychczasowe powiązania stron konfliktu, których nie przetworzono.
-            unchanged_ids = {candidate_id, existing_cat_id} & (verified_ids - assigned_id_to_url.keys())
-            category_mapping.update({key: cid for key, cid in existing_file_map.items() if cid in unchanged_ids})
+            unchanged_ids = {candidate_id, existing_cat_id} & (
+                verified_ids - assigned_id_to_url.keys()
+            )
+            category_mapping.update(
+                {
+                    key: cid
+                    for key, cid in existing_file_map.items()
+                    if cid in unchanged_ids
+                }
+            )
             continue
 
         cat_id: Optional[int] = None
@@ -302,11 +411,30 @@ def import_categories(
                         existing_data=existing_cat_full,
                     )
 
+                    journal.put(
+                        item.source_url,
+                        {
+                            "state": "pending",
+                            "id": cat_id,
+                            "path": item.category_path,
+                            "desired": {
+                                "name": item.name,
+                                "id_parent": target_parent_id,
+                                "link_rewrite": expected_slug,
+                                "active": 1,
+                            },
+                            "previous": existing_by_id.get(cat_id),
+                        },
+                    )
                     try:
                         client.put("categories", cat_id, payload)
                         stats.updated += 1
                         api_success = True
-                        logger.debug("Zaktualizowano kategorię ID %d: %s (zachowano opis i pola)", cat_id, item.name)
+                        logger.debug(
+                            "Zaktualizowano kategorię ID %d: %s (zachowano opis i pola)",
+                            cat_id,
+                            item.name,
+                        )
                         existing_by_id[cat_id] = {
                             "id": cat_id,
                             "id_parent": target_parent_id,
@@ -333,18 +461,55 @@ def import_categories(
             else:
                 stats.skipped += 1
                 api_success = True
-                logger.debug("Pominięto istniejącą kategorię ID %d: %s", cat_id, item.name)
+                logger.debug(
+                    "Pominięto istniejącą kategorię ID %d: %s", cat_id, item.name
+                )
         else:
             # Tworzenie brakującej kategorii
-            payload = build_category_payload(item, target_parent_id, active_languages=active_languages)
+            payload = build_category_payload(
+                item, target_parent_id, active_languages=active_languages
+            )
+            journal.put(
+                item.source_url,
+                {
+                    "state": "pending",
+                    "id": None,
+                    "path": item.category_path,
+                    "before_ids": list(existing_by_id),
+                    "desired": {
+                        "name": item.name,
+                        "id_parent": target_parent_id,
+                        "link_rewrite": slugify(item.name),
+                        "active": 1,
+                    },
+                },
+            )
             try:
                 created = client.post("categories", payload)
-                if not isinstance(created, dict) or "category" not in created or "id" not in created["category"]:
-                    raise PrestaShopAPIError(f"Nieprawidłowa odpowiedź PrestaShop po utworzeniu kategorii: {created}")
-                cat_id = int(created["category"]["id"])
+                if (
+                    not isinstance(created, dict)
+                    or not isinstance(created.get("category"), dict)
+                    or "id" not in created["category"]
+                ):
+                    raise PrestaShopAPIError(
+                        f"Nieprawidłowa odpowiedź PrestaShop po utworzeniu kategorii: {created}"
+                    )
+                try:
+                    cat_id = int(created["category"]["id"])
+                    if cat_id <= 0 or cat_id in existing_by_id:
+                        raise ValueError("Niepoprawne lub zajęte ID nowej kategorii")
+                except (TypeError, ValueError) as exc:
+                    raise PrestaShopAPIError(
+                        "Niepoprawne ID utworzonej kategorii."
+                    ) from exc
                 stats.created += 1
                 api_success = True
-                logger.info("Utworzono nową kategorię ID %d: %s (rodzic ID: %d)", cat_id, item.name, target_parent_id)
+                logger.info(
+                    "Utworzono nową kategorię ID %d: %s (rodzic ID: %d)",
+                    cat_id,
+                    item.name,
+                    target_parent_id,
+                )
                 existing_by_id[cat_id] = {
                     "id": cat_id,
                     "id_parent": target_parent_id,
@@ -353,6 +518,8 @@ def import_categories(
                     "active": 1,
                 }
             except PrestaShopAPIError as exc:
+                if exc.status_code in {401, 403, 404, 405}:
+                    journal.discard(item.source_url)
                 err_msg = f"Błąd tworzenia kategorii '{item.name}': {exc}"
                 logger.warning(err_msg)
                 stats.errors += 1
@@ -363,7 +530,10 @@ def import_categories(
 
         # Zapis nowej ścieżki w mapie i indeksach DOPIERO po sukcesie API
         if api_success and cat_id is not None:
-            if cat_id in assigned_id_to_url and assigned_id_to_url[cat_id] != item.source_url:
+            if (
+                cat_id in assigned_id_to_url
+                and assigned_id_to_url[cat_id] != item.source_url
+            ):
                 err_msg = (
                     f"Konflikt mapowania: kategorie '{item.name}' ({item.source_url}) oraz "
                     f"'{assigned_id_to_url[cat_id]}' wskazują na to samo ID {cat_id} w PrestaShop!"
@@ -373,6 +543,19 @@ def import_categories(
                 stats.error_details.append(err_msg)
                 continue
 
+            journal.put(
+                item.source_url,
+                {
+                    "state": "done",
+                    "id": cat_id,
+                    "path": item.category_path,
+                    "desired": {
+                        key: value
+                        for key, value in existing_by_id[cat_id].items()
+                        if key != "id"
+                    },
+                },
+            )
             assigned_id_to_url[cat_id] = item.source_url
 
             # Rejestracja w indeksach na potrzeby kolejnych poziomów
@@ -389,6 +572,13 @@ def import_categories(
             if slash_path != formatted_path:
                 category_mapping[slash_path] = cat_id
 
+            save_category_mapping(
+                mapping_path,
+                {**existing_file_map, **category_mapping},
+                instance_url=client.api_url,
+                identity=identity,
+            )
+
     # 5. Zapisanie pliku mapowania wraz z metadanymi instancji sklepu
     category_mapping["home"] = PRESTASHOP_HOME_CATEGORY_ID
     category_mapping["Strona główna"] = PRESTASHOP_HOME_CATEGORY_ID
@@ -396,6 +586,7 @@ def import_categories(
         mapping_path,
         category_mapping,
         instance_url=getattr(client, "api_url", None),
+        identity=identity,
     )
 
     return stats, category_mapping

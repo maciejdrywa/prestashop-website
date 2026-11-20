@@ -23,8 +23,10 @@ declare(strict_types=1);
  */
 function prepareCertificates(): void
 {
-    if (getenv('PS_DOMAIN') !== 'localhost') {
-        throw new RuntimeException('Lokalny Nginx i certyfikat wymagają PS_DOMAIN=localhost.');
+    $domain = getenv('PS_DOMAIN') ?: '';
+    if (!preg_match('/^localhost(?::([1-9][0-9]{0,4}))?$/D', $domain, $parts)
+        || (isset($parts[1]) && (int) $parts[1] > 65535)) {
+        throw new RuntimeException('Lokalny certyfikat wymaga PS_DOMAIN=localhost lub localhost:port.');
     }
     require_once __DIR__ . '/init/lib/images.php';
     $root = '/opt/shop/scraper-results';

@@ -9,7 +9,7 @@ Wymagane są Docker Engine z Compose v2, plik `.env` uzupełniony na podstawie `
 Z głównego katalogu repozytorium wykonaj jedną komendę.
 
 ```sh
-docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.bootstrap.yaml run --build --rm bootstrap
+docker compose --env-file .env -f deploy/compose.yaml run --build --rm bootstrap
 ```
 
 Polecenie przygotowuje certyfikat, uruchamia usługi, instaluje pusty sklep i wznawia import. Przy ponownym wykonaniu zachowuje istniejące produkty, treści, zamówienia i magazyn. Zmienione dane źródłowe wymagają świadomego importu opisanego w dokumentacji.
@@ -18,17 +18,18 @@ Sklep jest dostępny pod `https://localhost`, panel pod `https://localhost/admin
 
 ### Webservice API
 
-Dostęp do REST API PrestaShop na potrzeby automatycznego importu danych jest konfigurowany automatycznie podczas inicjalizacji. Parametry połączenia określa `.env`:
+Webservice API jest konfigurowane podczas inicjalizacji. Importer Python synchronizuje kategorie oraz produkty, cechy, kombinacje, magazyn i galerie; bootstrap nadal używa natywnych importerów PHP do katalogu. Parametry połączenia określa `.env`:
 - `PRESTASHOP_API_URL` — adres API (domyślnie `https://localhost/api`),
 - `PRESTASHOP_API_KEY` — 32-znakowy klucz alfanumeryczny z uprawnieniami *Least Privilege* (zasoby katalogu, bez dostępu do zamówień i klientów),
 - `PRESTASHOP_API_VERIFY_SSL` — weryfikacja certyfikatu TLS (`false` dla środowiska lokalnego).
 
-Weryfikację poprawności połączenia i uprawnień wykonuje:
+Kontrolę połączenia, tożsamości instalacji i uprawnień, bez zapisywania danych, wykonuje:
 
 ```sh
 python3 scraper/test_api_client.py
 ```
 
+Konfigurację i wznowienie kategorii opisuje [Webservice](docs/WEBSERVICE.md), a komendy i wyniki D2.3 — [import produktów](docs/PRODUCT_IMPORT.md). Zdjęcia i wznowienie galerii opisuje [import zdjęć D2.4](docs/IMAGE_IMPORT.md). Klucz importera nie ma uprawnień DELETE; stary test tworzący i usuwający kategorię zastąpiła kontrola tylko do odczytu.
 ## Testy E2E
 
 Test Playwright sprawdza pełny zakup: koszyk, rejestrację, dostawę, płatność przy odbiorze, status zamówienia i pobranie faktury VAT. W aktywnym środowisku wirtualnym z zależnościami z `tests/requirements.txt`:

@@ -1,41 +1,46 @@
 # PrestaShop Webservice API
 
-Do automatycznego importu danych katalogowych wykorzystywane jest oficjalne Webservice API PrestaShop.
+Konfigurator `deploy/init/configure-webservice.php` włącza Webservice, tworzy lub aktualizuje klucz z `.env` i przypisuje go wyłącznie do domyślnego sklepu. Wznowienie inicjalizacji kontroluje faktyczne uprawnienia oraz przypisanie, zamiast sprawdzać tylko istnienie aktywnego klucza.
 
-## 1. Zmienne środowiskowe
+## Konfiguracja
 
-Konfiguracja połączenia z API przekazywana jest przez zmienne środowiskowe w pliku `.env`:
+| Zmienna | Znaczenie |
+|---|---|
+| `PRESTASHOP_API_URL` | Adres HTTP(S) kończący się `/api`, bez klucza w URL, parametrów i fragmentu; domyślnie `https://localhost/api` |
+| `PRESTASHOP_API_KEY` | 32 znaki ASCII: litery i cyfry; `.env.example` pozostawia pustą wartość |
+| `PRESTASHOP_API_VERIFY_SSL` | `true` albo `false`; klient domyślnie weryfikuje certyfikat, przykład lokalny wyłącza weryfikację dla self-signed |
 
-| Zmienna | Opis | Wartość domyślna / przykład |
-|---|---|---|
-| `PRESTASHOP_API_URL` | Adres punktu wejścia REST API | `https://localhost/api` |
-| `PRESTASHOP_API_KEY` | 32-znakowy alfanumeryczny klucz API | *(definiowany w .env)* |
-| `PRESTASHOP_API_VERIFY_SSL` | Weryfikacja certyfikatu TLS (self-signed w środowisku dev) | `false` |
+Przy zaufanym certyfikacie użyj `true`; dodatkowy urząd certyfikacji można przekazać przez standardowe `REQUESTS_CA_BUNDLE`. Połączenia zdalne powinny korzystać z HTTPS. W kodzie klienta timeout wynosi domyślnie 15 sekund na żądanie; konstruktor przyjmuje dodatni `timeout` oraz `get_retries` od 0 do 5 (domyślnie 2).
 
-Wzór konfiguracji znajduje się w [`.env.example`](../.env.example). Klucz w `.env.example` pozostaje pusty ze względów bezpieczeństwa.
+## Uprawnienia
 
-## 2. Aktywacja API i uprawnienia klucza (*Least Privilege*)
+| Zasoby | Dozwolone metody |
+|---|---|
+| `categories`, `products`, `combinations`, `product_options`, `product_option_values`, `product_features`, `product_feature_values`, `images` | GET, POST, PUT |
+| `stock_availables` | GET, PUT |
+| `languages`, `shops`, `currencies`, `countries`, `taxes`, `tax_rules`, `tax_rule_groups` | GET |
 
-Webservice API oraz klucz są konfigurowane automatycznie w trakcie inicjalizacji sklepu przez skrypt [`deploy/init/configure-webservice.php`](../deploy/init/configure-webservice.php).
+Klucz nie ma DELETE, HEAD, PATCH ani dostępu do klientów, zamówień, pracowników i konfiguracji. Próba użycia niedozwolonej metody może zwrócić HTTP 405; brak uprawnień do zasobu zwraca zwykle 401/403. Do sprzątania instancji testowej służy osobny mechanizm PHP, bez rozszerzania uprawnień importera.
 
-Zgodnie z zasadą najmniejszych uprawnień (*Least Privilege*), klucz posiada wyłącznie uprawnienia do zasobów niezbędnych podczas importu katalogu:
-- `categories`, `products`, `combinations`, `product_options`, `product_option_values`, `product_features`, `product_feature_values`, `images`, `stock_availables`, `manufacturers`, `taxes` (metody: `GET`, `POST`, `PUT`, `DELETE`, `HEAD`).
+## Klient i tożsamość instalacji
 
-Wszystkie zasoby wrażliwe (np. `customers`, `orders`, `configurations`, `employees`) pozostają zablokowane (zwracają błąd HTTP 401/403).
+`scraper/prestashop_api.py` stosuje HTTP Basic Auth: klucz jako login, puste hasło. Odczyt wymusza JSON, zapis serializuje XML, a zdjęcia są wysyłane jako multipart. Niepoprawne odpowiedzi dają `PrestaShopProtocolError`; nie są traktowane jako pusty katalog. Klient odrzuca przekierowania i nie umieszcza treści odpowiedzi serwera w komunikatach błędów.
 
-## 3. Komponent klienta API
+Ponawiane są wyłącznie GET po timeoutach, błędach połączenia i HTTP 429/500/502/503/504. POST/PUT nie są automatycznie ponawiane. Ich niepewny wynik rozstrzyga dziennik importera.
 
-Za komunikację z Webservice API w języku Python odpowiada moduł [`scraper/prestashop_api.py`](../scraper/prestashop_api.py):
-- Implementuje klasę `PrestaShopClient`, która automatycznie wczytuje konfigurację z `.env` lub zmiennych środowiskowych procesu.
-- Obsługuje uwierzytelnianie HTTP Basic Auth (klucz jako login, puste hasło).
-- Obsługuje format JSON dla odczytu (`output_format=JSON`) oraz automatyczną konwersję słowników do XML (wymaganego przez PrestaShop 8.2) dla operacji zapisu (`post`, `put`).
-- Umożliwia przesyłanie zdjęć produktów i kategorii przez dedykowaną metodę `upload_image()` (`multipart/form-data`).
-- Zawiera dedykowaną hierarchię wyjątków (`PrestaShopAuthError`, `PrestaShopNotFoundError`, `PrestaShopValidationError`, `PrestaShopConnectionError`, `PrestaShopAPIError`).
+Konfigurator dodaje publiczny nagłówek `X-PrestaShop-Import-Instance` przez blok w `.htaccess`, poza sekcją generowaną PrestaShop. Wymaga Apache `mod_headers`. Odcisk HMAC zmienia się po nowej instalacji, nie zawiera klucza API ani sekretu sklepu. Reverse proxy musi go zachować. Po pierwszym odczycie klient sprawdza zgodność nagłówka w kolejnych odpowiedziach.
 
-## 4. Test połączenia i weryfikacja uprawnień
-
-Aby sprawdzić poprawność działania API, uwierzytelniania oraz blokadę nieuprawnionych zasobów:
+## Kategorie i weryfikacja
 
 ```sh
-python3 scraper/test_api_client.py
+python scraper/test_api_client.py
+python scraper/import_categories.py
 ```
+
+Pierwsza komenda kontroluje połączenie, macierz uprawnień i odmowę odczytu zasobów chronionych **bez zapisu danych**. Druga synchronizuje `scraper-results/categories.json`. Obsługuje `--categories-file`, `--mapping-file` i `--skip-existing`.
+
+Mapa domyślna ma nazwę `category_mapping_<host>.json`. Obok niej powstaje `category_mapping_<host>.state.json`. Zachowuj oba pliki; są lokalne i wykluczone z Git. Dziennik umożliwia odzyskanie powiązania po utracie odpowiedzi lub przerwaniu przed zapisem mapy. Konflikt instalacji, uszkodzony stan i niejednoznaczny POST wymagają kontroli operatora, a nie usunięcia dziennika i ślepego ponowienia.
+
+Import produktów, cech, kombinacji i magazynu przez API oraz testy D2.3 opisuje [import produktów](PRODUCT_IMPORT.md). Bootstrap nadal importuje katalog bezpośrednio przez modele PHP; integracja toru API należy do D2.5.
+
+Galerie, formaty odpowiedzi uploadu i przejęcie istniejących mapowań PHP opisuje [D2.4](IMAGE_IMPORT.md). Import korzysta z dotychczasowych praw `images` GET/POST/PUT oraz `products` GET/PUT.
