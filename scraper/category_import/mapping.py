@@ -46,6 +46,7 @@ def save_category_mapping(
     mapping_path: Path,
     mapping: Dict[str, Any],
     instance_url: Optional[str] = None,
+    identity: Optional[str] = None,
 ) -> None:
     """
     Zapisuje słownik mapowania kategorii atomowo do pliku JSON.
@@ -58,6 +59,8 @@ def save_category_mapping(
 
     if instance_url:
         mapping["_instance_url"] = instance_url
+    if identity:
+        mapping["_instance_identity"] = identity
 
     temp_path: Optional[Path] = None
     try:
@@ -85,6 +88,7 @@ def save_category_mapping(
 def load_category_mapping(
     mapping_path: Path,
     expected_instance_url: Optional[str] = None,
+    expected_identity: Optional[str] = None,
 ) -> Dict[str, int]:
     """
     Wczytuje zapisany słownik mapowania kategorii z pliku JSON.
@@ -100,6 +104,10 @@ def load_category_mapping(
 
     if not isinstance(data, dict):
         raise ValueError(f"Niepoprawny format pliku mapowania: {mapping_path}")
+
+    if expected_identity and data.get("_instance_identity") != expected_identity:
+        logger.warning("Zignorowano mapę bez zgodnej tożsamości instalacji; ID wymagają ponownego rozpoznania.")
+        return {}
 
     # Weryfikacja instancji sklepu
     if expected_instance_url:

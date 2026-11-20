@@ -32,7 +32,8 @@
       {foreach $block.links as $link}
         <a href="{$link.url|escape:'html':'UTF-8'}">
           {if isset($tile_images[$link.title])}
-            <img src="{$urls.child_img_url}{$tile_images[$link.title]}" alt="{$link.title|escape:'html':'UTF-8'} — zobacz ofertę">
+            <img src="{$urls.child_img_url}{$tile_images[$link.title]}" width="450" height="280"
+                 alt="{$link.title|escape:'html':'UTF-8'} — zobacz ofertę">
           {else}
             {$link.title|escape:'html':'UTF-8'}
           {/if}

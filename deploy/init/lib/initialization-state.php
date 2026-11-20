@@ -15,6 +15,7 @@ namespace ShopInit;
 use RuntimeException;
 
 require_once __DIR__ . '/initialization.php';
+require_once __DIR__ . '/webservice.php';
 require_once __DIR__ . '/cookies.php';
 require_once __DIR__ . '/theme.php';
 require_once __DIR__ . '/theme-content.php';
@@ -167,20 +168,8 @@ function configurationPresent(string $script, \Context $context): bool
                 }
             }
             return true;
-         case 'configure-webservice.php':
-            $enabled = (int) \Configuration::get('PS_WEBSERVICE') === 1;
-            if (!$enabled) {
-                return false;
-            }
-            $key = getenv('PRESTASHOP_API_KEY') ?: '';
-            if ($key !== '') {
-                return (bool) \Db::getInstance()->getValue(
-                    'SELECT 1 FROM ' . _DB_PREFIX_ . 'webservice_account WHERE `key` = \'' . pSQL($key) . '\' AND active = 1'
-                );
-            }
-            return (bool) \Db::getInstance()->getValue(
-                'SELECT 1 FROM ' . _DB_PREFIX_ . 'webservice_account WHERE active = 1'
-            );
+        case 'configure-webservice.php':
+            return webserviceConfigurationPresent();
         case 'configure-promotions.php':
             return promotionsConfigured($context);
         case 'configure-omnibus.php':

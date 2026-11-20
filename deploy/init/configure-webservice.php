@@ -10,14 +10,11 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/lib/prestashop.php';
+require_once __DIR__ . '/lib/webservice.php';
 
 function configureWebservice(): void
 {
     echo "[CONFIG] Konfiguracja PrestaShop Webservice API...\n";
-
-    //  Włączenie Webservice API w PS
-    Configuration::updateValue('PS_WEBSERVICE', 1);
-    Configuration::updateValue('PS_WEBSERVICE_CGI_HOST', 0);
 
     // Jezeli klucz API istnieje to go pobieramy jezeli nie to tworzymy nowy
     $apiKey = getenv('PRESTASHOP_API_KEY') ?: '';
@@ -48,42 +45,26 @@ function configureWebservice(): void
         throw new RuntimeException("Nie udało się zapisać klucza Webservice w bazie.");
     }
 
-    // Ograniczone uprawnienia
-    // Uprawnienia nadajemy TYLKO do zasobów potrzebnych przy imporcie produktów i kategorii.
-    // Nie dajemy dostępu do: customers, orders
-    $importResources = [
-        'categories',
-        'products',
-        'combinations',
-        'product_options',
-        'product_option_values',
-        'product_features',
-        'product_feature_values',
-        'images',
-        'stock_availables',
-        'manufacturers',
-        'taxes',
-    ];
-
-    $permissions = [];
-    foreach ($importResources as $resource) {
-        $permissions[$resource] = [
-            'GET' => 1,    // Czy zasób istnieje
-            'POST' => 1,   // Tworzenie nowego zasobu
-            'PUT' => 1,    // Aktualizacja istniejącego zasobu
-            'DELETE' => 1, // Usuwanie
-            'HEAD' => 1,   // Szybkie sprawdzanie nagłówków
-        ];
+    if (!Configuration::updateValue('PS_WEBSERVICE', 1)
+        || !Configuration::updateValue('PS_WEBSERVICE_CGI_HOST', 0)) {
+        throw new RuntimeException('Nie można włączyć Webservice.');
     }
-
-    // Usunięcie starych uprawnień i zapisanie nowych
-    WebserviceKey::setPermissionForAccount($wsKey->id, $permissions);
+    if (!WebserviceKey::setPermissionForAccount($wsKey->id, ShopInit\webservicePermissions())) {
+        throw new RuntimeException('Nie można zapisać uprawnień Webservice.');
+    }
 
     // Powiązanie z aktywnym sklepem
     $shopId = (int) Configuration::get('PS_SHOP_DEFAULT');
-    Db::getInstance()->execute(
-        'REPLACE INTO ' . _DB_PREFIX_ . 'webservice_account_shop (id_webservice_account, id_shop) VALUES (' . (int)$wsKey->id . ', ' . (int)$shopId . ')'
-    );
+    if (!Db::getInstance()->delete('webservice_account_shop', 'id_webservice_account = ' . (int) $wsKey->id)
+        || !Db::getInstance()->insert('webservice_account_shop', [
+            'id_webservice_account' => (int) $wsKey->id, 'id_shop' => $shopId,
+        ])) {
+        throw new RuntimeException('Nie można przypisać klucza do sklepu.');
+    }
+    ShopInit\writeWebserviceIdentityHeader();
+    if (!ShopInit\webserviceConfigurationPresent()) {
+        throw new RuntimeException('Weryfikacja konfiguracji Webservice nie powiodła się.');
+    }
 
     echo "[CONFIG] Webservice API włączone. Klucz API skonfigurowany z uprawnieniami Least Privilege.\n";
 }

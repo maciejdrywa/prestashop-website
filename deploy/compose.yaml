@@ -1,32 +1,49 @@
-# Bazowy zestaw usług lokalnego sklepu, używany samodzielnie lub z overlayem bootstrapu.
-# Uruchomienie usług z katalogu repozytorium
-# docker compose --env-file .env -f deploy/compose.yaml up -d --build
-# Zmienne pochodzą z lokalnego .env, a ścieżki bind mountów są względem tego pliku.
-# MariaDB i pliki PrestaShop mają odrębne trwałe wolumeny. Import i konfigurację
-# uruchamia init-shop.php, a ich automatyczne wykonanie dodaje compose.bootstrap.yaml.
+# Jedyna definicja Compose: sklep, inicjalizacja i odrębne instancje testowe.
+# Inicjalizacja z katalogu repozytorium:
+# docker compose --env-file .env -f deploy/compose.yaml run --build --rm bootstrap
+# Zwykłe up przygotowuje certyfikat i uruchamia usługi, bez importu katalogu.
+# Środowiska rozdziela COMPOSE_PROJECT_NAME (lub -p), konfigurację plik --env-file.
+x-shop-image: &shop-image
+  image: prestashop-website:8.2.8
+  platform: linux/amd64
+  build:
+    context: ../shop
+    dockerfile: Dockerfile
+
 services:
-  # Dane MariaDB są trwałe w odrębnym wolumenie.
+  certificates:
+    <<: *shop-image
+    entrypoint: ["php", "/opt/shop/deploy/bootstrap.php", "--certificates"]
+    environment:
+      PS_DOMAIN: ${PS_DOMAIN:?Uzupełnij PS_DOMAIN}
+    volumes:
+      - .:/opt/shop/deploy:ro
+      - ${SCRAPER_RESULTS_DIR:-../scraper-results}:/opt/shop/scraper-results:ro
+      - type: bind
+        source: ${TLS_CERT_DIR:?Uzupełnij TLS_CERT_DIR}
+        target: /certs
+        bind:
+          create_host_path: true
+    networks:
+      - shop_network
+    restart: "no"
+
   db:
     image: mariadb:10.11.14
     platform: linux/amd64
     restart: unless-stopped
-
-    # Te wartości inicjalizują pusty katalog danych. Zmiana .env przy istniejącym
-    # wolumenie nie rekonfiguruje automatycznie kont i haseł zapisanych w MariaDB.
+    depends_on:
+      certificates:
+        condition: service_completed_successfully
     environment:
       MARIADB_DATABASE: ${DB_NAME:?Uzupełnij DB_NAME}
       MARIADB_USER: ${DB_USER:?Uzupełnij DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD:?Uzupełnij DB_PASSWORD}
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Uzupełnij DB_ROOT_PASSWORD}
-
     volumes:
       - db_data:/var/lib/mysql
-
     networks:
       - shop_network
-
-    # Gotowość oznacza połączenie i zainicjalizowany InnoDB. Od tego warunku
-    # zależy start instalatora, aby początek pracy nie wyprzedził gotowości bazy.
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -34,34 +51,20 @@ services:
       retries: 30
       start_period: 60s
 
-  # Instalator pracuje tylko na pustej bazie, PS_ERASE_DB pozostaje wyłączone.
   shop:
-    image: prestashop-website:8.2.8
-    platform: linux/amd64
-
-    build:
-      context: ../shop
-      dockerfile: Dockerfile
-
+    <<: *shop-image
     restart: unless-stopped
-
     depends_on:
       db:
         condition: service_healthy
       mailpit:
         condition: service_started
-
     environment:
       DB_SERVER: db
       DB_NAME: ${DB_NAME:?Uzupełnij DB_NAME}
       DB_USER: ${DB_USER:?Uzupełnij DB_USER}
       DB_PASSWD: ${DB_PASSWORD:?Uzupełnij DB_PASSWORD}
       DB_PREFIX: ps_
-
-
-
-      # Natywny entrypoint obrazu instaluje sklep na pustej instalacji. Dane konta,
-      # język i kraj są wartościami startowymi, a konfigurację domenową wykonuje init/.
       PS_INSTALL_AUTO: "1"
       PS_ERASE_DB: "0"
       PS_DOMAIN: ${PS_DOMAIN:?Uzupełnij PS_DOMAIN}
@@ -69,66 +72,93 @@ services:
       PS_COUNTRY: pl
       PS_FOLDER_ADMIN: admin-dev
       PS_DEV_MODE: "0"
-      PS_ENABLE_SSL: "1"
-
+      PS_ENABLE_SSL: ${PS_ENABLE_SSL:-1}
       ADMIN_MAIL: ${ADMIN_EMAIL:?Uzupełnij ADMIN_EMAIL}
       ADMIN_PASSWD: ${ADMIN_PASSWORD:?Uzupełnij ADMIN_PASSWORD}
       PRESTASHOP_API_KEY: ${PRESTASHOP_API_KEY:?Uzupełnij PRESTASHOP_API_KEY}
-
     volumes:
-      # Ten wolumen jest współdzielony z bootstrapem i przechowuje również
-      # galerie, wygenerowaną pocztę i var/import/initialization-state.json.
       - shop_data:/var/www/html
+      - .:/opt/shop/deploy:ro
       - ./init:/opt/shop/init:ro
-      # Import czyta źródła, galerie zapisuje w shop_data.
-      - ../scraper-results:/opt/shop/scraper-results:ro
-
+      - ${SCRAPER_RESULTS_DIR:-../scraper-results}:/opt/shop/scraper-results:ro
     networks:
       - shop_network
+    healthcheck:
+      test: ["CMD", "su", "-s", "/bin/sh", "www-data", "-c", "php /opt/shop/deploy/bootstrap.php --check-shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 180
 
-  # Lokalna skrzynka testowa przechwytuje wiadomości SMTP.
   mailpit:
     image: axllent/mailpit:v1.33
     restart: unless-stopped
-    
     ports:
-      - "127.0.0.1:8025:8025"
-    
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
     networks:
       - shop_network
 
-  # Porty są dostępne na interfejsie lokalnym hosta.
   nginx:
     image: nginx:stable-alpine
     restart: unless-stopped
-
     depends_on:
-      - shop
-
+      shop:
+        condition: service_started
+      certificates:
+        condition: service_completed_successfully
     ports:
-      - "127.0.0.1:80:80"
-      - "127.0.0.1:443:443"
-
+      - "127.0.0.1:${HTTP_PORT:-80}:80"
+      - "127.0.0.1:${HTTPS_PORT:-443}:443"
     volumes:
-      # Proxy odczytuje konfigurację i parę TLS z hosta. Wariant bazowy wymaga
-      # istniejącego katalogu certyfikatów, a jego przygotowanie automatyzuje overlay.
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${NGINX_CONFIG:-./nginx/default.conf}:/etc/nginx/conf.d/default.conf:ro
       - type: bind
         source: ${TLS_CERT_DIR:?Uzupełnij TLS_CERT_DIR}
         target: /etc/nginx/certs
         read_only: true
         bind:
-          create_host_path: false
-
+          create_host_path: true
     networks:
       - shop_network
 
-volumes:
-  db_data:
-  shop_data:
+  bootstrap:
+    <<: *shop-image
+    # Cel jawny `run bootstrap` aktywuje usługę; zwykłe up nie wykonuje importu.
+    profiles: [init]
+    user: www-data
+    entrypoint: ["php", "/opt/shop/deploy/bootstrap.php"]
+    depends_on:
+      certificates:
+        condition: service_completed_successfully
+      shop:
+        condition: service_started
+      nginx:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    environment:
+      PS_DOMAIN: ${PS_DOMAIN:?Uzupełnij PS_DOMAIN}
+      BOOTSTRAP_TIMEOUT: ${BOOTSTRAP_TIMEOUT:-900}
+      PRESTASHOP_API_KEY: ${PRESTASHOP_API_KEY:?Uzupełnij PRESTASHOP_API_KEY}
+    volumes:
+      - shop_data:/var/www/html
+      - .:/opt/shop/deploy:ro
+      - ./init:/opt/shop/init:ro
+      - ${SCRAPER_RESULTS_DIR:-../scraper-results}:/opt/shop/scraper-results:ro
+      - type: bind
+        source: ${TLS_CERT_DIR:?Uzupełnij TLS_CERT_DIR}
+        target: /certs
+        read_only: true
+    networks:
+      - shop_network
+    restart: "no"
 
-# Nazwy usług są DNS-em wewnątrz projektu. Baza i SMTP nie wymagają publikacji
-# portów na hoście, a interfejsy użytkownika są wystawione na 127.0.0.1.
+volumes:
+  # Domyślnie nazwy pozostają takie jak wcześniej: <projekt>_db_data / shop_data.
+  # Jawne nadpisanie pozwala zachować wolumeny starszej instancji testowej.
+  db_data:
+    name: ${DB_VOLUME_NAME:-${COMPOSE_PROJECT_NAME}_db_data}
+  shop_data:
+    name: ${SHOP_VOLUME_NAME:-${COMPOSE_PROJECT_NAME}_shop_data}
+
 networks:
   shop_network:
     driver: bridge

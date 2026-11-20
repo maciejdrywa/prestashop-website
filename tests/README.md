@@ -173,12 +173,26 @@ python -m pytest -q
 node --test deploy/init/tests/cookie-notice.test.cjs
 ```
 
-Testy integracyjne Webservice i importu kategorii wymagają osobnej instancji testowej; mogą zmieniać dane:
+Kontrola połączenia Webservice jest tylko do odczytu:
 
-```powershell
+```sh
 python scraper/test_api_client.py
-python -m pytest -o addopts= scraper/test_category_import.py
 ```
+
+Testy zapisu Webservice, kategorii i produktów są oznaczone `integration`. Wymagają przygotowanej odrębnej instancji tego samego `deploy/compose.yaml`: projekt `prestashop-d21-tests`, osobne wolumeny, aktywne API oraz PLN, kg i polska reguła VAT. W konfiguracji testowej ustaw porty `HTTP_PORT=18080`, `HTTPS_PORT=18443`, `MAILPIT_PORT=18025`. Używaj istniejącego `deploy/api-test.env.example` jako podstawy prywatnej konfiguracji testowej; nie zapisuj haseł i klucza w repozytorium. Nie wskazuj wolumenów zwykłego sklepu przez `DB_VOLUME_NAME` lub `SHOP_VOLUME_NAME`.
+
+Po ustawieniu w środowisku `PRESTASHOP_API_KEY` instancji testowej oraz `REQUESTS_CA_BUNDLE` na jej zaufany certyfikat:
+
+```sh
+export D21_TEST_API_URL=https://localhost:18443/api
+python -m pytest -o addopts= -q scraper/test_api_integration.py scraper/test_product_import_integration.py scraper/test_image_import_integration.py
+```
+
+HTTP używa `http://localhost:18080/api` i wymaga testowej konfiguracji Nginx obsługującej API bez przekierowania na domyślny port HTTPS. Fixture ustawia domeny i flagi SSL wyłącznie w kontenerze `prestashop-d21-tests-shop-1`; test odrzuca pozostałe adresy API. Przygotowanie usług i konfiguratorów PHP opisują [wdrożenie](../docs/DEPLOYMENT.md) oraz [inicjalizacja](../docs/INITIALIZATION.md).
+
+Test całego eksportu pozostawia kategorie w testowym sklepie. Testy produktów tworzą sześć własnych rekordów na scenariusz i sprzątają je oraz własną cechę przez lokalny model PHP. Klucz API pozostaje bez DELETE. Domyślne testy offline nie zapisują map w `scraper-results/` ani nie uruchamiają importu po wykryciu brakującego pliku.
+
+D2.3 obejmuje ceny i rzeczywisty wariant domyślny, cechy, kombinacje, idempotencję, zmianę opisów i cen, zachowanie magazynu i metadanych, jawny reset ilości, utratę odpowiedzi POST/PUT, przejęcie referencji bez dziennika oraz dry run bez zapisu. Reguły i odbiór pełnego eksportu opisuje [import produktów](../docs/PRODUCT_IMPORT.md).
 
 ## PHP
 
@@ -189,3 +203,5 @@ docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data sh
 ```
 
 Testy zmieniające dane uruchamiaj na osobnych wolumenach. Szczegóły inicjalizacji opisuje [instrukcja](../deploy/init/README.md), a ograniczenia weryfikacji — [audyt](../docs/AUDIT.md).
+
+Testy D2.4 w `scraper/test_image_import.py` sprawdzają ZIP, limity pobierania, JPEG/WebP, EXIF, przezroczystość, cache i uzgadnianie niepewnego POST. `scraper/test_image_import_integration.py` korzysta z tej samej odrębnej instancji D2 i własnych produktów fixture: upload, ponowienie, zmiana pliku pod tym samym URL, zmiana okładki, utrata odpowiedzi POST/PUT, przejęcie eksportu PHP i brak zapisu w dry run. Własne produkty oraz testowe mapowania PHP są sprzątane. Wyniki pełnego katalogu opisuje [D2.4](../docs/IMAGE_IMPORT.md).

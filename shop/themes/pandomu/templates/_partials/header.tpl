@@ -1,6 +1,7 @@
 {extends file='parent:_partials/header.tpl'}
 
 {block name='header_nav'}
+  <a class="pd-skip-link" href="#content-wrapper">Przejdź do treści</a>
   <div class="header-nav pd-contact-strip">
     <div class="container">{hook h='displayNav1'}</div>
   </div>

@@ -76,3 +76,6 @@ Thumbs.db
 
 # Isolated live scraper verification output
 .tmp-catalog-qa/
+
+# Trwały stan i mapowania lokalnego importera API
+scraper-results/*.state.json

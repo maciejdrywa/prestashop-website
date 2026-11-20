@@ -29,8 +29,10 @@ Crawler odczytuje menu, sekcje podkategorii i wszystkie strony paginacji. Uwzgl�
 | `category_paths`, `category_source_urls` | Pełne przypisania do gałęzi i ich źródła |
 | `description_short`, `description` | Krótki opis i pełny HTML |
 | `price_netto`, `price_brutto`, `vat_rate` | Zweryfikowane ceny bazowe i VAT |
+| `source_placeholder` | Opcjonalny URL źródłowej grafiki braku zdjęcia, oddzielony od rzeczywistej galerii |
 | `images`, `cover_image` | Uporządkowana galeria i jawny URL okładki |
 | `weight` | Masa źródłowa w kg lub brak danych |
+| `features` | Opcjonalna lista par `name`/`value`, odczytana z metadanych lub tabeli cech produktu; domyślnie `[]` |
 | `variants` | Rzeczywiste kombinacje i ich ceny |
 | `stock` | Pole źródłowe zachowane w eksporcie, importer stosuje własny plan początkowy |
 
@@ -51,3 +53,7 @@ Produkt źródłowy 539 nie ma galerii i pozostaje z `images: []`. Raport pokazu
 `refresh_descriptions.py` i `refresh_image_covers.py` uzupełniają istniejący eksport bez ponownego pobierania całego katalogu. Są zachowane dla starszych plików i regresji. Pełny nowy przebieg głównego scrapera dostarcza te same wymagane pola.
 
 Testy korzystają z lokalnego HTML i atrap odpowiedzi. Polecenia zebrano w [instrukcji testów](../tests/README.md).
+
+Import eksportu przez API opisuje [D2.3](PRODUCT_IMPORT.md). Importer nie dopisuje wymyślonych cech do istniejącego eksportu.
+
+Import galerii przez Webservice, pobieranie przypiętego wydania i obsługę placeholdera produktu 539 opisuje [D2.4](IMAGE_IMPORT.md).
