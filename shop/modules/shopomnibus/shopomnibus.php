@@ -58,6 +58,10 @@ class ShopOmnibus extends Module
     /**
      * Odinstalowanie modułu.
      *
+     * Uwaga architektoniczna: Tabela historii cen ps_shopomnibus_price_history nie jest
+     * usuwana przy odinstalowaniu, aby zachować ciągłość danych audytowych wymaganych przez UOKiK
+     * w razie ponownej instalacji lub aktualizacji modułu.
+     *
      * @return bool
      */
     public function uninstall(): bool
@@ -86,7 +90,12 @@ class ShopOmnibus extends Module
             INDEX `idx_date_add` (`date_add`)
         ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;';
 
-        return (bool) Db::getInstance()->execute($sql);
+        $res = (bool) Db::getInstance()->execute($sql);
+        if ($res) {
+            Db::getInstance()->execute('CREATE OR REPLACE VIEW `' . _DB_PREFIX_ . 'omnibus_price_history` AS SELECT * FROM `' . _DB_PREFIX_ . self::TABLE_NAME . '`;');
+        }
+
+        return $res;
     }
 
     /**
@@ -155,9 +164,9 @@ class ShopOmnibus extends Module
         // W miniaturach brak hook_origin, a na karcie produktu hook_origin bywa ustawiony lub obecny w ścieżce
         $isListing = !($this->context->controller instanceof ProductController);
 
-        $label = $isListing
-            ? ($omnibusInfo['is_under_30_days'] ? 'Najniższa cena (nowość):' : 'Najniższa cena z 30 dni:')
-            : ($omnibusInfo['is_under_30_days'] ? 'Najniższa cena od wprowadzenia towaru:' : 'Najniższa cena z 30 dni przed obniżką:');
+        $label = $omnibusInfo['is_under_30_days']
+            ? 'Najniższa cena od wprowadzenia towaru:'
+            : ($isListing ? 'Najniższa cena z 30 dni:' : 'Najniższa cena z 30 dni przed obniżką:');
 
         $this->context->smarty->assign([
             'omnibus_lowest_price' => $formattedPrice,
@@ -216,7 +225,7 @@ class ShopOmnibus extends Module
               AND `id_product_attribute` = ' . (int) $idProductAttribute . '
               AND `id_shop` = ' . (int) $idShop . '
               AND `date_add` <= "' . pSQL($windowStart) . '"
-            ORDER BY `date_add` DESC';
+            ORDER BY `date_add` DESC, `id_price_history` DESC';
         $initialPrice = $db->getValue($sqlInitial);
 
         if (($initialPrice === false || $initialPrice === null) && $idProductAttribute > 0) {
@@ -226,7 +235,7 @@ class ShopOmnibus extends Module
                   AND `id_product_attribute` = 0
                   AND `id_shop` = ' . (int) $idShop . '
                   AND `date_add` <= "' . pSQL($windowStart) . '"
-                ORDER BY `date_add` DESC';
+                ORDER BY `date_add` DESC, `id_price_history` DESC';
             $initialPrice = $db->getValue($sqlInitialFallback);
         }
 
@@ -291,16 +300,34 @@ class ShopOmnibus extends Module
     {
         $db = Db::getInstance();
         $tableName = _DB_PREFIX_ . self::TABLE_NAME;
+        $nowStr = date('Y-m-d H:i:s');
 
-        // Sprawdź czy w tabeli historii istnieje ciągły okres promocji (sukcesywne obniżki)
-        $sql = 'SELECT `date_add`, `is_promotional`
-            FROM `' . $tableName . '`
-            WHERE `id_product` = ' . (int) $idProduct . '
-              AND (`id_product_attribute` = ' . (int) $idProductAttribute . ' OR `id_product_attribute` = 0)
-              AND `id_shop` = ' . (int) $idShop . '
-            ORDER BY (`id_product_attribute` = ' . (int) $idProductAttribute . ') DESC, `date_add` DESC
-            LIMIT 20';
-        $rows = $db->executeS($sql);
+        // Sprawdź czy w tabeli historii istnieje ciągły okres promocji (sukcesywne obniżki).
+        // Dla wariantów (idProductAttribute > 0) odpytujemy najpierw historię tego konkretnego wariantu,
+        // aby nie zaburzać chronologii zdarzeń wariantów wierszami produktu bazowego.
+        $rows = [];
+        if ($idProductAttribute > 0) {
+            $sqlAttr = 'SELECT `date_add`, `is_promotional`
+                FROM `' . $tableName . '`
+                WHERE `id_product` = ' . (int) $idProduct . '
+                  AND `id_product_attribute` = ' . (int) $idProductAttribute . '
+                  AND `id_shop` = ' . (int) $idShop . '
+                  AND `date_add` <= "' . pSQL($nowStr) . '"
+                ORDER BY `date_add` DESC, `id_price_history` DESC';
+            $rows = $db->executeS($sqlAttr);
+        }
+
+        // Fallback do produktu bazowego, jeśli brak historii dla wariantu lub idProductAttribute == 0
+        if (empty($rows)) {
+            $sqlBase = 'SELECT `date_add`, `is_promotional`
+                FROM `' . $tableName . '`
+                WHERE `id_product` = ' . (int) $idProduct . '
+                  AND `id_product_attribute` = 0
+                  AND `id_shop` = ' . (int) $idShop . '
+                  AND `date_add` <= "' . pSQL($nowStr) . '"
+                ORDER BY `date_add` DESC, `id_price_history` DESC';
+            $rows = $db->executeS($sqlBase);
+        }
 
         if (!empty($rows)) {
             // Szukamy najwcześniejszego wpisu w aktualnie trwającej nieprzerwanej serii promocji
@@ -330,12 +357,12 @@ class ShopOmnibus extends Module
             ORDER BY `id_specific_price` DESC';
         $specificFrom = $db->getValue($sqlSpecific);
 
-        if ($specificFrom && $specificFrom !== '0000-00-00 00:00:00') {
+        if ($specificFrom && $specificFrom !== '0000-00-00 00:00:00' && $specificFrom <= $nowStr) {
             return $specificFrom;
         }
 
         // Domyślnie chwila obecna
-        return date('Y-m-d H:i:s');
+        return $nowStr;
     }
 
     /**
@@ -419,7 +446,7 @@ class ShopOmnibus extends Module
     }
 
     /**
-     * Rejestruje aktualną cenę w historii przy edycji produktu.
+     * Rejestruje aktualną cenę w historii przy edycji produktu bazowego (wraz z wariantami).
      *
      * @param array<string, mixed> $params
      * @return void
@@ -428,7 +455,7 @@ class ShopOmnibus extends Module
     {
         $product = $params['object'] ?? null;
         if ($product instanceof Product && $product->id > 0) {
-            self::recordCurrentPrice((int) $product->id, 0);
+            self::recordProductAndVariantsPrice((int) $product->id);
         }
     }
 
@@ -442,7 +469,13 @@ class ShopOmnibus extends Module
     {
         $specificPrice = $params['object'] ?? null;
         if ($specificPrice instanceof SpecificPrice && $specificPrice->id_product > 0) {
-            self::recordCurrentPrice((int) $specificPrice->id_product, (int) $specificPrice->id_product_attribute, true);
+            $idAttr = (int) $specificPrice->id_product_attribute;
+            $dateAdd = ($specificPrice->from && $specificPrice->from !== '0000-00-00 00:00:00') ? $specificPrice->from : null;
+            if ($idAttr === 0) {
+                self::recordProductAndVariantsPrice((int) $specificPrice->id_product, true, $dateAdd);
+            } else {
+                self::recordCurrentPrice((int) $specificPrice->id_product, $idAttr, true, $dateAdd);
+            }
         }
     }
 
@@ -456,7 +489,13 @@ class ShopOmnibus extends Module
     {
         $specificPrice = $params['object'] ?? null;
         if ($specificPrice instanceof SpecificPrice && $specificPrice->id_product > 0) {
-            self::recordCurrentPrice((int) $specificPrice->id_product, (int) $specificPrice->id_product_attribute, true);
+            $idAttr = (int) $specificPrice->id_product_attribute;
+            $dateAdd = ($specificPrice->from && $specificPrice->from !== '0000-00-00 00:00:00') ? $specificPrice->from : null;
+            if ($idAttr === 0) {
+                self::recordProductAndVariantsPrice((int) $specificPrice->id_product, true, $dateAdd);
+            } else {
+                self::recordCurrentPrice((int) $specificPrice->id_product, $idAttr, true, $dateAdd);
+            }
         }
     }
 
@@ -470,7 +509,12 @@ class ShopOmnibus extends Module
     {
         $specificPrice = $params['object'] ?? null;
         if ($specificPrice instanceof SpecificPrice && $specificPrice->id_product > 0) {
-            self::recordCurrentPrice((int) $specificPrice->id_product, (int) $specificPrice->id_product_attribute, false);
+            $idAttr = (int) $specificPrice->id_product_attribute;
+            if ($idAttr === 0) {
+                self::recordProductAndVariantsPrice((int) $specificPrice->id_product, false);
+            } else {
+                self::recordCurrentPrice((int) $specificPrice->id_product, $idAttr, false);
+            }
         }
     }
 
@@ -494,7 +538,33 @@ class ShopOmnibus extends Module
     }
 
     /**
-     * Zapisuje bieżący punkt cenowy produktu/wariantu w tabeli historii cen.
+     * Zapisuje aktualną cenę produktu bazowego oraz propaguje ją na wszystkie jego warianty (kombinacje).
+     *
+     * @param int $idProduct
+     * @param bool|null $isPromotional
+     * @param string|null $dateAdd
+     * @return void
+     */
+    public static function recordProductAndVariantsPrice(
+        int $idProduct,
+        ?bool $isPromotional = null,
+        ?string $dateAdd = null
+    ): void {
+        self::recordCurrentPrice($idProduct, 0, $isPromotional, $dateAdd);
+
+        $combinations = Product::getProductAttributesIds($idProduct);
+        if (!empty($combinations)) {
+            foreach ($combinations as $combo) {
+                $attrId = (int) ($combo['id_product_attribute'] ?? 0);
+                if ($attrId > 0) {
+                    self::recordCurrentPrice($idProduct, $attrId, $isPromotional, $dateAdd);
+                }
+            }
+        }
+    }
+
+    /**
+     * Zapisuje bieżący punkt cenowy produktu/wariantu w tabeli historii cen z dirty-checkingiem.
      *
      * @param int $idProduct
      * @param int $idProductAttribute
@@ -509,7 +579,15 @@ class ShopOmnibus extends Module
         ?string $dateAdd = null
     ): bool {
         $context = Context::getContext();
+        if (!isset($context->cart) || !is_object($context->cart)) {
+            $context->cart = new Cart();
+        }
         $attrId = $idProductAttribute > 0 ? $idProductAttribute : null;
+
+        // Reset statycznego cache cen PrestaShop z tego samego żądania
+        if (method_exists('Product', 'flushPriceCache')) {
+            Product::flushPriceCache();
+        }
 
         $grossPrice = (float) Product::getPriceStatic(
             id_product: $idProduct,
@@ -543,8 +621,30 @@ class ShopOmnibus extends Module
 
         $idShop = (int) ($context->shop->id ?: 1);
         $date = $dateAdd ?: date('Y-m-d H:i:s');
+        $db = Db::getInstance();
 
-        return (bool) Db::getInstance()->insert(self::TABLE_NAME, [
+        // Dirty-check: jeśli ostatni wpis dla tej kombinacji ma identyczną cenę i status promocji,
+        // pomijamy zbędne duplikowanie historii (np. przy zwykłym zapisie opisu/stanu magazynowego).
+        $lastRow = $db->getRow('
+            SELECT `price_gross`, `is_promotional`
+            FROM `' . _DB_PREFIX_ . self::TABLE_NAME . '`
+            WHERE `id_product` = ' . (int) $idProduct . '
+              AND `id_product_attribute` = ' . (int) $idProductAttribute . '
+              AND `id_shop` = ' . (int) $idShop . '
+            ORDER BY `date_add` DESC, `id_price_history` DESC
+        ');
+
+        if ($lastRow !== false && !empty($lastRow)) {
+            $lastGross = (float) $lastRow['price_gross'];
+            $lastPromo = (int) $lastRow['is_promotional'];
+            $currentPromoInt = $isPromotional ? 1 : 0;
+
+            if ($lastPromo === $currentPromoInt && abs($lastGross - $grossPrice) < 0.0001) {
+                return true;
+            }
+        }
+
+        return (bool) $db->insert(self::TABLE_NAME, [
             'id_product' => (int) $idProduct,
             'id_product_attribute' => (int) $idProductAttribute,
             'id_shop' => $idShop,
