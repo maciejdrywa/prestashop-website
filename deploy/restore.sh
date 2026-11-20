@@ -228,10 +228,10 @@ SET SESSION group_concat_max_len = 4194304;
 SELECT CONCAT('RENAME TABLE ', GROUP_CONCAT(x ORDER BY ord, x SEPARATOR ', '))
 FROM (
     SELECT 1 AS ord, CONCAT('\`$a\`.\`', table_name, '\` TO \`$b\`.\`', table_name, '\`') AS x
-    FROM information_schema.tables WHERE table_schema = '$a'
+    FROM information_schema.tables WHERE table_schema = '$a' AND table_type = 'BASE TABLE'
     UNION ALL
     SELECT 2, CONCAT('\`$c\`.\`', table_name, '\` TO \`$a\`.\`', table_name, '\`')
-    FROM information_schema.tables WHERE table_schema = '$c'
+    FROM information_schema.tables WHERE table_schema = '$c' AND table_type = 'BASE TABLE'
 ) moves;
 SQL
 )
@@ -264,8 +264,9 @@ swap_happened() {
     [[ "$(table_count "$old_db" 2>/dev/null)" =~ ^[1-9] && "$(table_count "$tmp_db" 2>/dev/null)" == "0" ]]
 }
 
+# Tylko tabele bazowe: widoki nie są przenoszone przez RENAME TABLE (MariaDB nie zmienia ich bazy).
 table_count() {
-    db_sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$1';" | tr -d '\r'
+    db_sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$1' AND table_type = 'BASE TABLE';" | tr -d '\r'
 }
 
 # Pliki konfiguracyjne i katalog z ich poprzednimi wersjami (poza katalogami publicznymi, 0600, root).
@@ -322,7 +323,7 @@ rollback() {
     if [[ "$db_swapped" != "true" && -n "${tmp_db:-}" && "${db_import_started:-false}" == "true" ]]; then
         # Podmiana nie nastąpiła: usuwamy tylko bazę tymczasową i pustą bazę na poprzednie tabele.
         db_sql -e "DROP DATABASE IF EXISTS \`$tmp_db\`;" || true
-        old_tables=$(db_sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$old_db';" | tr -d '\r')
+        old_tables=$(table_count "$old_db")
         [[ "$old_tables" != "0" ]] || db_sql -e "DROP DATABASE IF EXISTS \`$old_db\`;" || true
     fi
     if [[ "$db_swapped" == "true" ]]; then
@@ -499,6 +500,19 @@ for key in cookie_key cookie_iv secret; do
     grep -qE "'$key' => '[^']+'" "$bdir/config/parameters.php" || die "config/parameters.php nie zawiera klucza $key."
 done
 
+# Widoki (np. ps_omnibus_price_history modułu shopomnibus): mariadb-dump zapisuje ich DEFINER, a ustawienie
+# cudzego DEFINER wymaga uprawnienia SUPER, którego konto importu nie ma. Zrzut jest importowany z widokami
+# SQL SECURITY INVOKER bez DEFINER; po podmianie tabel widoki są tworzone w bazie sklepu na nowo (krok 4).
+import_dump="$temp_dir/database.import.sql"
+sed -E 's#^/\*!50013 DEFINER=`[^`]*`@`[^`]*` SQL SECURITY (DEFINER|INVOKER) \*/$#/*!50013 SQL SECURITY INVOKER */#' \
+    "$dump" > "$import_dump" || die "Nie udało się przygotować zrzutu do importu."
+if grep -qE '^/\*!50[0-9]{3} .*DEFINER=' "$import_dump"; then
+    die "Zrzut zawiera wyzwalacze, procedury lub zdarzenia z DEFINER. Obsługiwane są wyłącznie tabele i widoki."
+fi
+view_count=$(grep -c '^-- Final view structure for view ' "$import_dump" || true)
+# Sekcje końcowych definicji widoków; tymczasowe zastępniki z początku zrzutu nie są potrzebne.
+awk '/^-- Final view structure for view /{ f = 1 } f && /^\/\*!40[0-9]+ SET /{ f = 0 } f' "$import_dump" > "$temp_dir/views.sql"
+
 log_success "Archiwum $backup_name jest kompletne i poprawne (PrestaShop ${backup_ps_version:-?}, $images_count zdjęć)."
 if [[ "$verify_only" == "true" ]]; then
     restore_finished=true
@@ -661,14 +675,14 @@ fi
 log_info "Import zrzutu bazy do bazy tymczasowej $tmp_db..."
 db_import_started=true
 db_sql -e "DROP DATABASE IF EXISTS \`$tmp_db\`; CREATE DATABASE \`$tmp_db\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
-db_import "$tmp_db" < "$dump" || die "Import zrzutu bazy nie powiódł się. Bieżąca baza pozostała bez zmian."
+db_import "$tmp_db" < "$import_dump" || die "Import zrzutu bazy nie powiódł się. Bieżąca baza pozostała bez zmian."
 
-restored_tables=$(db_sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$tmp_db';" | tr -d '\r')
+restored_tables=$(table_count "$tmp_db")
 dump_tables=$(grep -c '^CREATE TABLE ' "$dump" || true)
 [[ "$restored_tables" == "$dump_tables" ]] \
     || die "Zaimportowano $restored_tables tabel, zrzut zawiera $dump_tables. Bieżąca baza pozostała bez zmian."
 restored_products=$(db_sql "$tmp_db" -e "SELECT COUNT(*) FROM \`${p}product\`;" | tr -d '\r')
-log_info "Zaimportowano $restored_tables tabel, $restored_products produktów."
+log_info "Zaimportowano $restored_tables tabel, $view_count widoków, $restored_products produktów."
 
 log_info "Atomowa podmiana tabel bazy $live_db..."
 # RENAME TABLE jest atomowe: przy błędzie bieżąca baza pozostaje nietknięta.
@@ -697,7 +711,34 @@ if [[ -n "$pending_signal" ]]; then
 fi
 db_sql -e "DROP DATABASE IF EXISTS \`$tmp_db\`;"
 
+if [[ "$view_count" -gt 0 ]]; then
+    # Definicje widoków ze zrzutu wykonuje ograniczone konto importu (tylko baza sklepu, --sandbox).
+    # Potem root ustawia jako DEFINER konto aplikacji. VIEW_DEFINITION pochodzi z MariaDB, nie z archiwum,
+    # i odwołuje się wyłącznie do tabel, do których konto importu miało dostęp.
+    log_info "Tworzenie widoków bazy ($view_count)..."
+    db_import "$live_db" < "$temp_dir/views.sql" || die "Nie udało się utworzyć widoków bazy."
+    app_user=$(dc exec -T db printenv MARIADB_USER | tr -d '\r')
+    [[ "$app_user" =~ ^[A-Za-z0-9_]{1,80}$ ]] || die "Niepoprawna nazwa konta aplikacji bazy: '$app_user'."
+    db_sql -r -e "SELECT CONCAT('ALTER DEFINER=\`$app_user\`@\`%\` SQL SECURITY INVOKER VIEW \`', TABLE_SCHEMA, '\`.\`', TABLE_NAME, '\` AS ', VIEW_DEFINITION, ';') FROM information_schema.VIEWS WHERE TABLE_SCHEMA = '$live_db';" \
+        > "$temp_dir/views-definer.sql" || die "Nie udało się odczytać definicji widoków."
+    db_sql < "$temp_dir/views-definer.sql" || die "Nie udało się ustawić właściciela widoków."
+    live_views=$(db_sql -e "SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA = '$live_db';" | tr -d '\r')
+    [[ "$live_views" -ge "$view_count" ]] || die "Utworzono $live_views z $view_count widoków."
+fi
+
 log_info "Ustawianie domeny sklepu na $shop_domain..."
+backup_domain=$(db_sql "$live_db" -e "SELECT domain_ssl FROM \`${p}shop_url\` WHERE main = 1 LIMIT 1;" | tr -d '\r')
+# Treści (strony CMS, teksty modułów, reassurance) zawierają bezwzględne odnośniki z domeną sklepu źródłowego.
+# Po zmianie domeny wskazywałyby stary sklep, więc są przepisywane na domenę bieżącego środowiska.
+if [[ "$backup_domain" =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$ && "$backup_domain" != "$shop_domain" ]]; then
+    log_info "Przepisywanie odnośników w treściach z $backup_domain na $shop_domain..."
+    for target in "cms_lang:content" "configuration_lang:value" "psreassurance:link"; do
+        table="${p}${target%%:*}"; column="${target#*:}"
+        if db_sql "$live_db" -e "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$table' AND column_name = '$column';" | grep -q 1; then
+            db_sql "$live_db" -e "UPDATE \`$table\` SET \`$column\` = REPLACE(\`$column\`, '://$backup_domain/', '://$shop_domain/') WHERE \`$column\` LIKE '%://$backup_domain/%';"
+        fi
+    done
+fi
 db_sql "$live_db" << SQL
 UPDATE \`${p}shop_url\` SET domain = '$shop_domain', domain_ssl = '$shop_domain';
 UPDATE \`${p}configuration\` SET value = '$shop_domain' WHERE name IN ('PS_SHOP_DOMAIN', 'PS_SHOP_DOMAIN_SSL');
@@ -814,6 +855,17 @@ dc exec -T --user www-data shop php -r '
     require "/var/www/html/config/config.inc.php";
     exit(Tools::generateHtaccess() ? 0 : 1);' >/dev/null 2>&1 \
     || log_warn "Nie udało się wygenerować .htaccess. Pozostawiono plik z kopii."
+
+# Nagłówek tożsamości instalacji dla importera API (blok catalog-import-identity w .htaccess) jest liczony
+# z bazy, prefiksu, sklepu domyślnego i klucza cookie bieżącej instalacji. Blok z kopii opisuje instalację
+# źródłową, a niezgodny blok blokuje etap configure-webservice.php (init-shop.php, export-config.php).
+if dc exec -T shop test -f /opt/shop/init/lib/webservice.php >/dev/null 2>&1; then
+    dc exec -T --user www-data shop php -r '
+        require "/opt/shop/init/lib/initialization-state.php";
+        ShopInit\boot();
+        ShopInit\writeWebserviceIdentityHeader();' >/dev/null 2>&1 \
+        || log_warn "Nie udało się odświeżyć nagłówka tożsamości API w .htaccess."
+fi
 
 log_info "Restart kontenera shop..."
 dc restart shop >/dev/null

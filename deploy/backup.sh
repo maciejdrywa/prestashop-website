@@ -146,7 +146,13 @@ env_file="$repo_dir/.env"
 compose_file="$repo_dir/deploy/compose.yaml"
 [[ -f "$compose_file" ]] || { log_error "Brak pliku compose: $compose_file"; exit 1; }
 
-compose=(docker compose --env-file "$env_file" -f "$compose_file")
+# Ścieżka hosta przekazywana do docker.exe. Przy MSYS_NO_PATHCONV Git Bash nie zamienia
+# /c/Users/... na C:/Users/..., więc konwersję wykonuje jawnie cygpath (poza Git Bash bez zmian).
+host_path() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
+}
+
+compose=(docker compose --env-file "$(host_path "$env_file")" -f "$(host_path "$compose_file")")
 
 # Weryfikacja działania wymaganych kontenerów
 db_running=$("${compose[@]}" ps --status running -q db 2>/dev/null || true)
@@ -229,7 +235,7 @@ log_info "Zrzut bazy MariaDB zakończony pomyślnie ($(format_bytes "$db_size"))
 
 # 2. Zdjęcia produktów
 log_info "Kopiowanie zdjęć produktów z kontenera sklepu (/var/www/html/img/p)..."
-"${compose[@]}" cp shop:/var/www/html/img/p "$backup_dir/images"
+"${compose[@]}" cp shop:/var/www/html/img/p "$(host_path "$backup_dir/images")"
 if [[ ! -d "$backup_dir/images/p" ]]; then
     log_error "Nie udało się skopiować katalogu zdjęć produktów img/p!"
     exit 1
@@ -244,21 +250,21 @@ if ! "${compose[@]}" exec -T shop test -f /var/www/html/app/config/parameters.ph
     log_error "Brak wymaganego pliku /var/www/html/app/config/parameters.php w kontenerze!"
     exit 1
 fi
-"${compose[@]}" cp shop:/var/www/html/app/config/parameters.php "$backup_dir/config/parameters.php"
+"${compose[@]}" cp shop:/var/www/html/app/config/parameters.php "$(host_path "$backup_dir/config/parameters.php")"
 
 # parameters.yml (opcjonalny)
 if "${compose[@]}" exec -T shop test -f /var/www/html/app/config/parameters.yml; then
-    "${compose[@]}" cp shop:/var/www/html/app/config/parameters.yml "$backup_dir/config/parameters.yml"
+    "${compose[@]}" cp shop:/var/www/html/app/config/parameters.yml "$(host_path "$backup_dir/config/parameters.yml")"
 fi
 
 # defines_custom.inc.php (opcjonalny)
 if "${compose[@]}" exec -T shop test -f /var/www/html/config/defines_custom.inc.php; then
-    "${compose[@]}" cp shop:/var/www/html/config/defines_custom.inc.php "$backup_dir/config/defines_custom.inc.php"
+    "${compose[@]}" cp shop:/var/www/html/config/defines_custom.inc.php "$(host_path "$backup_dir/config/defines_custom.inc.php")"
 fi
 
 # .htaccess (opcjonalny)
 if "${compose[@]}" exec -T shop test -f /var/www/html/.htaccess; then
-    "${compose[@]}" cp shop:/var/www/html/.htaccess "$backup_dir/config/.htaccess"
+    "${compose[@]}" cp shop:/var/www/html/.htaccess "$(host_path "$backup_dir/config/.htaccess")"
 fi
 
 # .env
@@ -283,8 +289,10 @@ ps_version=$("${compose[@]}" exec -T shop php -r '
 # 4. Generowanie manifestu JSON ze strukturą, sumami SHA-256 i metadanymi
 log_info "Generowanie manifestu metadanych (manifest.json)..."
 
-if command -v python3 >/dev/null 2>&1; then
-    python3 - "$backup_dir" "$backup_name" "$iso_created_at" "$ps_version" << 'PYEOF'
+# "python3 -c" odrzuca alias Microsoft Store bez zainstalowanego Pythona (Windows).
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys' >/dev/null 2>&1; then
+    # Windows python.exe nie rozumie ścieżek /tmp/... z Git Bash, stąd host_path.
+    python3 - "$(host_path "$backup_dir")" "$backup_name" "$iso_created_at" "$ps_version" << 'PYEOF'
 import hashlib
 import json
 import os
@@ -305,7 +313,8 @@ for root, _, filenames in os.walk(backup_dir):
         if fn == "manifest.json":
             continue
         full_path = os.path.join(root, fn)
-        rel_path = os.path.relpath(full_path, backup_dir)
+        # Manifest zawsze z separatorem "/" (restore.sh porównuje ścieżki z listą tar).
+        rel_path = os.path.relpath(full_path, backup_dir).replace(os.sep, "/")
         size = os.path.getsize(full_path)
         
         hasher = hashlib.sha256()

@@ -8,7 +8,7 @@ docker compose --env-file .env -f deploy/compose.yaml run --build --rm bootstrap
 
 Pełną instrukcję `.env`, HTTPS, platform i pracy ręcznej zawiera [wdrożenie](../docs/DEPLOYMENT.md). Etapy i aktualizacje opisuje [inicjalizacja](../docs/INITIALIZATION.md), a reguły sklepu [konfiguracja](../docs/CONFIGURATION.md).
 
-`bootstrap.php` jest wspólnym punktem wejścia kontenerów. `generate-cert.ps1`, `generate-cert.sh` i `start-macos.sh` udostępniają zgodne wywołania pomocnicze. `backup.sh` tworzy bezpieczną kopię zapasową bazy, plików konfiguracyjnych i zdjęć produktów. `nginx/default.conf` obsługuje lokalne HTTPS. W `init/` znajdują się importery i konfiguracja, a w `init/tests/` testy klas PHP oraz JavaScript.
+`bootstrap.php` jest wspólnym punktem wejścia kontenerów. `generate-cert.ps1`, `generate-cert.sh` i `start-macos.sh` udostępniają zgodne wywołania pomocnicze. `backup.sh` tworzy bezpieczną kopię zapasową bazy, plików konfiguracyjnych i zdjęć produktów, `restore.sh` odtwarza z niej sklep, a `verify-restore.sh` sprawdza odtwarzanie na czystym środowisku. `nginx/default.conf` obsługuje lokalne HTTPS. W `init/` znajdują się importery i konfiguracja, a w `init/tests/` testy klas PHP oraz JavaScript.
 
 ## Kopia zapasowa sklepu (backup.sh)
 
@@ -100,6 +100,7 @@ Na Linuksie i macOS skrypt można też uruchomić bezpośrednio: `./deploy/resto
    - nginx zostaje zatrzymany na czas odtwarzania,
    - zrzut trafia do bazy tymczasowej `<DB_NAME>_restore_tmp`; po sprawdzeniu liczby tabel jedna instrukcja `RENAME TABLE` podmienia tabele, a poprzednie przenosi do `<DB_NAME>_pre_restore`,
    - jeśli import się nie uda, bieżąca baza zostaje bez zmian,
+   - widoki (np. `ps_omnibus_price_history` modułu `shopomnibus`) nie mogą być przenoszone przez `RENAME TABLE` między bazami, a ich `DEFINER` ze zrzutu wymagałby uprawnienia `SUPER`. Zrzut jest importowany z widokami `SQL SECURITY INVOKER` bez `DEFINER`. Po podmianie tabel konto importu tworzy widoki w bazie sklepu na nowo, a root ustawia jako `DEFINER` konto aplikacji (`DB_USER`). Zrzut z wyzwalaczami, procedurami lub zdarzeniami z `DEFINER` jest odrzucany. Rollback nie zmienia widoków: odwołują się do tabel po nazwie, więc działają z przywróconymi tabelami,
    - przerwanie (Ctrl+C, `kill`, zamknięcie okna terminala) na dowolnym etapie po imporcie kończy się rollbackiem; gdy przerwanie trafi w podmianę tabel, skrypt czeka, aż MariaDB zakończy `RENAME TABLE`, i dopiero wtedy ustala, czy podmiana nastąpiła.
 5. **Zdjęcia i konfiguracja:**
    - `img/p` trafia najpierw do katalogu tymczasowego, a poprzednia wersja zostaje jako `img/p.pre-restore`,
@@ -109,10 +110,11 @@ Na Linuksie i macOS skrypt można też uruchomić bezpośrednio: `./deploy/resto
    - poprzednie wersje tych plików trafiają do `var/restore-previous/` (właściciel root, uprawnienia `0600`).
 6. **Dopasowanie do środowiska:**
    - domena z `PS_DOMAIN` jest wpisywana do `ps_shop_url` i `PS_SHOP_DOMAIN(_SSL)`,
+   - gdy domena kopii jest inna niż bieżąca, bezwzględne odnośniki do starej domeny w treściach (`cms_lang.content`, `configuration_lang.value`, `psreassurance.link`) są przepisywane na bieżącą domenę; bez tego strony CMS i stopka po odtworzeniu na innej domenie prowadziłyby do starego sklepu,
    - klucz konta Webservice dostaje wartość `PRESTASHOP_API_KEY` z bieżącego `.env`,
    - motyw i moduły projektu są kopiowane z obrazu (`/opt/shop-themes`, `/opt/shop-modules`), bo kopia ich nie zawiera,
    - skrypt zawsze włącza sklep (`PS_SHOP_ENABLE=1`): kopia z `backup.sh --maintenance` ma ten parametr ustawiony na 0. Jeśli sklep był wyłączony celowo, wyłącz go ponownie w panelu,
-   - na końcu skrypt czyści cache, generuje `.htaccess` i restartuje kontener `shop`.
+   - na końcu skrypt czyści cache, generuje `.htaccess`, odświeża w nim nagłówek tożsamości instalacji dla importera API (blok `catalog-import-identity`, wymagany przez etap `configure-webservice.php`) i restartuje kontener `shop`.
 7. **Kontrola:**
    - nginx jest uruchamiany (także gdy wcześniej nie działał),
    - liczba produktów i zdjęć musi zgadzać się z kopią,
@@ -146,7 +148,7 @@ Na Linuksie i macOS skrypt można też uruchomić bezpośrednio: `./deploy/resto
 
 ### Odtworzenie na nowym komputerze
 
-1. Sklonuj repozytorium, utwórz `.env` (albo użyj `--use-backup-env`) i przygotuj certyfikat (`deploy/generate-cert.sh` lub `.ps1`).
+1. Sklonuj repozytorium, przygotuj `scraper-results/` (`products.json`, `categories.json`, `images/` z GitHub Releases; wymaga ich usługa `certificates`, od której zależy start bazy), utwórz `.env` (albo użyj `--use-backup-env` i popraw `TLS_CERT_DIR`) i przygotuj certyfikat (`deploy/generate-cert.sh` lub `.ps1`).
 2. Skopiuj archiwum do `deploy/backups/`.
 3. Uruchom `bash deploy/restore.sh --latest`. Skrypt uruchomi środowisko, poczeka na instalację pustego sklepu i zastąpi go kopią.
 
@@ -165,4 +167,52 @@ Gdy rollback sam się nie powiedzie (np. Docker przestał odpowiadać), skrypt w
 - Kopia obejmuje tylko `img/p`. Zdjęcia kategorii, producentów i logo (`img/c`, `img/m`, `img/*.jpg`) oraz katalogi `upload/` i `download/` nie są przywracane.
 - Moduły zainstalowane ręcznie z panelu, spoza obrazu, nie są częścią kopii.
 - Po udanym odtworzeniu z `--keep-previous` kolejne odtwarzanie wymaga usunięcia bazy `<DB_NAME>_pre_restore` oraz katalogów `img/p.pre-restore` i `var/restore-previous/` w kontenerze `shop`. Skrypt o tym przypomina.
-- **Git Bash na Windows:** `backup.sh` przekazuje do `docker` ścieżki w formacie `/c/...` przy `MSYS_NO_PATHCONV=1`, więc kopia bezpieczeństwa może się nie udać. Nic nie zostaje wtedy zmienione. Do czasu poprawki w `backup.sh` wykonaj kopię ręcznie i uruchom odtwarzanie z `--no-safety-backup`.
+- **Git Bash na Windows:** `backup.sh` zamienia ścieżki przekazywane do `docker` (`--env-file`, `-f`, cel `docker compose cp`) i do Pythona generującego manifest przez `cygpath -m`, tak jak `restore.sh`. Alias `python3` ze Sklepu Microsoft bez zainstalowanego Pythona jest wykrywany i zastępowany generatorem w Bashu. Ścieżka Git Bash nie była jeszcze sprawdzona w działaniu; przetestowana jest WSL.
+
+## Weryfikacja odtwarzania (verify-restore.sh)
+
+Skrypt `deploy/verify-restore.sh` sprawdza, że kopia działającego sklepu daje się odtworzyć na czystym środowisku w wymaganym czasie i że po odtworzeniu sklep ma te same dane i działa. Dane głównego sklepu są wyłącznie czytane. Ze sklepem źródłowym środowisko weryfikacyjne dzieli tylko obraz `prestashop-website:8.2.8` (budowany wyłącznie, gdy go brak, więc obraz źródła nie jest podmieniany) i katalog `scraper-results/`.
+
+```sh
+bash deploy/verify-restore.sh                                    # pełna weryfikacja
+bash deploy/verify-restore.sh --recreate --down-after            # ponowienie i usunięcie środowiska po sukcesie
+bash deploy/verify-restore.sh --archive deploy/backups/backup_….tar.gz   # gotowe archiwum, bez porównania ze sklepem
+bash deploy/verify-restore.sh --cleanup                          # usunięcie środowiska weryfikacyjnego
+```
+
+### Przebieg
+
+0. **Kontrola czystości** przed kopią: brak kontenerów i wolumenów projektu `prestashop-restore-verify` (inaczej `--recreate` albo `--cleanup`) i wolne porty 19080/19443/19025.
+1. **Kopia zapasowa** działającego sklepu przez `backup.sh` do `deploy/backups/verify/archive/` (poprzednie archiwa weryfikacji są usuwane, bo zawierają `.env` i klucze).
+2. **Odcisk sklepu źródłowego** przed kopią (`CHECKSUM TABLE`) i zaraz po niej. Tabele zmienione w trakcie kopii (np. nowe zamówienie) są oznaczane jako nieporównywalne. Odcisk po kopii: 18 liczników (kategorie, produkty, kombinacje, zdjęcia, ceny promocyjne, reguły koszyka, stany, przewoźnicy, moduły, klienci, zamówienia), `CHECKSUM TABLE` wszystkich tabel, suma MD5 plików `img/p`, wybrane i wszystkie wartości `ps_configuration`, eksport `export-config.php`.
+3. **Czyste środowisko:** projekt Compose `prestashop-restore-verify` z nowymi wolumenami, siecią, losowymi hasłami bazy i administratora, własnym certyfikatem, kluczem API i konfiguracją nginx (`deploy/backups/verify/nginx.conf`: nagłówek `Host` z portem 19443, bez którego PrestaShop zapętliłby przekierowania), porty 19080/19443/19025. Zmienne powłoki, które Compose stawia ponad `--env-file` (`COMPOSE_PROJECT_NAME`, `DB_VOLUME_NAME`, porty itd.), są usuwane, żeby odtwarzanie nie trafiło w sklep źródłowy. Brakujące obrazy są budowane lub pobierane przed pomiarem.
+4. **Odtworzenie** przez `restore.sh --yes --no-safety-backup` z pomiarem czasu. Po odtworzeniu skrypt sprawdza, że kontenery sklepu źródłowego są te same i działają. Pomiar obejmuje start usług, instalację pustego PrestaShop, walidację archiwum, import bazy, zdjęć i konfiguracji oraz kontrolę HTTP 200. Limit: `RESTORE_TIME_LIMIT` (domyślnie 600 s).
+5. **Porównanie** odtworzonego sklepu ze źródłem (przed jakimkolwiek ruchem HTTP testów):
+   - liczniki muszą być równe, a kategorie, produkty, kombinacje i zdjęcia niezerowe,
+   - tabele danych sklepu (katalog, warianty, zdjęcia, stany, promocje, przewoźnicy, podatki, moduły, CMS, klienci, zamówienia) muszą mieć identyczne `CHECKSUM TABLE`; różnice w `configuration`, `shop_url`, `webservice_account` i tabelach statystyk są oczekiwane i tylko raportowane,
+   - pliki `img/p` muszą mieć identyczne ścieżki i zawartość,
+   - `ps_configuration` musi być zgodna poza domeną (`PS_SHOP_DOMAIN*`), włączeniem sklepu i wersjami cache CSS/JS, a eksport `export-config.php` identyczny,
+   - domena w `ps_shop_url` musi wskazywać `localhost:19443`, a sklep być włączony.
+6. **Funkcjonalności** (`deploy/verify/restore-smoke.php` w kontenerze `shop`, żądania przez nginx środowiska): strona główna z nazwą sklepu, kategoria z listą produktów, produkt z selektorem wariantów, plik zdjęcia i miniatura pod przyjaznym adresem, produkt z ceną promocyjną, wyszukiwarka, dodanie wariantu do koszyka, podgląd koszyka, pierwszy krok zamówienia, logowanie do panelu, Webservice API z nowym kluczem.
+7. **Raport** Markdown w `docs/RESTORE_VERIFICATION.md` (inna ścieżka: `--report`) i pełny log w `deploy/backups/verify/verify-*.log`. Raport powstaje także po przerwaniu weryfikacji (wynik negatywny z opisem). Raport podaje czas odtwarzania i czas od zera (z przygotowaniem obrazów). Kod wyjścia 0 oznacza wynik pozytywny.
+
+Po weryfikacji odtworzony sklep zostaje uruchomiony pod `https://localhost:19443` (panel `/admin-dev/`, konto administratora z kopii), żeby można go było pokazać. `--cleanup` usuwa kontenery, wolumeny, wygenerowany `verify.env`, `nginx.conf`, certyfikat i archiwum weryfikacji.
+
+Brak produktu z wariantem lub promocji jest błędem, gdy baza zawiera kombinacje lub aktualne ceny promocyjne; pominięciem tylko wtedy, gdy sklep ich nie ma.
+
+Pełny test zakupu E2E na odtworzonym sklepie (opcjonalnie, z aktywnym środowiskiem Pythona z `tests/requirements.txt`):
+
+```powershell
+$env:BASE_URL="https://localhost:19443"; python -m pytest -c pytest-e2e.ini
+```
+
+| Zmienna | Domyślnie |
+|---|---|
+| `VERIFY_PROJECT` | `prestashop-restore-verify` (nie może być równy projektowi sklepu źródłowego) |
+| `VERIFY_HTTPS_PORT`, `VERIFY_HTTP_PORT`, `VERIFY_MAILPIT_PORT` | `19443`, `19080`, `19025` |
+| `RESTORE_TIME_LIMIT` | `600` sekund |
+
+Sklep źródłowy to zawsze ten z `<repo>/.env`, bo z niego robi kopię `backup.sh`.
+
+Z `--archive` porównanie ze sklepem źródłowym jest pomijane, bo sklep mógł zmienić się po wykonaniu kopii. Skrypt sprawdza wtedy liczbę zdjęć z manifestem i konfigurację z `deploy/config/shop-config.json` (`export-config.php --check`).
+
