@@ -71,6 +71,8 @@ bash deploy/restore.sh deploy/backups/backup_YYYYMMDD_HHMMSS.tar.gz
 bash deploy/restore.sh deploy/backups/backup_YYYYMMDD_HHMMSS.tar.gz --verify-only
 ```
 
+Na Linuksie i macOS skrypt można też uruchomić bezpośrednio: `./deploy/restore.sh --latest`.
+
 > **Odtwarzaj wyłącznie archiwa z zaufanego źródła.** Sumy SHA-256 z `manifest.json` wykrywają uszkodzenie archiwum, ale nie celową modyfikację, bo manifest jest częścią tego samego archiwum. Skrypt ogranicza skutki spreparowanej kopii:
 > - zrzut importuje tymczasowe konto MariaDB z uprawnieniami wyłącznie do bazy tymczasowej, w trybie `--sandbox`; SQL ze zrzutu nie zmieni bazy produkcyjnej ani kont,
 > - w `images/p` dopuszczone są tylko obrazy, pliki `fileType` i standardowy `index.php` PrestaShopa (sprawdzany po sumie SHA-256),
@@ -113,7 +115,8 @@ bash deploy/restore.sh deploy/backups/backup_YYYYMMDD_HHMMSS.tar.gz --verify-onl
    - na końcu skrypt czyści cache, generuje `.htaccess` i restartuje kontener `shop`.
 7. **Kontrola:**
    - nginx jest uruchamiany (także gdy wcześniej nie działał),
-   - liczba produktów i zdjęć musi zgadzać się z kopią, a `https://<PS_DOMAIN>/` musi zwrócić HTTP 200 w czasie `RESTORE_TIMEOUT`,
+   - liczba produktów i zdjęć musi zgadzać się z kopią,
+   - `https://<PS_DOMAIN>/` musi zwrócić HTTP 200 w czasie `RESTORE_TIMEOUT`, najwyżej 300 s. Skrypt sprawdza to z hosta przez `curl`, a gdy `curl` nie ma lub nie może się połączyć, także z kontenera nginx: `https://127.0.0.1/` z nagłówkiem `Host: <PS_DOMAIN>`, bo nginx nasłuchuje tylko na IPv4,
    - błąd na dowolnym etapie po podmianie przywraca poprzednią bazę, zdjęcia i konfigurację.
 
 ### Opcje i zmienne środowiskowe
@@ -133,7 +136,7 @@ bash deploy/restore.sh deploy/backups/backup_YYYYMMDD_HHMMSS.tar.gz --verify-onl
 | `ENV_FILE` | `<repo>/.env` |
 | `COMPOSE_FILE_PATH` | `<repo>/deploy/compose.yaml` |
 | `BACKUP_DIR` | `deploy/backups` (kopie bezpieczeństwa: `BACKUP_DIR/pre-restore`) |
-| `RESTORE_TIMEOUT` | `900` sekund oczekiwania na bazę, sklep i odpowiedź HTTP |
+| `RESTORE_TIMEOUT` | `900` sekund oczekiwania na bazę i sklep; kontrola HTTP najwyżej 300 s |
 | `SHOP_URL` | `https://<PS_DOMAIN>/` |
 
 - Bieżący `.env` nie jest nadpisywany. Gdy różni się od `.env` z kopii, skrypt wypisuje tylko nazwy różniących się zmiennych, bez wartości.

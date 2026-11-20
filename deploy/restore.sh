@@ -833,17 +833,39 @@ live_images=$(shop_sh 'find /var/www/html/img/p -type f | wc -l' | tr -d ' \r')
 [[ "$live_images" == "$images_count" ]] || die "Liczba zdjęć po podmianie ($live_images) różni się od kopii ($images_count)."
 
 shop_url="${SHOP_URL:-https://$shop_domain/}"
+
+# Kontrola z wnętrza kontenera nginx. 127.0.0.1 zamiast localhost: w Alpine localhost rozwiązuje się
+# najpierw na ::1, a nginx nasłuchuje tylko na IPv4. Nagłówek Host = domena sklepu, aby PrestaShop
+# nie przekierował na inny adres. Wynik: ostatni kod HTTP z nagłówków lub 000 przy braku połączenia.
+probe_nginx() {
+    dc exec -T nginx wget -S -q --no-check-certificate --header "Host: $shop_domain" -O /dev/null "https://127.0.0.1/" 2>&1 \
+        | awk '/^ *HTTP\// { code = $2 } END { print (code == "" ? "000" : code) }'
+}
+
+# Osobny, krótszy limit na kontrolę HTTP: zatrzymany sklep nie powinien czekać 15 minut na rollback.
+http_timeout=$(( restore_timeout < 300 ? restore_timeout : 300 ))
 http_code=""
-deadline=$(( $(date +%s) + restore_timeout ))
+deadline=$(( $(date +%s) + http_timeout ))
 while :; do
+    host_code=""
     if command -v curl >/dev/null 2>&1; then
-        http_code=$(curl -k -s -o /dev/null -w '%{http_code}' --max-time 60 "$shop_url" || true)
-    else
-        dc exec -T nginx wget -q --no-check-certificate -O /dev/null "https://localhost/" >/dev/null 2>&1 \
-            && http_code=200 || http_code=000
+        host_code=$(curl -k -s -o /dev/null -w '%{http_code}' --max-time 60 "$shop_url" || true)
+    fi
+    http_code="$host_code"
+    if [[ "$host_code" != "200" ]]; then
+        nginx_code=$(probe_nginx || true)
+        if [[ "$nginx_code" == "200" && -n "$host_code" && "$host_code" != "000" ]]; then
+            # Host dostaje odpowiedź inną niż 200 (np. 500): to błąd sklepu, nie sieci.
+            http_code="$host_code"
+        elif [[ "$nginx_code" == "200" ]]; then
+            [[ -z "$host_code" ]] || log_warn "Brak połączenia z $shop_url z hosta, ale nginx w kontenerze zwraca HTTP 200. Sprawdź mapowanie portów."
+            http_code=200
+        elif [[ -z "$host_code" || "$host_code" == "000" ]]; then
+            http_code="$nginx_code"
+        fi
     fi
     [[ "$http_code" == "200" ]] && break
-    [[ $(date +%s) -ge $deadline ]] && die "Sklep nie odpowiada poprawnie pod $shop_url (HTTP $http_code)."
+    [[ $(date +%s) -ge $deadline ]] && die "Sklep nie odpowiada poprawnie pod $shop_url (HTTP ${http_code:-000}) w ciągu ${http_timeout}s."
     sleep 5
 done
 log_info "Sklep odpowiada pod $shop_url (HTTP 200)."
