@@ -407,3 +407,68 @@ def test_vat_duplicate_rules_are_not_a_general_unique_rule(vat_store):
     data["tax_rules"].append(copy.deepcopy(data["tax_rules"][0]))
     with pytest.raises(ValueError, match="reguły VAT"):
         preflight(helper, "fixture", [{"price_plan": {"vat": Decimal(23)}}])
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 405])
+@pytest.mark.parametrize(
+    "resource,identity",
+    [
+        ("products", {"reference": "pandomu-123"}),
+        ("product_features", {"name": {"1": "Materiał"}}),
+        ("product_feature_values", {"id_feature": "3", "value": {"1": "Stal"}}),
+        ("product_options", {"name": {"1": "Kolor"}}),
+        ("product_option_values", {"id_attribute_group": "2", "name": {"1": "Czarny"}}),
+    ],
+)
+def test_rejected_post_discards_pending_and_allows_restart(
+    tmp_path, status, resource, identity
+):
+    from prestashop_api import RESOURCE_SINGULAR_MAP
+
+    api = FakeAPI()
+    singular = RESOURCE_SINGULAR_MAP[resource]
+    api._send = Mock(
+        return_value=SimpleNamespace(
+            content=(
+                f"<prestashop><{singular}><reference/><id_feature/><id_attribute_group/>"
+                '<name><language id="1"/></name><value><language id="1"/></value>'
+                f"</{singular}></prestashop>"
+            ).encode()
+        )
+    )
+    original_post = api.post
+    rejection = PrestaShopAPIError("Rejected", status_code=status)
+    calls = 0
+
+    def reject_then_create(resource, payload):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise rejection
+        created = original_post(resource, payload)
+        return {singular: created["product"]}
+
+    api.post = reject_then_create
+    with pytest.raises(PrestaShopAPIError) as caught:
+        store(tmp_path, api).sync(resource, "fixture", identity, identity)
+    assert caught.value is rejection
+    # Odczyt z dysku potwierdza trwałe usunięcie wpisu, także dla nowego procesu.
+    restarted = store(tmp_path, api)
+    assert resource + ":fixture" not in restarted.journal.data["records"]
+    saved, owned = restarted.sync(resource, "fixture", identity, identity)
+    assert saved["id"] == 1 and owned and calls == 2
+    assert restarted.journal.data["records"][resource + ":fixture"]["state"] == "done"
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, None])
+def test_uncertain_post_error_keeps_pending_and_never_reposts(tmp_path, status):
+    api = FakeAPI()
+    api.post = Mock(side_effect=PrestaShopAPIError("Uncertain", status_code=status))
+    desired = {"reference": "pandomu-123"}
+    with pytest.raises(PrestaShopAPIError):
+        store(tmp_path, api).sync("products", "123", desired, desired)
+    restarted = store(tmp_path, api)
+    assert restarted.journal.data["records"]["products:123"]["state"] == "pending"
+    with pytest.raises(PrestaShopAPIError, match="Niepewny wynik"):
+        restarted.sync("products", "123", desired, desired)
+    assert api.post.call_count == 1

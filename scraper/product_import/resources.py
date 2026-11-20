@@ -279,7 +279,14 @@ class Resources:
             payload = self.payload(resource, current, desired)
             if not current:
                 payload = {**(new_defaults or {}), **payload}
-                result = self.client.post(resource, payload)
+                try:
+                    result = self.client.post(resource, payload)
+                except PrestaShopAPIError as exc:
+                    # Jednoznaczne odrzucenie nie jest niepewnym wynikiem POST.
+                    # Timeouty, błędy 5xx i niepoprawne potwierdzenia zachowują pending.
+                    if exc.status_code in {400, 401, 403, 404, 405}:
+                        self.journal.discard(entry_key)
+                    raise
                 singular = RESOURCE_SINGULAR_MAP[resource]
                 created = result.get(singular)
                 if not isinstance(created, dict) or not re.fullmatch(
