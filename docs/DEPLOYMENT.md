@@ -70,3 +70,13 @@ bash deploy/backup.sh [--maintenance]
 ```
 
 Archiwum zapisywane jest w katalogu `deploy/backups/` w formacie `backup_YYYYMMDD_HHMMSS.tar.gz` z uprawnieniami `0600`. Szczegóły parametrów i strukturę archiwum opisuje [dokumentacja deploy](../deploy/BACKUP.md).
+
+## Odtwarzanie z kopii
+
+Sklep odtwarza się z archiwum jedną komendą:
+
+```sh
+bash deploy/restore.sh --latest
+```
+
+Skrypt sprawdza kompletność i sumy kontrolne archiwum, prosi o potwierdzenie, wykonuje kopię bezpieczeństwa bieżącego stanu, podmienia bazę, zdjęcia produktów i konfigurację, a na końcu sprawdza działanie sklepu. Błąd cofa zmiany. Odtwarzaj wyłącznie zaufane archiwa. Opcje i ograniczenia opisuje [dokumentacja deploy](../deploy/BACKUP.md#odtwarzanie-sklepu-restoresh).
