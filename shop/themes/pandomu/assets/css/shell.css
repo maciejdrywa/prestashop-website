@@ -280,6 +280,8 @@
 #footer .footer-container .h3, #footer .footer-container .h4, .pd-footer-toggle { color: var(--pd-link); font-size: .85rem; font-weight: 500; text-transform: uppercase; }
 #footer .footer-container li a { color: var(--pd-text); font-size: .875rem; }
 #footer .footer-container li a:hover { color: var(--pd-link); }
+#footer #contact-infos { color: var(--pd-muted); }
+#footer #contact-infos a[href^="mailto:"] { text-decoration: underline; }
 #footer .footer-container { padding-bottom: 0; }
 #footer .footer-container .row:has(.pd-copyright) {
     padding: 2rem 0;
