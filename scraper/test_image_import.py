@@ -362,3 +362,19 @@ def test_malformed_gallery_is_not_an_empty_catalog(product):
 
     with pytest.raises(ValueError):
         gallery(product)
+
+
+def test_source_download_does_not_inherit_private_api_ca(tmp_path, monkeypatch):
+    import requests
+
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(tmp_path / "private-api.crt"))
+    cache = ImageCache(tmp_path)
+    response = Mock(headers={})
+    response.iter_content.return_value = [b"jpeg"]
+    cache.session.get = Mock(
+        return_value=Mock(
+            __enter__=Mock(return_value=response), __exit__=Mock(return_value=False)
+        )
+    )
+    cache.download(URL, tmp_path / "download", 10)
+    assert cache.session.get.call_args.kwargs["verify"] == requests.certs.where()
