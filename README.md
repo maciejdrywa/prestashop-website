@@ -30,6 +30,46 @@ python3 scraper/test_api_client.py
 ```
 
 Konfigurację i wznowienie kategorii opisuje [Webservice](docs/WEBSERVICE.md), a komendy i wyniki D2.3 — [import produktów](docs/PRODUCT_IMPORT.md). Zdjęcia i wznowienie galerii opisuje [import zdjęć D2.4](docs/IMAGE_IMPORT.md). Klucz importera nie ma uprawnień DELETE; stary test tworzący i usuwający kategorię zastąpiła kontrola tylko do odczytu.
+## Kopie zapasowe i odtwarzanie
+
+Polecenia uruchamiamy z głównego katalogu repozytorium w Bashu: na Linuksie i macOS w terminalu, na Windows w PowerShellu przez `bash …` (WSL) albo w Git Bash. Wymagany jest działający Docker i plik `.env`.
+
+**Kopia zapasowa** działającego sklepu (baza MariaDB, zdjęcia produktów `img/p`, pliki konfiguracyjne i manifest z sumami SHA-256):
+
+```sh
+bash deploy/backup.sh                 # bez przerwy w działaniu sklepu
+bash deploy/backup.sh --maintenance   # sklep wyłączony na czas kopii, pełna spójność bazy i zdjęć
+```
+
+Archiwum `backup_RRRRMMDD_GGMMSS.tar.gz` trafia do `deploy/backups/` (katalog wykluczony z Gita). Zawiera `.env` i klucze sklepu, więc przechowuj je jak hasła.
+
+**Odtworzenie** sklepu z archiwum:
+
+```sh
+bash deploy/restore.sh --verify-only deploy/backups/backup_RRRRMMDD_GGMMSS.tar.gz   # tylko kontrola archiwum
+bash deploy/restore.sh deploy/backups/backup_RRRRMMDD_GGMMSS.tar.gz                 # odtworzenie wskazanej kopii
+bash deploy/restore.sh --latest                                                     # odtworzenie najnowszej kopii
+```
+
+Skrypt sprawdza archiwum, prosi o wpisanie nazwy bazy, robi kopię bezpieczeństwa bieżącego stanu, podmienia bazę, zdjęcia i konfigurację, a na końcu sprawdza odpowiedź sklepu. Błąd na dowolnym etapie cofa zmiany. Odtwarzaj wyłącznie archiwa z zaufanego źródła.
+
+**Na nowym komputerze:**
+
+1. Sklonuj repozytorium i przygotuj `scraper-results/` (`products.json`, `categories.json`, komplet zdjęć w `images/` z GitHub Releases). Kopia ich nie zawiera, a usługa `certificates`, od której zależy start bazy, sprawdza ten katalog.
+2. Skopiuj archiwum do `deploy/backups/`.
+3. Utwórz `.env` z `.env.example` albo użyj `--use-backup-env` (tworzy `.env` z kopii). W obu przypadkach ustaw `TLS_CERT_DIR` na katalog certyfikatów tego komputera.
+4. Uruchom `bash deploy/restore.sh --latest` (lub `--latest --use-backup-env`). Skrypt uruchomi kontenery, zainstaluje pusty PrestaShop i zastąpi go kopią. Nie uruchamiaj potem bootstrapu z importem.
+
+**Weryfikacja odtwarzania** na czystym, odizolowanym środowisku (osobny projekt Compose, nowe wolumeny, hasła i port 19443):
+
+```sh
+bash deploy/verify-restore.sh              # kopia działającego sklepu, odtworzenie, porównanie, testy, raport
+bash deploy/verify-restore.sh --recreate   # ponowienie na nowo utworzonym środowisku
+bash deploy/verify-restore.sh --cleanup    # usunięcie środowiska weryfikacyjnego
+```
+
+Skrypt mierzy czas odtwarzania (limit 10 minut), porównuje kategorie, produkty, warianty, promocje, zdjęcia i konfigurację z działającym sklepem oraz sprawdza stronę główną, kategorię, produkt, zdjęcia, wyszukiwarkę, koszyk, start zamówienia, panel i API. Wynik zapisuje w [docs/RESTORE_VERIFICATION.md](docs/RESTORE_VERIFICATION.md). Odtworzony sklep zostaje uruchomiony pod `https://localhost:19443` do pokazania podczas odbioru. Szczegóły, opcje i ograniczenia opisuje [deploy/BACKUP.md](deploy/BACKUP.md).
+
 ## Testy E2E
 
 Test Playwright sprawdza pełny zakup: koszyk, rejestrację, dostawę, płatność przy odbiorze, status zamówienia i pobranie faktury VAT. W aktywnym środowisku wirtualnym z zależnościami z `tests/requirements.txt`:
@@ -65,6 +105,7 @@ GitHub Actions uruchamia `Scraper CI` przy każdym pull requeście. W zakładce 
 - Pobieranie katalogu i zdjęć opisuje [scraper](docs/SCRAPER.md).
 - Konfigurację i uprawnienia Webservice API opisuje [API](docs/WEBSERVICE.md).
 - Reguły sprzedaży, treści i faktury opisuje [konfiguracja](docs/CONFIGURATION.md).
+- Kopie zapasowe, odtwarzanie i jego weryfikację opisuje [deploy/BACKUP.md](deploy/BACKUP.md), a wynik ostatniej weryfikacji [raport](docs/RESTORE_VERIFICATION.md).
 - Pozostałe dokumenty i testy zbiera [indeks dokumentacji](docs/README.md).
 
 ## Struktura

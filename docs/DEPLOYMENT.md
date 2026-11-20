@@ -92,3 +92,5 @@ bash deploy/restore.sh --latest
 ```
 
 Skrypt sprawdza kompletność i sumy kontrolne archiwum, prosi o potwierdzenie, wykonuje kopię bezpieczeństwa bieżącego stanu, podmienia bazę, zdjęcia produktów i konfigurację, a na końcu sprawdza działanie sklepu. Błąd cofa zmiany. Odtwarzaj wyłącznie zaufane archiwa. Opcje i ograniczenia opisuje [dokumentacja deploy](../deploy/BACKUP.md#odtwarzanie-sklepu-restoresh).
+
+Poprawność i czas odtwarzania na czystym środowisku sprawdza `bash deploy/verify-restore.sh` ([opis](../deploy/BACKUP.md#weryfikacja-odtwarzania-verify-restoresh), [wynik](RESTORE_VERIFICATION.md)).
