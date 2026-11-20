@@ -6,7 +6,7 @@ Skrypty przygotowują sklep przez natywne klasy PrestaShop. Wszystkie uruchamiam
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/init-shop.php --resume
 ```
 
-Pełny start z instalacją, certyfikatem i kontrolą usług opisuje [wdrożenie](../../docs/DEPLOYMENT.md). Kolejność 20 etapów, format dziennika i skutki trybów CLI opisuje [inicjalizacja](../../docs/INITIALIZATION.md).
+Pełny start z instalacją, certyfikatem i kontrolą usług opisuje [wdrożenie](../../docs/DEPLOYMENT.md). Kolejność 23 etapów, format dziennika i skutki trybów CLI opisuje [inicjalizacja](../../docs/INITIALIZATION.md).
 
 | Skrypty | Odpowiedzialność |
 |---|---|
@@ -22,6 +22,7 @@ Pełny start z instalacją, certyfikatem i kontrolą usług opisuje [wdrożenie]
 | `configure-webservice.php` | Włączenie Webservice API i uprawnienia klucza Least Privilege |
 | `configure-carriers.php`, `configure-payments.php`, `configure-orders.php` | Dostawa, płatności, statusy i demonstracyjne faktury |
 | `configure-mail.php` | SMTP Mailpit i natywne polskie szablony e-mail |
+| `export-config.php`, `configure-from-export.php` | Eksport konfiguracji do `deploy/config/shop-config.json` i jej odtworzenie (ostatni etap) |
 | `check-environment.php`, `check-price-settings.php` | Diagnostyka środowiska, waluty i VAT |
 | `check-products.php`, `check-images.php`, `check-stock.php` | Porównanie zapisu z początkowym planem |
 | `plan-variants.php`, `audit-sales.php` | Podgląd wariantów i konfiguracji sprzedaży |
