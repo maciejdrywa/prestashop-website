@@ -15,6 +15,7 @@ namespace ShopInit;
 use RuntimeException;
 
 require_once __DIR__ . '/initialization.php';
+require_once __DIR__ . '/api-initialization.php';
 require_once __DIR__ . '/webservice.php';
 require_once __DIR__ . '/cookies.php';
 require_once __DIR__ . '/theme.php';

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Orkiestracja konfiguracji i importu w 20 etapach.
+ * Orkiestracja konfiguracji i importu PHP oraz faz przygotowania/finalizacji API.
  *
  * Wywołanie jako www-data w kontenerze shop
  * php /opt/shop/init/init-shop.php [--dry-run|--resume]
@@ -33,12 +33,15 @@ function initializeShopMain(array $arguments): int
     try {
         $options = array_slice($arguments, 1);
         if ($options === ['--help']) {
-            echo "Użycie: php init-shop.php [--dry-run|--resume]\nWymagane: products.json, categories.json i images/ w scraper-results.\n";
+            echo "Użycie: php init-shop.php [--dry-run|--resume]\nFazy API: --api-prepare lub --api-finalize, opcjonalnie --sync.\nWymagane: products.json, categories.json i images/ w scraper-results.\n";
             return 0;
         }
-        if ($options !== [] && $options !== ['--dry-run'] && $options !== ['--resume']) {
+        $apiPhase = in_array($options[0] ?? '', ['--api-prepare', '--api-finalize'], true);
+        $apiSync = $apiPhase && ($options[1] ?? '') === '--sync';
+        if (!$apiPhase && $options !== [] && $options !== ['--dry-run'] && $options !== ['--resume']) {
             throw new RuntimeException('Użycie: php init-shop.php [--dry-run|--resume]');
         }
+        if ($apiPhase && count($options) !== ($apiSync ? 2 : 1)) throw new RuntimeException('Niepoprawne opcje fazy API.');
         $dryRun = $options === ['--dry-run'];
         echo "[INIT] Wczytywanie PrestaShop...\n";
         $context = ShopInit\boot();
@@ -54,6 +57,11 @@ function initializeShopMain(array $arguments): int
                 throw new RuntimeException('Inny proces inicjalizacji sklepu już działa.');
             }
         }
+        if ($apiPhase) {
+            ShopInit\runApiInitialization($context, $options[0] === '--api-prepare' ? 'prepare' : 'finalize', $apiSync);
+            return 0;
+        }
+        if (!$dryRun) ShopInit\claimCatalogBackend('php');
         echo "[INIT] Kontrola kompletu plików źródłowych przed importem...\n";
         // Walidacja całego katalogu poprzedza pierwszy etap zapisu. Jej odciski są
         // punktem odniesienia dla kontroli zmiany źródeł i dziennika wznowienia.

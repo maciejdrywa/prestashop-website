@@ -37,7 +37,7 @@ function prepareCertificates(): void
     // Jedno zdjęcie może być wskazane wielokrotnie. Walidacja po ścieżce eliminuje
     // powtórne dekodowanie tego samego JPEG podczas sprawdzania wejścia.
     $seen = [];
-    foreach ($products as $product) {
+    foreach ((getenv('IMPORT_BACKEND') === 'api' ? [] : $products) as $product) {
         foreach ($product['images'] as $url) {
             $file = $root . '/images/' . ShopInit\sourceImageFilename($url);
             if (!isset($seen[$file])) {
@@ -154,7 +154,7 @@ function localResponse(string $url): array
  * @return void
  * @throws \RuntimeException Po upływie czasu gotowości, błędzie inicjalizacji lub końcowej kontroli usług.
  */
-function bootstrapShop(): void
+function bootstrapShop(string $apiPhase = ''): void
 {
     $started = microtime(true);
     $timeout = (int) (getenv('BOOTSTRAP_TIMEOUT') ?: 900);
@@ -168,7 +168,8 @@ function bootstrapShop(): void
     $response = ['status' => 0, 'error' => 'Instalator jeszcze nie zakończył pracy.'];
     do {
         if (!is_file('/var/www/html/install.lock') && is_file('/var/www/html/app/config/parameters.php')) {
-            $response = localResponse('https://localhost/');
+            if ($apiPhase !== '') break;
+            $response = localResponse(getenv('IMPORT_BACKEND') === 'api' && getenv('PS_ENABLE_SSL') === '0' ? 'http://localhost/' : 'https://localhost/');
             if ($response['status'] === 200) break;
         }
         if (time() >= $deadline) {
@@ -185,11 +186,14 @@ function bootstrapShop(): void
     echo "[START] Wznawianie konfiguracji i importu...\n";
     // Postęp i błędy podprocesu trafiają bezpośrednio do konsoli Compose.
     // Kod wyjścia jest warunkiem przejścia do końcowej kontroli usług.
-    $process = proc_open([PHP_BINARY, __DIR__ . '/init/init-shop.php', '--resume'],
+    $arguments = $apiPhase === '' ? ['--resume'] : [$apiPhase];
+    if ($apiPhase !== '' && in_array('--sync', $GLOBALS['argv'], true)) $arguments[] = '--sync';
+    $process = proc_open([PHP_BINARY, __DIR__ . '/init/init-shop.php', ...$arguments],
         [0 => ['pipe', 'r'], 1 => STDOUT, 2 => STDERR], $pipes, __DIR__);
     if (!is_resource($process)) throw new RuntimeException('Nie można uruchomić inicjalizacji.');
     fclose($pipes[0]);
     if (proc_close($process) !== 0) throw new RuntimeException('Inicjalizacja przerwana. Popraw wskazaną przyczynę i powtórz tę samą komendę.');
+    if ($apiPhase !== '') return;
     // Sprawdzamy efekt inicjalizacji przez publiczne punkty wejścia usług.
     // Dla HTTP wymagamy konkretnego przekierowania, dla panelu dopuszczamy ekran lub redirect.
     $https = localResponse('https://localhost/');
@@ -212,6 +216,7 @@ try {
     $mode = $argv[1] ?? '';
     if ($mode === '--certificates') prepareCertificates();
     elseif ($mode === '--check-shop') checkShopReady();
+    elseif (in_array($mode, ['--api-prepare', '--api-finalize'], true)) bootstrapShop($mode);
     elseif ($mode === '') bootstrapShop();
     else throw new RuntimeException('Nieznany tryb bootstrap.');
 } catch (Throwable $error) {

@@ -16,6 +16,7 @@ services:
     entrypoint: ["php", "/opt/shop/deploy/bootstrap.php", "--certificates"]
     environment:
       PS_DOMAIN: ${PS_DOMAIN:?Uzupełnij PS_DOMAIN}
+      IMPORT_BACKEND: ${IMPORT_BACKEND:-php}
     volumes:
       - .:/opt/shop/deploy:ro
       - ${SCRAPER_RESULTS_DIR:-../scraper-results}:/opt/shop/scraper-results:ro

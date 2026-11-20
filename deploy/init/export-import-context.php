@@ -13,6 +13,8 @@ try {
     if ($groups === false) throw new RuntimeException('Cannot read tax groups.');
     echo json_encode([
         'identity' => ShopInit\webserviceInstanceIdentity(),
+        'source_hashes' => ['products' => is_readable(ShopInit\SOURCE_FILE) ? hash_file('sha256', ShopInit\SOURCE_FILE) : null,
+            'categories' => is_readable(dirname(ShopInit\SOURCE_FILE) . '/categories.json') ? hash_file('sha256', dirname(ShopInit\SOURCE_FILE) . '/categories.json') : null],
         'exported_at' => time(),
         'shop_id' => $shopId,
         'home_category_id' => (int) $context->shop->id_category,
