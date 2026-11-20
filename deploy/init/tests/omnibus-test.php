@@ -75,43 +75,53 @@ try {
 
     echo "[3/5] Test algorytmu wyznaczania najniższej ceny dla 5 scenariuszy prawnych...\n";
 
-    // Scenariusz 1: Standardowy produkt (> 30 dni, stała cena przed obniżką) - ID 53 (Klamka NINA)
-    $info53 = ShopOmnibus::getLowestPriceInfo(53, 0, 1);
-    omnibusAssert($info53 !== null, 'Produkt 53 musi zwrócić dane Omnibus.');
-    omnibusAssert(abs($info53['lowest_price'] - 42.55) < 0.01, "Produkt 53: najniższa cena musi wynosić 42.55 PLN, otrzymano: {$info53['lowest_price']}");
-    omnibusAssert($info53['is_under_30_days'] === false, 'Produkt 53 nie może być oznaczony jako oferowany krócej niż 30 dni.');
+    $pid139 = (int) (ShopInit\productId('pandomu-139', $context) ?: 53); // Klamka NINA
+    $pid12  = (int) (ShopInit\productId('pandomu-12', $context) ?: 22);  // Zamek ZN-160
+    $pid541 = (int) (ShopInit\productId('pandomu-541', $context) ?: 43); // KLAMKA LIZA
+    $pid5   = (int) (ShopInit\productId('pandomu-5', $context) ?: 21);   // Zamek GAMA
+    $pid944 = (int) (ShopInit\productId('pandomu-944', $context) ?: 32); // Wycieraczka z ramą
 
-    // Scenariusz 2: Wahania cen w oknie 30 dni (krótka przecena do 26.00 zł i powrót) - ID 22 (Zamek ZN-160)
-    $info22 = ShopOmnibus::getLowestPriceInfo(22, 0, 1);
-    omnibusAssert($info22 !== null, 'Produkt 22 musi zwrócić dane Omnibus.');
-    omnibusAssert(abs($info22['lowest_price'] - 26.00) < 0.01, "Produkt 22: najniższa cena z 30 dni musi wynosić 26.00 PLN, otrzymano: {$info22['lowest_price']}");
+    // Scenariusz 1: Standardowy produkt (> 30 dni, stała cena przed obniżką) - Klamka NINA (source 139)
+    $info53 = ShopOmnibus::getLowestPriceInfo($pid139, 0, 1);
+    omnibusAssert($info53 !== null, "Produkt {$pid139} (NINA) musi zwrócić dane Omnibus.");
+    omnibusAssert(abs($info53['lowest_price'] - 42.55) < 0.01, "Produkt {$pid139}: najniższa cena musi wynosić 42.55 PLN, otrzymano: {$info53['lowest_price']}");
+    omnibusAssert($info53['is_under_30_days'] === false, "Produkt {$pid139} nie może być oznaczony jako oferowany krócej niż 30 dni.");
 
-    // Scenariusz 3: Sukcesywne obniżki cen (69.99 -> 59.99 -> 49.99) - ID 43 (KLAMKA LIZA)
-    $info43 = ShopOmnibus::getLowestPriceInfo(43, 0, 1);
-    omnibusAssert($info43 !== null, 'Produkt 43 musi zwrócić dane Omnibus.');
-    omnibusAssert(abs($info43['lowest_price'] - 69.99) < 0.01, "Produkt 43: najniższa cena przed pierwszą obniżką z serii musi wynosić 69.99 PLN, otrzymano: {$info43['lowest_price']}");
+    // Scenariusz 2: Wahania cen w oknie 30 dni (krótka przecena do 26.00 zł i powrót) - Zamek ZN-160 (source 12)
+    $info22 = ShopOmnibus::getLowestPriceInfo($pid12, 0, 1);
+    omnibusAssert($info22 !== null, "Produkt {$pid12} (ZN-160) musi zwrócić dane Omnibus.");
+    omnibusAssert(abs($info22['lowest_price'] - 26.00) < 0.01, "Produkt {$pid12}: najniższa cena z 30 dni musi wynosić 26.00 PLN, otrzymano: {$info22['lowest_price']}");
 
-    // Scenariusz 4: Produkt oferowany krócej niż 30 dni (< 30 dni) - ID 21 (Zamek GAMA)
-    $info21 = ShopOmnibus::getLowestPriceInfo(21, 0, 1);
-    omnibusAssert($info21 !== null, 'Produkt 21 musi zwrócić dane Omnibus.');
-    omnibusAssert(abs($info21['lowest_price'] - 59.99) < 0.01, "Produkt 21: najniższa cena od wprowadzenia musi wynosić 59.99 PLN, otrzymano: {$info21['lowest_price']}");
-    omnibusAssert($info21['is_under_30_days'] === true, 'Produkt 21 musi być oznaczony jako oferowany krócej niż 30 dni (is_under_30_days = true).');
+    // Scenariusz 3: Sukcesywne obniżki cen (69.99 -> 59.99 -> 49.99) - KLAMKA LIZA (source 541)
+    $info43 = ShopOmnibus::getLowestPriceInfo($pid541, 0, 1);
+    omnibusAssert($info43 !== null, "Produkt {$pid541} (LIZA) musi zwrócić dane Omnibus.");
+    omnibusAssert(abs($info43['lowest_price'] - 69.99) < 0.01, "Produkt {$pid541}: najniższa cena przed pierwszą obniżką z serii musi wynosić 69.99 PLN, otrzymano: {$info43['lowest_price']}");
 
-    // Scenariusz 5: Warianty produktów - ID 32 (Wycieraczka z ramą, kombinacje 89 i 90)
-    $info32_89 = ShopOmnibus::getLowestPriceInfo(32, 89, 1);
-    $info32_90 = ShopOmnibus::getLowestPriceInfo(32, 90, 1);
-    omnibusAssert($info32_89 !== null && $info32_90 !== null, 'Produkt 32 musi zwrócić dane Omnibus dla obu kombinacji.');
-    omnibusAssert(abs($info32_89['lowest_price'] - 144.74) < 0.01, "Kombinacja 89 produktu 32 musi mieć najniższą cenę 144.74 PLN, otrzymano: {$info32_89['lowest_price']}");
-    omnibusAssert(abs($info32_90['lowest_price'] - 132.44) < 0.01, "Kombinacja 90 produktu 32 musi mieć najniższą cenę 132.44 PLN, otrzymano: {$info32_90['lowest_price']}");
+    // Scenariusz 4: Produkt oferowany krócej niż 30 dni (< 30 dni) - Zamek GAMA (source 5)
+    $info21 = ShopOmnibus::getLowestPriceInfo($pid5, 0, 1);
+    omnibusAssert($info21 !== null, "Produkt {$pid5} (GAMA) musi zwrócić dane Omnibus.");
+    omnibusAssert(abs($info21['lowest_price'] - 59.99) < 0.01, "Produkt {$pid5}: najniższa cena od wprowadzenia musi wynosić 59.99 PLN, otrzymano: {$info21['lowest_price']}");
+    omnibusAssert($info21['is_under_30_days'] === true, "Produkt {$pid5} musi być oznaczony jako oferowany krócej niż 30 dni (is_under_30_days = true).");
+
+    // Scenariusz 5: Warianty produktów - Wycieraczka z ramą (source 944)
+    $combos32 = Product::getProductAttributesIds($pid944);
+    $attrIds = array_column($combos32, 'id_product_attribute');
+    sort($attrIds);
+    $infoComboA = ShopOmnibus::getLowestPriceInfo($pid944, (int) $attrIds[0], 1);
+    $infoComboB = ShopOmnibus::getLowestPriceInfo($pid944, (int) $attrIds[1], 1);
+    omnibusAssert($infoComboA !== null && $infoComboB !== null, "Produkt {$pid944} musi zwrócić dane Omnibus dla obu kombinacji.");
+    $comboPrices = [$infoComboA['lowest_price'], $infoComboB['lowest_price']];
+    sort($comboPrices);
+    omnibusAssert(abs($comboPrices[0] - 132.44) < 0.01 && abs($comboPrices[1] - 144.74) < 0.01, "Kombinacje produktu {$pid944} muszą mieć najniższe ceny 132.44 i 144.74 PLN, otrzymano: {$comboPrices[0]} i {$comboPrices[1]}");
 
     echo "[4/5] Test automatycznego zapisu historii cen, dirty-checkingu i pełnego cyklu życia hooków...\n";
 
     // 4a: Test deduplikacji (dirty-check)
     $testDate = '2026-11-19 12:00:00';
-    $countBefore = (int) $db->getValue("SELECT COUNT(*) FROM `{$tableName}` WHERE `id_product` = 53 AND `id_product_attribute` = 0");
-    ShopOmnibus::recordCurrentPrice(53, 0, true, $testDate);
-    ShopOmnibus::recordCurrentPrice(53, 0, true, $testDate);
-    $countAfter = (int) $db->getValue("SELECT COUNT(*) FROM `{$tableName}` WHERE `id_product` = 53 AND `id_product_attribute` = 0");
+    $countBefore = (int) $db->getValue("SELECT COUNT(*) FROM `{$tableName}` WHERE `id_product` = {$pid139} AND `id_product_attribute` = 0");
+    ShopOmnibus::recordCurrentPrice($pid139, 0, true, $testDate);
+    ShopOmnibus::recordCurrentPrice($pid139, 0, true, $testDate);
+    $countAfter = (int) $db->getValue("SELECT COUNT(*) FROM `{$tableName}` WHERE `id_product` = {$pid139} AND `id_product_attribute` = 0");
     omnibusAssert($countAfter <= $countBefore + 1, 'Dirty-checking: powtórne wywołanie z identyczną ceną nie może tworzyć duplikatów.');
 
     // 4b: Pełny cykl życia (Product update -> SpecificPrice add -> successive promo -> SpecificPrice delete)
@@ -183,7 +193,7 @@ try {
         // Sprzątanie po teście
         $testProd->delete();
         $db->execute("DELETE FROM `{$tableName}` WHERE `id_product` = {$testPid}");
-        $db->execute("DELETE FROM `{$tableName}` WHERE `id_product` = 53 AND `date_add` = '{$testDate}'");
+        $db->execute("DELETE FROM `{$tableName}` WHERE `id_product` = {$pid139} AND `date_add` = '{$testDate}'");
     }
 
     echo "[5/5] Test pokrycia baseline dla katalogu i stanu inicjalizacji (omnibusConfigured)...\n";

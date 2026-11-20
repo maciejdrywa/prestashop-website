@@ -244,8 +244,8 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
         $promoNet = round($promoGross / 1.23, 6);
 
         // Upewnij się, że produkt ma date_add odpowiednie do scenariusza
-        if ($sourceId === '5' || $pId === 21) {
-            // SCENARIUSZ 4: Produkt oferowany krócej niż 30 dni (wprowadzony 14 dni temu)
+        if ($sourceId === '5') {
+            // SCENARIUSZ 4: Produkt oferowany krócej niż 30 dni (wprowadzony 14 dni temu) - Zamek GAMA (source 5)
             $dateAdd14 = $now->modify('-14 days')->format('Y-m-d 08:00:00');
             $datePromo2 = $now->modify('-2 days')->format('Y-m-d 10:00:00');
 
@@ -268,8 +268,8 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
             continue;
         }
 
-        if ($sourceId === '12' || $pId === 22) {
-            // SCENARIUSZ 2: Wahania cen w oknie 30 dni (krótka przecena do 26.00 zł i powrót do 28.00 zł)
+        if ($sourceId === '12') {
+            // SCENARIUSZ 2: Wahania cen w oknie 30 dni (krótka przecena do 26.00 zł i powrót do 28.00 zł) - Zamek ZN-160 (source 12)
             $date40 = $now->modify('-40 days')->format('Y-m-d 09:00:00');
             $date20 = $now->modify('-20 days')->format('Y-m-d 09:00:00');
             $date15 = $now->modify('-15 days')->format('Y-m-d 09:00:00');
@@ -286,8 +286,8 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
             continue;
         }
 
-        if ($sourceId === '444' || $pId === 43) {
-            // SCENARIUSZ 3: Sukcesywne obniżki (69.99 -> 59.99 -> 49.99)
+        if ($sourceId === '541') {
+            // SCENARIUSZ 3: Sukcesywne obniżki (69.99 -> 59.99 -> 49.99) - KLAMKA LIZA (source 541)
             $date45 = $now->modify('-45 days')->format('Y-m-d 09:00:00');
             $date15 = $now->modify('-15 days')->format('Y-m-d 09:00:00');
             $date2 = $now->modify('-2 days')->format('Y-m-d 10:00:00');
@@ -301,8 +301,8 @@ function seedOmnibusDemoData(Context $context, array $catalog, bool $dryRun = fa
             continue;
         }
 
-        if ($sourceId === '944' || $pId === 32) {
-            // SCENARIUSZ 5: Wycieraczka z ramą (warianty kombinacji 89 i 90)
+        if ($sourceId === '944') {
+            // SCENARIUSZ 5: Wycieraczka z ramą (warianty kombinacji 89 i 90) - source 944
             $combos = Product::getProductAttributesIds($pId);
             $date40 = $now->modify('-40 days')->format('Y-m-d 09:00:00');
             $date1 = $now->modify('-1 day')->format('Y-m-d 10:00:00');
