@@ -98,6 +98,7 @@ try {
     initTest(in_array('configure-carriers.php', array_column($stages, 'script'), true), 'Project carrier configuration is missing');
     initTest(in_array('configure-mail.php', array_column($stages,'script'), true), 'Polish email configuration is missing');
     initTest(in_array('configure-payments.php', array_column($stages,'script'), true), 'Offline payment configuration is missing');
+    initTest(end($scripts) === 'configure-from-export.php', 'Repository configuration export must be the last stage');
     $calls = [];
     $runner = function (array $stage) use (&$calls): int {
         $calls[] = $stage['script'];

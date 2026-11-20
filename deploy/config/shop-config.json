@@ -1,0 +1,2147 @@
+{
+    "format": 1,
+    "prestashop": "8.2.8",
+    "languages": {
+        "pl": {
+            "active": true
+        }
+    },
+    "currencies": {
+        "PLN": {
+            "active": true,
+            "conversion_rate": "1.000000",
+            "precision": 2
+        }
+    },
+    "countries": {
+        "active": [
+            "FR",
+            "PL",
+            "US"
+        ],
+        "zones": {
+            "FR": "Europe",
+            "PL": "Europe",
+            "US": "North America"
+        }
+    },
+    "customer_groups": {
+        "@customer": {
+            "price_display_method": 0,
+            "show_prices": true
+        },
+        "@guest": {
+            "price_display_method": 0,
+            "show_prices": true
+        },
+        "@visitor": {
+            "price_display_method": 0,
+            "show_prices": true
+        }
+    },
+    "taxes": {
+        "EU VAT For Virtual Products": {
+            "active": true,
+            "rules": [
+                {
+                    "country": "AT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "20.000"
+                },
+                {
+                    "country": "BE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "21.000"
+                },
+                {
+                    "country": "BG",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "20.000"
+                },
+                {
+                    "country": "CY",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "19.000"
+                },
+                {
+                    "country": "CZ",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "21.000"
+                },
+                {
+                    "country": "DE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "19.000"
+                },
+                {
+                    "country": "DK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "25.000"
+                },
+                {
+                    "country": "EE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "20.000"
+                },
+                {
+                    "country": "ES",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "21.000"
+                },
+                {
+                    "country": "FI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "25.500"
+                },
+                {
+                    "country": "FR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "20.000"
+                },
+                {
+                    "country": "GB",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "20.000"
+                },
+                {
+                    "country": "GR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "24.000"
+                },
+                {
+                    "country": "HR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "25.000"
+                },
+                {
+                    "country": "HU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "27.000"
+                },
+                {
+                    "country": "IE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "IT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "22.000"
+                },
+                {
+                    "country": "LT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "21.000"
+                },
+                {
+                    "country": "LU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "17.000"
+                },
+                {
+                    "country": "LV",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "21.000"
+                },
+                {
+                    "country": "MC",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "20.000"
+                },
+                {
+                    "country": "MT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "18.000"
+                },
+                {
+                    "country": "NL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "21.000"
+                },
+                {
+                    "country": "PL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "PT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "RO",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "19.000"
+                },
+                {
+                    "country": "SE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "25.000"
+                },
+                {
+                    "country": "SI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "22.000"
+                },
+                {
+                    "country": "SK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                }
+            ]
+        },
+        "PL Exempted Rate (0%)": {
+            "active": true,
+            "rules": [
+                {
+                    "country": "AT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "BE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "BG",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "CY",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "CZ",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "DE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "DK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "EE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "ES",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "FI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "FR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "GB",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "GR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "HR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "HU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "IT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "LT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "LU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "LV",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "MC",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "MT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "NL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "PL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "PT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "RO",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "SE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "SI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                },
+                {
+                    "country": "SK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "0.000"
+                }
+            ]
+        },
+        "PL Reduced Rate (5%)": {
+            "active": true,
+            "rules": [
+                {
+                    "country": "AT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "BE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "BG",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "CY",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "CZ",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "DE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "DK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "EE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "ES",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "FI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "FR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "GB",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "GR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "HR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "HU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "IT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "LT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "LU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "LV",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "MC",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "MT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "NL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "PL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "PT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "RO",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "SE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "SI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                },
+                {
+                    "country": "SK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "5.000"
+                }
+            ]
+        },
+        "PL Reduced Rate (8%)": {
+            "active": true,
+            "rules": [
+                {
+                    "country": "AT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "BE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "BG",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "CY",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "CZ",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "DE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "DK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "EE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "ES",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "FI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "FR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "GB",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "GR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "HR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "HU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "IE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "IT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "LT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "LU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "LV",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "MC",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "MT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "NL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "PL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "PT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "RO",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "SE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "SI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                },
+                {
+                    "country": "SK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "8.000"
+                }
+            ]
+        },
+        "PL Standard Rate (23%)": {
+            "active": true,
+            "rules": [
+                {
+                    "country": "AT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "BE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "BG",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "CY",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "CZ",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "DE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "DK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "EE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "ES",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "FI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "FR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "GB",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "GR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "HR",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "HU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "IE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "IT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "LT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "LU",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "LV",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "MC",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "MT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "NL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "PL",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "PT",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "RO",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "SE",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "SI",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                },
+                {
+                    "country": "SK",
+                    "state": null,
+                    "zipcode_from": "0",
+                    "zipcode_to": "0",
+                    "behavior": 0,
+                    "description": "",
+                    "rate": "23.000"
+                }
+            ]
+        }
+    },
+    "modules": {
+        "blockreassurance": {
+            "enabled": true
+        },
+        "blockwishlist": {
+            "enabled": true
+        },
+        "contactform": {
+            "enabled": true
+        },
+        "dashactivity": {
+            "enabled": true
+        },
+        "dashgoals": {
+            "enabled": true
+        },
+        "dashproducts": {
+            "enabled": true
+        },
+        "dashtrends": {
+            "enabled": true
+        },
+        "graphnvd3": {
+            "enabled": true
+        },
+        "gridhtml": {
+            "enabled": true
+        },
+        "gsitemap": {
+            "enabled": true
+        },
+        "pagesnotfound": {
+            "enabled": true
+        },
+        "productcomments": {
+            "enabled": true
+        },
+        "psgdpr": {
+            "enabled": true
+        },
+        "ps_banner": {
+            "enabled": false
+        },
+        "ps_bestsellers": {
+            "enabled": true
+        },
+        "ps_brandlist": {
+            "enabled": true
+        },
+        "ps_cashondelivery": {
+            "enabled": true
+        },
+        "ps_categoryproducts": {
+            "enabled": true
+        },
+        "ps_categorytree": {
+            "enabled": true
+        },
+        "ps_checkpayment": {
+            "enabled": false
+        },
+        "ps_contactinfo": {
+            "enabled": true
+        },
+        "ps_crossselling": {
+            "enabled": true
+        },
+        "ps_currencyselector": {
+            "enabled": true
+        },
+        "ps_customeraccountlinks": {
+            "enabled": true
+        },
+        "ps_customersignin": {
+            "enabled": true
+        },
+        "ps_customtext": {
+            "enabled": false
+        },
+        "ps_dataprivacy": {
+            "enabled": true
+        },
+        "ps_distributionapiclient": {
+            "enabled": true
+        },
+        "ps_emailalerts": {
+            "enabled": true
+        },
+        "ps_emailsubscription": {
+            "enabled": true
+        },
+        "ps_facetedsearch": {
+            "enabled": true
+        },
+        "ps_faviconnotificationbo": {
+            "enabled": true
+        },
+        "ps_featuredproducts": {
+            "enabled": true
+        },
+        "ps_googleanalytics": {
+            "enabled": true
+        },
+        "ps_imageslider": {
+            "enabled": false
+        },
+        "ps_languageselector": {
+            "enabled": true
+        },
+        "ps_linklist": {
+            "enabled": true
+        },
+        "ps_mainmenu": {
+            "enabled": true
+        },
+        "ps_newproducts": {
+            "enabled": true
+        },
+        "ps_searchbar": {
+            "enabled": true
+        },
+        "ps_sharebuttons": {
+            "enabled": true
+        },
+        "ps_shoppingcart": {
+            "enabled": true
+        },
+        "ps_socialfollow": {
+            "enabled": true
+        },
+        "ps_specials": {
+            "enabled": true
+        },
+        "ps_supplierlist": {
+            "enabled": true
+        },
+        "ps_themecusto": {
+            "enabled": true
+        },
+        "ps_viewedproduct": {
+            "enabled": true
+        },
+        "ps_wirepayment": {
+            "enabled": true
+        },
+        "shopcategorypagination": {
+            "enabled": true
+        },
+        "shopcookieinfo": {
+            "enabled": true
+        },
+        "shopomnibus": {
+            "enabled": true
+        },
+        "statsbestcategories": {
+            "enabled": true
+        },
+        "statsbestcustomers": {
+            "enabled": true
+        },
+        "statsbestmanufacturers": {
+            "enabled": true
+        },
+        "statsbestproducts": {
+            "enabled": true
+        },
+        "statsbestsuppliers": {
+            "enabled": true
+        },
+        "statsbestvouchers": {
+            "enabled": true
+        },
+        "statscarrier": {
+            "enabled": true
+        },
+        "statscatalog": {
+            "enabled": true
+        },
+        "statscheckup": {
+            "enabled": true
+        },
+        "statsdata": {
+            "enabled": true
+        },
+        "statsforecast": {
+            "enabled": true
+        },
+        "statsnewsletter": {
+            "enabled": true
+        },
+        "statspersonalinfos": {
+            "enabled": true
+        },
+        "statsproduct": {
+            "enabled": true
+        },
+        "statsregistrations": {
+            "enabled": true
+        },
+        "statssales": {
+            "enabled": true
+        },
+        "statssearch": {
+            "enabled": true
+        },
+        "statsstock": {
+            "enabled": true
+        }
+    },
+    "theme": {
+        "name": "pandomu"
+    },
+    "cms": {
+        "dostawa": {
+            "init_key": "DELIVERY",
+            "category": "strona-glowna",
+            "active": true,
+            "indexation": false,
+            "position": 0,
+            "lang": {
+                "pl": {
+                    "meta_title": "Dostawa",
+                    "head_seo_title": "Dostawa",
+                    "meta_description": "Dostawa — sklep demonstracyjny Twoje Drzwi do Sukcesu.",
+                    "meta_keywords": "",
+                    "content": "<h2>Dostawa w wersji demonstracyjnej</h2>\n<p>Sklep Twoje Drzwi do Sukcesu umożliwia przećwiczenie wyboru sposobu dostawy. Nie wysyłamy rzeczywistych przesyłek i nie rezerwujemy usług przewoźników.</p>\n<h2>Udostępnione rodzaje dostawy</h2>\n<ul><li>Odbiór osobisty</li><li>Dostawa kurierska</li><li>InPost</li><li>DPD</li></ul>\n<p>Dostawa InPost kosztuje 15,00 zł brutto, a DPD 20,00 zł brutto. Dla zamówień o wartości powyżej 2000,00 zł brutto po rabatach dostawa jest bezpłatna u obu przewoźników. Próg nie obejmuje kosztu dostawy. Przy wartości dokładnie 2000,00 zł brutto dostawa pozostaje płatna.</p>\n<p>Wysyłka jest dostępna dla zamówień o łącznej wadze produktów do 50 kg włącznie. Powyżej 50 kg jedyną dostępną metodą jest bezpłatny odbiór osobisty w sklepie, również gdy wartość zamówienia przekracza próg darmowej dostawy. Odbiór osobisty można wybrać także dla lżejszych zamówień.</p>\n<p>Opcje dostępne dla konkretnego koszyka zobaczysz po podaniu adresu w kroku wyboru dostawy. Ich dostępność i koszt mogą zależeć od adresu, produktów, masy zamówienia i konfiguracji sklepu. Ostateczną kwotę sprawdź w podsumowaniu przed zatwierdzeniem zamówienia.</p>\n<h2>Dane i termin</h2>\n<p>W formularzu adresowym wpisuj fikcyjne dane przeznaczone do testów. Podawane w procesie zamówienia terminy mają charakter demonstracyjny. Nie oznaczają rzeczywistego terminu nadania ani doręczenia. Odbiór osobisty również jest scenariuszem demonstracyjnym i nie oznacza rzeczywistego wydania towaru.</p>\n<h2>Brak dostępnej metody</h2>\n<p>Jeśli dla wybranego koszyka nie ma sposobu dostawy, sprawdź kraj i poprawność fikcyjnego adresu. Problem zgłoś zespołowi przez <a href=\"{{shop_url}}kontakt\">formularz kontaktowy</a>. Zasady korzystania ze środowiska opisuje <a href=\"{{cms:regulamin}}\">Regulamin</a>.</p>\n",
+                    "link_rewrite": "dostawa"
+                }
+            }
+        },
+        "formy-platnosci": {
+            "init_key": "PAYMENTS",
+            "category": "strona-glowna",
+            "active": true,
+            "indexation": false,
+            "position": 4,
+            "lang": {
+                "pl": {
+                    "meta_title": "Formy płatności",
+                    "head_seo_title": "Formy płatności",
+                    "meta_description": "Formy płatności — sklep demonstracyjny Twoje Drzwi do Sukcesu.",
+                    "meta_keywords": "",
+                    "content": "<h2>Płatności testowe</h2>\n<p>W sklepie demonstracyjnym Twoje Drzwi do Sukcesu wybór płatności służy sprawdzeniu działania zamówienia. Nie wykonuj rzeczywistego przelewu, nie przesyłaj czeków i nie podawaj numeru karty ani kodu zabezpieczającego.</p>\n<h2>Udostępnione formy płatności</h2>\n<ul><li>Płatność przy odbiorze (testowa)</li><li>Przelew bankowy (testowy)</li></ul>\n<p>Metody dostępne dla danego zamówienia pojawią się w ostatnim kroku zakupów. Ich wybór może zależeć od adresu, waluty oraz sposobu dostawy. Brak wybranej metody na tej liście oznacza, że nie jest ona aktualnie udostępniona w tej konfiguracji.</p>\n<h2>Potwierdzenie zamówienia</h2>\n<p>Sprawdź łączną kwotę brutto i koszt dostawy, a następnie wybierz dostępną metodę testową. Potwierdzenie zapisuje zamówienie w sklepie; komunikat o oczekiwaniu na zapłatę jest elementem scenariusza demonstracyjnego. Nie należy na jego podstawie przekazywać pieniędzy.</p>\n<h2>Status płatności i faktura demonstracyjna</h2>\n<p>Po wyborze przelewu zamówienie otrzymuje status „Oczekiwanie na płatność przelewem”, a po wyborze pobrania „Oczekiwanie na płatność przy odbiorze”. W tych statusach faktura nie jest jeszcze dostępna. W scenariuszu testowym administrator potwierdza otrzymanie płatności, zmieniając status na „Płatność zaakceptowana”. Wtedy powstaje demonstracyjna faktura VAT, którą można pobrać po zalogowaniu z sekcji „Historia i szczegóły zamówień” w <a href=\"{{shop_url}}moje-konto\">koncie klienta</a>. Dokument ma fikcyjne dane wystawcy i nie służy do rozliczeń.</p>\n<h2>Pomoc</h2>\n<p>Wątpliwości dotyczące działania płatności zgłoś przez <a href=\"{{shop_url}}kontakt\">formularz kontaktowy</a>. Informacje uzupełniają strony <a href=\"{{cms:regulamin}}\">Regulamin</a>, <a href=\"{{cms:dostawa}}\">Dostawa</a> i <a href=\"{{cms:polityka-prywatnosci}}\">Polityka prywatności</a>.</p>\n",
+                    "link_rewrite": "formy-platnosci"
+                }
+            }
+        },
+        "o-sklepie": {
+            "init_key": "ABOUT",
+            "category": "strona-glowna",
+            "active": true,
+            "indexation": false,
+            "position": 3,
+            "lang": {
+                "pl": {
+                    "meta_title": "O sklepie",
+                    "head_seo_title": "O sklepie",
+                    "meta_description": "O sklepie — sklep demonstracyjny Twoje Drzwi do Sukcesu.",
+                    "meta_keywords": "",
+                    "content": "<h2>Twoje Drzwi do Sukcesu</h2>\n<p>To sklep demonstracyjny przygotowany w ramach przedmiotu Biznes elektroniczny na Politechnice Gdańskiej. Pozwala zapoznać się z ofertą okuć i akcesoriów oraz przećwiczyć zakupy internetowe. Nie prowadzimy rzeczywistej sprzedaży ani wysyłki towarów.</p>\n<h2>Co znajdziesz w katalogu?</h2>\n<p>Asortyment obejmuje klamki do drzwi, okucia drzwiowe, elementy bram i ogrodzeń, okucia budowlane, artykuły do domu i ogrodu oraz akcesoria meblowe. Karty produktów zawierają opisy, zdjęcia, ceny brutto i dostępne warianty.</p>\n<p>Dane katalogowe pochodzą ze sklepu PAN DOMU i służą celom dydaktycznym. Ten projekt nie jest oficjalnym sklepem ani kanałem obsługi firmy PAN DOMU. Dostępność w naszej wersji jest ustalana na potrzeby testów i nie określa stanów magazynowych sklepu źródłowego.</p>\n<h2>Jak korzystać ze sklepu?</h2>\n<p>Wybierz kategorię, porównaj produkty i dodaj wybrany wariant do koszyka. Podczas testowania konta i zamówienia używaj danych fikcyjnych. Zasady opisuje <a href=\"{{cms:regulamin}}\">Regulamin</a>, a informacje o danych znajdziesz w <a href=\"{{cms:polityka-prywatnosci}}\">Polityce prywatności</a>.</p>\n<h2>Kontakt z zespołem</h2>\n<p>Uwagi dotyczące działania projektu możesz przekazać przez <a href=\"{{shop_url}}kontakt\">formularz kontaktowy</a>. W środowisku demonstracyjnym wiadomości trafiają do testowej skrzynki zespołu.</p>\n",
+                    "link_rewrite": "o-sklepie"
+                }
+            }
+        },
+        "polityka-prywatnosci": {
+            "init_key": "PRIVACY",
+            "category": "strona-glowna",
+            "active": true,
+            "indexation": false,
+            "position": 1,
+            "lang": {
+                "pl": {
+                    "meta_title": "Polityka prywatności",
+                    "head_seo_title": "Polityka prywatności",
+                    "meta_description": "Polityka prywatności — sklep demonstracyjny Twoje Drzwi do Sukcesu.",
+                    "meta_keywords": "",
+                    "content": "<h2>Kto obsługuje środowisko?</h2>\n<p>Sklep demonstracyjny Twoje Drzwi do Sukcesu jest obsługiwany przez zespół projektu realizowanego na Politechnice Gdańskiej w ramach przedmiotu Biznes elektroniczny. Nie jest systemem sprzedażowym firmy PAN DOMU. Z zespołem skontaktujesz się przez <a href=\"{{shop_url}}kontakt\">formularz kontaktowy</a>.</p>\n<h2>Jakie dane zapisuje sklep?</h2>\n<p>Przeglądarka przekazuje informacje potrzebne do wyświetlenia strony i utrzymania sesji. Po wypełnieniu formularzy sklep może zapisać imię, nazwisko, adres e-mail, hasło w postaci chronionej przez mechanizmy platformy, adres dostawy, zawartość koszyka, zamówienia oraz wiadomości kontaktowe. Serwer może także zapisywać techniczne dzienniki żądań, w tym adres IP i czas połączenia.</p>\n<p>Dane służą działaniu funkcji konta, koszyka i zamówień oraz weryfikacji projektu. Do prób używaj wyłącznie danych fikcyjnych i hasła, którego nie stosujesz w innych usługach. Nie podawaj prawdziwych danych płatniczych.</p>\n<h2>Dostęp i przechowywanie</h2>\n<p>Dostęp do danych w środowisku mają osoby obsługujące i oceniające projekt w ramach jego weryfikacji. Wiadomości są przechwytywane w testowej skrzynce pocztowej. Testowe wybory dostawy i płatności nie powodują przekazania zamówienia rzeczywistemu przewoźnikowi ani realizacji płatności przez zespół.</p>\n<p>Dane pozostają w danej instancji do usunięcia przez obsługę lub odtworzenia środowiska. Ponowne utworzenie pustej bazy usuwa poprzednie konta i zamówienia. Nie traktuj sklepu jako miejsca przechowywania ważnych informacji.</p>\n<h2>Twoje zgłoszenia dotyczące danych</h2>\n<p>Dane konta można sprawdzić w sekcji <a href=\"{{shop_url}}moje-konto\">Twoje konto</a>. Jeżeli przez pomyłkę wpiszesz rzeczywiste dane, zgłoś to zespołowi przez formularz kontaktowy. W zakresie wynikającym z obowiązujących przepisów możesz wystąpić między innymi o dostęp do danych, sprostowanie, usunięcie lub ograniczenie przetwarzania. Zakres uprawnień zależy od okoliczności. Informacje o prawach osób i składaniu skarg publikuje <a href=\"https://uodo.gov.pl/pl/p/dla-obywatela\">Urząd Ochrony Danych Osobowych</a>.</p>\n<h2>Pliki cookies</h2>\n<p>Sklep wykorzystuje pliki cookies i dane sesji do utrzymania logowania, zawartości koszyka oraz ustawień użytkownika. Zapamiętujemy również zamknięcie komunikatu o cookies na 180 dni. Cookies możesz usuwać i blokować w przeglądarce; zablokowanie plików potrzebnych do działania sesji może uniemożliwić logowanie lub zakupy testowe. Treść tej strony opisuje demonstracyjną konfigurację projektu.</p>\n",
+                    "link_rewrite": "polityka-prywatnosci"
+                }
+            }
+        },
+        "regulamin": {
+            "init_key": "TERMS",
+            "category": "strona-glowna",
+            "active": true,
+            "indexation": false,
+            "position": 2,
+            "lang": {
+                "pl": {
+                    "meta_title": "Regulamin",
+                    "head_seo_title": "Regulamin",
+                    "meta_description": "Regulamin — sklep demonstracyjny Twoje Drzwi do Sukcesu.",
+                    "meta_keywords": "",
+                    "content": "<h2>1. Charakter sklepu</h2>\n<p>Twoje Drzwi do Sukcesu jest demonstracyjnym sklepem projektu uczelnianego. Służy prezentacji katalogu oraz testowaniu konta, koszyka i składania zamówień. Nie prowadzi rzeczywistej sprzedaży; zamówienia testowe nie powodują wysyłki towarów ani pobrania pieniędzy przez zespół projektu.</p>\n<h2>2. Korzystanie z katalogu i konta</h2>\n<p>Produkty można przeglądać bez konta. Konto umożliwia przećwiczenie obsługi historii zamówień i adresów. Podawaj wyłącznie dane fikcyjne oraz hasło nieużywane w innych usługach. Nie zamieszczaj cudzych danych, treści bezprawnych ani informacji poufnych.</p>\n<h2>3. Produkty, ceny i dostępność</h2>\n<p>Ceny prezentujemy w złotych polskich jako ceny brutto, z uwzględnieniem podatku VAT. Wybór wariantu może zmienić cenę produktu. Przed potwierdzeniem zamówienia sprawdź wariant, ilość, koszt dostawy i łączną kwotę w podsumowaniu. Stany magazynowe są danymi testowymi, niezależnymi od rzeczywistego sprzedawcy.</p>\n<h2>4. Zamówienia testowe</h2>\n<p>Dodaj dostępny produkt do koszyka, podaj fikcyjne dane i wybierz jedną z udostępnionych metod dostawy i płatności. Potwierdzenie zapisuje zamówienie wyłącznie na potrzeby sprawdzenia działania sklepu. Nie wykonuj prawdziwych przelewów i nie podawaj danych karty płatniczej. Wiadomości są obsługiwane w środowisku testowym.</p>\n<h2>5. Dostawa i płatności</h2>\n<p>Szczegóły opisują strony <a href=\"{{cms:dostawa}}\">Dostawa</a> oraz <a href=\"{{cms:formy-platnosci}}\">Formy płatności</a>. Żaden wybór w wersji demonstracyjnej nie oznacza zamówienia rzeczywistej usługi przewozowej.</p>\n<h2>6. Prywatność i zgłaszanie problemów</h2>\n<p>Informacje o danych i plikach cookies zawiera <a href=\"{{cms:polityka-prywatnosci}}\">Polityka prywatności</a>. Błąd lub potrzebę usunięcia danych zgłoś zespołowi przez <a href=\"{{shop_url}}kontakt\">formularz kontaktowy</a>. Środowisko może być okresowo odtwarzane, dlatego konta, koszyki i zamówienia testowe mogą zostać usunięte.</p>\n",
+                    "link_rewrite": "regulamin"
+                }
+            }
+        }
+    },
+    "carriers": {
+        "EXPRESS": {
+            "name": "DPD",
+            "active": true,
+            "is_free": false,
+            "shipping_handling": false,
+            "shipping_method": 1,
+            "range_behavior": true,
+            "max_weight": "50.000000",
+            "max_width": 0,
+            "max_height": 0,
+            "max_depth": 0,
+            "grade": 9,
+            "position": 5,
+            "url": "",
+            "delay": {
+                "pl": "Dostawa w ciągu 1–2 dni roboczych"
+            },
+            "tax_rules_group": "PL Standard Rate (23%)",
+            "zones": [
+                "Europe"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "weight_ranges": [
+                {
+                    "from": "0.000000",
+                    "to": "50.000001",
+                    "prices": {
+                        "Europe": "16.260163"
+                    }
+                }
+            ],
+            "price_ranges": []
+        },
+        "INSTALLER_DEFAULT": {
+            "name": "Dostawa kurierska",
+            "active": true,
+            "is_free": false,
+            "shipping_handling": true,
+            "shipping_method": 1,
+            "range_behavior": false,
+            "max_weight": "50.000000",
+            "max_width": 0,
+            "max_height": 0,
+            "max_depth": 0,
+            "grade": 0,
+            "position": 1,
+            "url": "",
+            "delay": {
+                "pl": "Dostawa następnego dnia!"
+            },
+            "tax_rules_group": "PL Standard Rate (23%)",
+            "zones": [
+                "Europe",
+                "North America"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "weight_ranges": [
+                {
+                    "from": "0.000000",
+                    "to": "10000.000000",
+                    "prices": {
+                        "Europe": "5.000000",
+                        "North America": "5.000000"
+                    }
+                }
+            ],
+            "price_ranges": [
+                {
+                    "from": "0.000000",
+                    "to": "10000.000000",
+                    "prices": {
+                        "Europe": "5.000000",
+                        "North America": "5.000000"
+                    }
+                }
+            ]
+        },
+        "INSTALLER_ECONOMY": {
+            "name": "Dostawa ekonomiczna",
+            "active": false,
+            "is_free": false,
+            "shipping_handling": true,
+            "shipping_method": 2,
+            "range_behavior": false,
+            "max_weight": "50.000000",
+            "max_width": 0,
+            "max_height": 0,
+            "max_depth": 0,
+            "grade": 0,
+            "position": 2,
+            "url": "",
+            "delay": {
+                "pl": "Kup więcej, aby zapłacić mniej!"
+            },
+            "tax_rules_group": "PL Standard Rate (23%)",
+            "zones": [
+                "Europe",
+                "North America"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "weight_ranges": [],
+            "price_ranges": [
+                {
+                    "from": "0.000000",
+                    "to": "50.000000",
+                    "prices": {
+                        "Europe": "3.000000",
+                        "North America": "4.000000"
+                    }
+                },
+                {
+                    "from": "50.000000",
+                    "to": "100.000000",
+                    "prices": {
+                        "Europe": "1.000000",
+                        "North America": "2.000000"
+                    }
+                },
+                {
+                    "from": "100.000000",
+                    "to": "200.000000",
+                    "prices": {
+                        "Europe": "0.000000",
+                        "North America": "0.000000"
+                    }
+                }
+            ]
+        },
+        "INSTALLER_LIGHT": {
+            "name": "Dostawa lekkich przesyłek",
+            "active": false,
+            "is_free": false,
+            "shipping_handling": true,
+            "shipping_method": 1,
+            "range_behavior": false,
+            "max_weight": "50.000000",
+            "max_width": 0,
+            "max_height": 0,
+            "max_depth": 0,
+            "grade": 0,
+            "position": 3,
+            "url": "",
+            "delay": {
+                "pl": "Im lżej, tym taniej!"
+            },
+            "tax_rules_group": "PL Standard Rate (23%)",
+            "zones": [
+                "Europe",
+                "North America"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "weight_ranges": [
+                {
+                    "from": "0.000000",
+                    "to": "1.000000",
+                    "prices": {
+                        "Europe": "0.000000",
+                        "North America": "0.000000"
+                    }
+                },
+                {
+                    "from": "1.000000",
+                    "to": "3.000000",
+                    "prices": {
+                        "Europe": "2.000000",
+                        "North America": "3.000000"
+                    }
+                },
+                {
+                    "from": "3.000000",
+                    "to": "10000.000000",
+                    "prices": {
+                        "Europe": "5.000000",
+                        "North America": "6.000000"
+                    }
+                }
+            ],
+            "price_ranges": []
+        },
+        "INSTALLER_PICKUP": {
+            "name": "Odbiór osobisty",
+            "active": true,
+            "is_free": true,
+            "shipping_handling": false,
+            "shipping_method": 1,
+            "range_behavior": false,
+            "max_weight": "0.000000",
+            "max_width": 0,
+            "max_height": 0,
+            "max_depth": 0,
+            "grade": 0,
+            "position": 0,
+            "url": "",
+            "delay": {
+                "pl": "Odbiór w sklepie"
+            },
+            "tax_rules_group": "PL Standard Rate (23%)",
+            "zones": [
+                "Europe"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "weight_ranges": [],
+            "price_ranges": []
+        },
+        "STANDARD": {
+            "name": "InPost",
+            "active": true,
+            "is_free": false,
+            "shipping_handling": false,
+            "shipping_method": 1,
+            "range_behavior": true,
+            "max_weight": "50.000000",
+            "max_width": 0,
+            "max_height": 0,
+            "max_depth": 0,
+            "grade": 5,
+            "position": 4,
+            "url": "",
+            "delay": {
+                "pl": "Dostawa w ciągu 2–3 dni roboczych"
+            },
+            "tax_rules_group": "PL Standard Rate (23%)",
+            "zones": [
+                "Europe"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "weight_ranges": [
+                {
+                    "from": "0.000000",
+                    "to": "50.000001",
+                    "prices": {
+                        "Europe": "12.195122"
+                    }
+                }
+            ],
+            "price_ranges": []
+        }
+    },
+    "payments": {
+        "ps_cashondelivery": {
+            "countries": [
+                "PL"
+            ],
+            "currencies": [
+                "PLN"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "carriers": [
+                "EXPRESS",
+                "INSTALLER_DEFAULT",
+                "INSTALLER_ECONOMY",
+                "INSTALLER_LIGHT",
+                "INSTALLER_PICKUP",
+                "STANDARD"
+            ]
+        },
+        "ps_checkpayment": {
+            "countries": [
+                "PL"
+            ],
+            "currencies": [
+                "PLN"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "carriers": [
+                "INSTALLER_DEFAULT",
+                "INSTALLER_ECONOMY",
+                "INSTALLER_LIGHT",
+                "INSTALLER_PICKUP"
+            ]
+        },
+        "ps_wirepayment": {
+            "countries": [
+                "PL"
+            ],
+            "currencies": [
+                "PLN"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "carriers": [
+                "EXPRESS",
+                "INSTALLER_DEFAULT",
+                "INSTALLER_ECONOMY",
+                "INSTALLER_LIGHT",
+                "INSTALLER_PICKUP",
+                "STANDARD"
+            ]
+        }
+    },
+    "configuration": {
+        "BANK_WIRE_ADDRESS": "Środowisko demonstracyjne — brak rzeczywistego rachunku bankowego.",
+        "BANK_WIRE_CUSTOM_TEXT": {
+            "pl": "Zamówienie testowe. Nie wykonuj rzeczywistego przelewu; status płatności zmienia administrator podczas weryfikacji projektu."
+        },
+        "BANK_WIRE_DETAILS": "Płatność testowa — nie wykonuj rzeczywistego przelewu.",
+        "BANK_WIRE_OWNER": "Twoje Drzwi do Sukcesu — sklep demonstracyjny",
+        "BANK_WIRE_PAYMENT_INVITE": "1",
+        "BLOCK_CATEG_DHTML": "1",
+        "BLOCK_CATEG_MAX_DEPTH": "4",
+        "BLOCK_CATEG_NBR_COLUMN_FOOTER": "1",
+        "HOME_FEATURED_NBR": "8",
+        "HOME_FEATURED_RANDOMIZE": "",
+        "PRODUCT_COMMENTS_ALLOW_GUESTS": "0",
+        "PRODUCT_COMMENTS_ANONYMISATION": "0",
+        "PRODUCT_COMMENTS_COMMENTS_PER_PAGE": "5",
+        "PRODUCT_COMMENTS_MINIMAL_TIME": "30",
+        "PRODUCT_COMMENTS_MODERATE": "1",
+        "PRODUCT_COMMENTS_USEFULNESS": "1",
+        "PSGDPR_CREATION_FORM": {
+            "pl": "Akceptuję ogólne warunki użytkowania i politykę prywatności"
+        },
+        "PSGDPR_CREATION_FORM_SWITCH": "1",
+        "PSGDPR_CUSTOMER_FORM": {
+            "pl": "Akceptuję ogólne warunki użytkowania i politykę prywatności"
+        },
+        "PSGDPR_CUSTOMER_FORM_SWITCH": "1",
+        "PSR_HOOK_CHECKOUT": "1",
+        "PSR_HOOK_FOOTER": "0",
+        "PSR_HOOK_HEADER": "0",
+        "PSR_HOOK_PRODUCT": "1",
+        "PSR_ICON_COLOR": "#F19D76",
+        "PSR_TEXT_COLOR": "#000000",
+        "PS_ATTRIBUTE_ANCHOR_SEPARATOR": "-",
+        "PS_ATTRIBUTE_CATEGORY_DISPLAY": "1",
+        "PS_BASE_DISTANCE_UNIT": "m",
+        "PS_CANONICAL_REDIRECT": "1",
+        "PS_CARRIER_DEFAULT": "STANDARD",
+        "PS_CARRIER_DEFAULT_ORDER": "0",
+        "PS_CARRIER_DEFAULT_SORT": "0",
+        "PS_CATALOG_MODE": "0",
+        "PS_CATALOG_MODE_WITH_PRICES": "0",
+        "PS_CONDITIONS": "1",
+        "PS_CONDITIONS_CMS_ID": "regulamin",
+        "PS_COOKIE_LIFETIME_BO": "480",
+        "PS_COOKIE_LIFETIME_FO": "480",
+        "PS_COOKIE_SAMESITE": "Lax",
+        "PS_COUNTRY_DEFAULT": "PL",
+        "PS_CURRENCY_DEFAULT": "PLN",
+        "PS_CUSTOMER_BIRTHDATE": "1",
+        "PS_CUSTOMER_CREATION_EMAIL": "1",
+        "PS_CUSTOMER_OPTIN": "1",
+        "PS_DELIVERY_PREFIX": {
+            "pl": "#LP"
+        },
+        "PS_DETECT_COUNTRY": "1",
+        "PS_DETECT_LANG": "1",
+        "PS_DIMENSION_UNIT": "cm",
+        "PS_DISPLAY_BEST_SELLERS": "1",
+        "PS_DISPLAY_MANUFACTURERS": "1",
+        "PS_DISPLAY_PRODUCT_WEIGHT": "0",
+        "PS_DISPLAY_QTIES": "1",
+        "PS_DISPLAY_SUPPLIERS": "0",
+        "PS_DISP_UNAVAILABLE_ATTR": "1",
+        "PS_DISTANCE_UNIT": "km",
+        "PS_GIFT_WRAPPING": "0",
+        "PS_GIFT_WRAPPING_PRICE": "0",
+        "PS_GUEST_CHECKOUT_ENABLED": "1",
+        "PS_INVOICE": "1",
+        "PS_INVOICE_LEGAL_FREE_TEXT": {
+            "pl": "Dokument demonstracyjny projektu edukacyjnego. Dane wystawcy są fikcyjne. Nie służy do rozliczeń."
+        },
+        "PS_INVOICE_MODEL": "invoice",
+        "PS_INVOICE_PREFIX": {
+            "pl": "#FV/DEMO/"
+        },
+        "PS_LABEL_IN_STOCK_PRODUCTS": {
+            "pl": ""
+        },
+        "PS_LABEL_OOS_PRODUCTS_BOA": {
+            "pl": ""
+        },
+        "PS_LABEL_OOS_PRODUCTS_BOD": {
+            "pl": "Obecnie brak na stanie"
+        },
+        "PS_LANG_DEFAULT": "pl",
+        "PS_LAST_QTIES": "3",
+        "PS_LAYERED_FILTER_CATEGORY_DEPTH": "1",
+        "PS_LAYERED_FILTER_PRICE_ROUNDING": "1",
+        "PS_LAYERED_FILTER_PRICE_USETAX": "1",
+        "PS_LAYERED_FILTER_SHOW_OUT_OF_STOCK_LAST": "0",
+        "PS_LAYERED_FULL_TREE": "1",
+        "PS_LAYERED_SHOW_QTIES": "1",
+        "PS_LOCALE_COUNTRY": "pl",
+        "PS_LOCALE_LANGUAGE": "pl",
+        "PS_LOG_EMAILS": "1",
+        "PS_MAIL_COLOR": "#db3484",
+        "PS_MAIL_METHOD": "2",
+        "PS_MAIL_SERVER": "mailpit",
+        "PS_MAIL_SMTP_ENCRYPTION": "off",
+        "PS_MAIL_SMTP_PORT": "1025",
+        "PS_MAIL_SUBJECT_PREFIX": "1",
+        "PS_MAIL_THEME": "modern",
+        "PS_MAIL_TYPE": "3",
+        "PS_NB_DAYS_NEW_PRODUCT": "20",
+        "PS_ORDER_OUT_OF_STOCK": "0",
+        "PS_ORDER_RECALCULATE_SHIPPING": "1",
+        "PS_ORDER_RETURN": "0",
+        "PS_ORDER_RETURN_NB_DAYS": "14",
+        "PS_PRICE_ROUND_MODE": "2",
+        "PS_PRODUCTS_ORDER_BY": "4",
+        "PS_PRODUCTS_ORDER_WAY": "0",
+        "PS_PRODUCTS_PER_PAGE": "12",
+        "PS_PRODUCT_SHORT_DESC_LIMIT": "800",
+        "PS_PRODUCT_WEIGHT_PRECISION": "2",
+        "PS_PURCHASE_MINIMUM": "0",
+        "PS_RECYCLABLE_PACK": "0",
+        "PS_RETURN_PREFIX": {
+            "pl": "#ZW"
+        },
+        "PS_ROUND_TYPE": "2",
+        "PS_SEARCH_AJAX": "1",
+        "PS_SEARCH_FUZZY": "1",
+        "PS_SEARCH_INDEXATION": "1",
+        "PS_SEARCH_MINWORDLEN": "3",
+        "PS_SEARCH_WEIGHT_ATTRIBUTE": "2",
+        "PS_SEARCH_WEIGHT_CNAME": "3",
+        "PS_SEARCH_WEIGHT_DESC": "1",
+        "PS_SEARCH_WEIGHT_FEATURE": "2",
+        "PS_SEARCH_WEIGHT_MNAME": "3",
+        "PS_SEARCH_WEIGHT_PNAME": "6",
+        "PS_SEARCH_WEIGHT_REF": "10",
+        "PS_SEARCH_WEIGHT_SHORTDESC": "1",
+        "PS_SEARCH_WEIGHT_TAG": "4",
+        "PS_SHIPPING_FREE_PRICE": "2000.01",
+        "PS_SHIPPING_FREE_WEIGHT": "0",
+        "PS_SHIPPING_HANDLING": "2",
+        "PS_SHIPPING_METHOD": "1",
+        "PS_SHOP_ACTIVITY": "0",
+        "PS_SHOP_ADDR1": "Adres demonstracyjny 1",
+        "PS_SHOP_ADDR2": "Sklep demonstracyjny",
+        "PS_SHOP_CITY": "Miasto testowe",
+        "PS_SHOP_CODE": "00-000",
+        "PS_SHOP_COUNTRY_ID": "PL",
+        "PS_SHOP_DETAILS": "Projekt edukacyjny - fikcyjne dane wystawcy, brak rzeczywistej sprzedaży.",
+        "PS_SHOP_NAME": "Twoje Drzwi do Sukcesu",
+        "PS_SHOW_LABEL_OOS_LISTING_PAGES": "1",
+        "PS_STOCK_MANAGEMENT": "1",
+        "PS_TAX": "1",
+        "PS_TAX_ADDRESS_TYPE": "id_address_delivery",
+        "PS_TAX_DISPLAY": "0",
+        "PS_TIMEZONE": "Europe/Paris",
+        "PS_USE_ECOTAX": "0",
+        "PS_VOLUME_UNIT": "cl",
+        "PS_WEIGHT_UNIT": "kg",
+        "SHOP_COOKIE_INFO_CMS_ID": "polityka-prywatnosci",
+        "blockwishlist_CreateButtonLabel": {
+            "pl": "Utwórz nową listę"
+        },
+        "blockwishlist_WishlistDefaultTitle": {
+            "pl": "Moja lista życzeń"
+        },
+        "blockwishlist_WishlistPageName": {
+            "pl": "Moje listy życzeń"
+        }
+    }
+}

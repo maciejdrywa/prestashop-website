@@ -10,7 +10,7 @@
 | [Import zdjęć D2.4](IMAGE_IMPORT.md) | Cache, normalizacja, galerie API i wznowienie uploadu |
 | [Jedna komenda D2.5](CATALOG_IMPORT.md) | Bootstrap API, wznowienie, odbiór, aktywacja i benchmark |
 | [Import produktów D2.3](PRODUCT_IMPORT.md) | Produkty, cechy, kombinacje, magazyn i wyniki testów API |
-| [Konfiguracja](CONFIGURATION.md) | Sprzedaż, statusy, faktury, poczta i treści |
+| [Konfiguracja](CONFIGURATION.md) | Sprzedaż, statusy, faktury, poczta, treści oraz eksport i odtwarzanie konfiguracji |
 | [Rozwiązywanie problemów](TROUBLESHOOTING.md) | Diagnoza uruchomienia i importu |
 | [Audyt](AUDIT.md) | Punkt wyjścia, usunięcia i weryfikacja zmian |
 | [Dziennik AI](AI_LOG.md) | Dotychczasowa historia użycia AI |

@@ -184,6 +184,8 @@ function initializationStages(): array
         ['name' => 'Promocje cenowe produktów', 'script' => 'configure-promotions.php', 'args' => []],
         ['name' => 'Dyrektywa Omnibus (historia cen i najniższa cena)', 'script' => 'configure-omnibus.php', 'args' => []],
         ['name' => 'Treści motywu i filtry katalogu', 'script' => 'configure-theme-content.php', 'args' => []],
+        // Eksport z repozytorium jest ostatni, bo nadpisuje wartości zapisane przez wcześniejsze konfiguratory.
+        ['name' => 'Konfiguracja z eksportu w repozytorium', 'script' => 'configure-from-export.php', 'args' => []],
     ];
 }
 

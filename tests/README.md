@@ -127,6 +127,8 @@ Kontrolę parsowania kwot, odrzucania niezgodnej sumy, oczekiwania na dane potwi
 python -m pytest -c pytest-e2e.ini tests/unit
 ```
 
+`tests/unit/test_config_export.py` sprawdza plik `deploy/config/shop-config.json` bez uruchamiania sklepu. Kontroluje komplet sekcji, wymagane ustawienia, odwołania kluczami naturalnymi i brak sekretów oraz danych osobowych.
+
 ## Dane testowe i analityka
 
 Klienci testowi mają e-mail `e2e-<uuid>@example.com` oraz imię i nazwisko „Jan Testowy”. Zamówienia testowe znajdziesz w panelu w **Zamówienia → Zamówienia**, filtrując kolumnę klienta po „Testowy” albo e-mail po `e2e-`.
@@ -201,6 +203,8 @@ Po inicjalizacji osobnej instancji uruchom wybrany plik `deploy/init/tests/*-tes
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/source-test.php
 ```
+
+`config-export-test.php` sprawdza eksport konfiguracji. Zmienia ustawienia, przewoźników, płatności, CMS, podatki, kraje i moduł, odtwarza je z eksportu i potwierdza idempotencję. Na końcu przywraca stan wyjściowy.
 
 Testy zmieniające dane uruchamiaj na osobnych wolumenach. Szczegóły inicjalizacji opisuje [instrukcja](../deploy/init/README.md), a ograniczenia weryfikacji — [audyt](../docs/AUDIT.md).
 

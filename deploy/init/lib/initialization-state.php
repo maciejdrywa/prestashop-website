@@ -22,6 +22,7 @@ require_once __DIR__ . '/theme.php';
 require_once __DIR__ . '/theme-content.php';
 require_once __DIR__ . '/promotions.php';
 require_once __DIR__ . '/omnibus.php';
+require_once __DIR__ . '/config-export.php';
 
 /**
  * Odczytuje dziennik zgodny z instalacją i odciskami wejścia.
@@ -175,8 +176,40 @@ function configurationPresent(string $script, \Context $context): bool
             return promotionsConfigured($context);
         case 'configure-omnibus.php':
             return omnibusConfigured($context);
+        case 'configure-from-export.php':
+            // Plik jest stosowany ponownie tylko po zmianie w repozytorium. Późniejsze edycje w panelu pozostają.
+            return configExportApplied($context);
     }
     throw new RuntimeException('Nieznany etap konfiguracji ' . $script);
+}
+
+/**
+ * Sprawdza warunki gotowości wszystkich konfiguratorów poza eksportem konfiguracji.
+ *
+ * Wywoływana przed zatwierdzeniem odtworzenia z pliku i przed zapisem eksportu. Plik, który np. włącza
+ * moduł demonstracyjny albo czyści dane wystawcy, unieważniłby warunki wcześniejszych etapów i zatrzymał
+ * każde kolejne --resume. Taki plik jest odrzucany.
+ *
+ * @param \Context $context Kontekst PrestaShop wyznaczający sklep i zakres operacji.
+ * @return void
+ * @throws \RuntimeException Z listą etapów, których warunki nie są spełnione.
+ */
+function assertInitializationConfigurationReady(\Context $context): void
+{
+    \Configuration::resetStaticCache();
+    \Module::resetStaticCache();
+    \Cache::clean('*');
+    $failed = [];
+    foreach (initializationStages() as $stage) {
+        if (str_starts_with($stage['script'], 'configure-') && $stage['script'] !== 'configure-from-export.php'
+            && !configurationPresent($stage['script'], $context)) {
+            $failed[] = $stage['script'];
+        }
+    }
+    if ($failed !== []) {
+        throw new RuntimeException('Konfiguracja jest sprzeczna z warunkami etapów inicjalizacji: ' . implode(', ', $failed)
+            . '. Taki stan zatrzymałby init-shop.php --resume. Sprawdź ustawienia tych obszarów (np. moduły demonstracyjne, dane wystawcy, SMTP).');
+    }
 }
 
 /**
@@ -405,10 +438,11 @@ function resumeInitialization(\Context $context, array $summary): void
                 \Media::clearCache();
                 \Tools::clearSmartyCache();
             }
-            // Nowy obraz może zmienić pliki motywu także po zakończeniu etapu.
+            // Nowy obraz może zmienić pliki motywu, a repozytorium plik eksportu, także po zakończeniu etapu.
             $themeDeployment = $script === 'configure-theme.php';
+            $repeatable = $themeDeployment || $script === 'configure-from-export.php';
             if ($themeDeployment || !configurationPresent($script, $context)) {
-                if (!$themeDeployment && isset($state['stages'][$script])) {
+                if (!$repeatable && isset($state['stages'][$script])) {
                     throw new RuntimeException('Brakuje zapisanych powiązań etapu ' . $script . '. Sprawdź konfigurację ręcznie.');
                 }
                 if (runInitializationScript($stage) !== 0) {
