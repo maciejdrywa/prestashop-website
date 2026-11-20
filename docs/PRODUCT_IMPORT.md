@@ -71,10 +71,12 @@ Wyniki z 19 listopada 2026 r., PrestaShop 8.2.8, projekt Compose `prestashop-d21
 - Kontrola natywnym `check-products.php --all --with-combinations` potwierdziła pola, tłumaczenia, kategorie, brutto i wszystkie kombinacje. Osobne porównanie tylko do odczytu potwierdziło magazyn względem `stockPlans()` PHP, zachowując nieaktywność produktów.
 - Pierwszy pełny przebieg: około 617 s, w tym tworzenie 571 produktów po wcześniejszej próbce trzech produktów. Ostatnia pełna synchronizacja trwała 41,911 s: 574 produkty i 1269 kombinacji pominięto, bez tworzenia, aktualizacji, resetowania magazynu i zmiany wariantów domyślnych.
 
-Szczegółowe komendy testów są w [instrukcji testów](../tests/README.md). Dane wykonania pozostają lokalnie w ignorowanym `logs/d23-test/`. Pomiar nie stanowi benchmarku D2.5: nie obejmuje 1000 produktów ani zdjęć.
+Szczegółowe komendy testów są w [instrukcji testów](TESTING.md). Dane wykonania pozostają lokalnie w ignorowanym `logs/d23-test/`. Pomiar nie stanowi benchmarku D2.5: nie obejmuje 1000 produktów ani zdjęć.
 
 Weryfikacja kodu: Ruff bez błędów, 159 testów offline i 11 subtestów; 9 testów integracyjnych przez HTTP oraz te same 9 przez HTTPS z weryfikacją certyfikatu; PHP lint eksportera bez błędów. Kontrola obejmowała również publiczny CLI i brak plików stanu/raportu po `--dry-run`.
 
 Ręczny odbiór panelu pozostaje do wykonania: produkt prosty `pandomu-539`, produkt wariantowy `pandomu-5`, produkty z wagą `demo` oraz zerowym stanem wskazane w raporcie. Sprawdź opisy, ceny i ilości kombinacji. Zdjęcia, aktywacja i prezentacja kompletnych galerii na stronie sklepu pozostają poza D2.3.
 
 Wspólną komendę przygotowania, importu API i finalizacji opisuje [D2.5](CATALOG_IMPORT.md).
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

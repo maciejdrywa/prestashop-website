@@ -91,3 +91,5 @@ Kontrole kodu: 196 testów offline i 11 subtestów przeszło; 14 testów integra
 Wspólną komendę przygotowania, importu API i finalizacji opisuje [D2.5](CATALOG_IMPORT.md).
 
 Pobieranie publicznych zdjęć i wydania używa niezależnego zestawu zaufanych CA, dzięki czemu prywatny `REQUESTS_CA_BUNDLE` dla lokalnego API nie blokuje źródła ani GitHub Releases.
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

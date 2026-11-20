@@ -1,20 +1,37 @@
 # Dokumentacja projektu
 
+Zacznij od [głównego README](../README.md): opisu projektu, pierwszego uruchomienia i podstawowych poleceń testów. Wszystkie polecenia w instrukcjach wykonuj z katalogu głównego repozytorium, chyba że wskazano inaczej.
+
+## Instrukcje techniczne
+
 | Dokument | Zakres |
 |---|---|
-| [Architektura](ARCHITECTURE.md) | Komponenty, zależności i przepływ danych |
-| [Wdrożenie](DEPLOYMENT.md) | Wymagania, `.env`, Compose, HTTPS i platformy |
-| [Inicjalizacja](INITIALIZATION.md) | Etapy, importery, dziennik i wznowienie |
-| [Scraper](SCRAPER.md) | CLI, format danych, obrazy i testy Pythona |
-| [Webservice API](WEBSERVICE.md) | Uprawnienia Least Privilege, zmienne środowiskowe i klient Python |
-| [Import zdjęć D2.4](IMAGE_IMPORT.md) | Cache, normalizacja, galerie API i wznowienie uploadu |
-| [Jedna komenda D2.5](CATALOG_IMPORT.md) | Bootstrap API, wznowienie, odbiór, aktywacja i benchmark |
-| [Import produktów D2.3](PRODUCT_IMPORT.md) | Produkty, cechy, kombinacje, magazyn i wyniki testów API |
-| [Konfiguracja](CONFIGURATION.md) | Sprzedaż, statusy, faktury, poczta, treści oraz eksport i odtwarzanie konfiguracji |
-| [Kopie i odtwarzanie](../deploy/BACKUP.md) | `backup.sh`, `restore.sh` i weryfikacja odtwarzania `verify-restore.sh` |
-| [Weryfikacja odtwarzania](RESTORE_VERIFICATION.md) | Wynik ostatniej weryfikacji: czas, kompletność danych, konfiguracja, funkcjonalności |
+| [Architektura](ARCHITECTURE.md) | Komponenty, kontenery, zależności i przepływ danych |
+| [Wdrożenie](DEPLOYMENT.md) | Wymagania, `.env`, Compose, HTTPS, platformy i zatrzymanie |
+| [Sklep](SHOP.md) | Obraz PrestaShop, motyw potomny, moduły i aktualizacja wyglądu |
+| [Konfiguracja](CONFIGURATION.md) | Sprzedaż, dostawy, faktury, poczta, treści i eksport ustawień |
+| [Scraper](SCRAPER.md) | Pobieranie, parsery, CLI, wznowienie i odświeżanie danych |
+| [Dane katalogu](DATA.md) | Pliki wynikowe, kontrakt produktu, zdjęcia, próbki i Releases |
+| [Inicjalizacja](INITIALIZATION.md) | Etapy PHP, mapa skryptów, dziennik i wznowienie |
+| [Webservice API](WEBSERVICE.md) | Uprawnienia, zmienne środowiskowe i klient Python |
+| [Import katalogu](CATALOG_IMPORT.md) | Wspólna komenda API, bootstrap, synchronizacja, aktywacja i benchmark |
+| [Import produktów](PRODUCT_IMPORT.md) | Kategorie, produkty, cechy, kombinacje i magazyn |
+| [Import zdjęć](IMAGE_IMPORT.md) | Cache, normalizacja, galerie i wznowienie uploadu |
+| [Testowanie](TESTING.md) | Zależności, testy jednostkowe, integracyjne, E2E, PHP, JavaScript, raporty i CI |
+| [Kopie i odtwarzanie](BACKUP.md) | Tworzenie kopii, odtwarzanie i weryfikacja na osobnej instancji |
 | [Rozwiązywanie problemów](TROUBLESHOOTING.md) | Diagnoza uruchomienia i importu |
-| [Audyt](AUDIT.md) | Punkt wyjścia, usunięcia i weryfikacja zmian |
-| [Dziennik AI](AI_LOG.md) | Dotychczasowa historia użycia AI |
 
-Polecenia uruchamiamy z głównego katalogu repozytorium. Testy jednostkowe i integracyjne opisuje [katalog testów](../tests/README.md).
+## Raporty, historia i materiały referencyjne
+
+Poniższe materiały opisują konkretne przebiegi lub historię pracy. Ich obecność nie oznacza ponownej weryfikacji aktualnej wersji projektu.
+
+| Materiał | Zakres |
+|---|---|
+| [Wyniki E2E](E2E_RESULTS.md) | Zapisane wyniki kontroli scenariusza zakupowego |
+| [Weryfikacja odtwarzania](RESTORE_VERIFICATION.md) | Wynik zapisanego przebiegu odtwarzania |
+| [Audyt](AUDIT.md) | Punkt wyjścia, zmiany i ograniczenia weryfikacji |
+| [Materiały audytowe](audits/README.md) | Szczegółowe analizy i raporty |
+| [Referencje wyglądu](design-reference/) | Materiały do odwzorowania sklepu źródłowego |
+| [Dziennik AI](AI_LOG.md) | Historia użycia AI i sposób weryfikacji wyników |
+
+Szczegółowe instrukcje są utrzymywane w `docs/`. README w katalogach komponentów pełnią rolę krótkich odsyłaczy.

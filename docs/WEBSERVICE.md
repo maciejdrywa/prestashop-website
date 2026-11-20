@@ -46,3 +46,5 @@ Import produktów, cech, kombinacji i magazynu przez API oraz testy D2.3 opisuje
 Galerie, formaty odpowiedzi uploadu i przejęcie istniejących mapowań PHP opisuje [D2.4](IMAGE_IMPORT.md). Import korzysta z dotychczasowych praw `images` GET/POST/PUT oraz `products` GET/PUT.
 
 Wspólną komendę przygotowania, importu API i finalizacji opisuje [D2.5](CATALOG_IMPORT.md).
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

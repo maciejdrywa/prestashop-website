@@ -81,7 +81,7 @@ Przed usunięciem wolumenów lub wdrożeniem istotnych zmian utwórz kopię zapa
 bash deploy/backup.sh [--maintenance]
 ```
 
-Archiwum zapisywane jest w katalogu `deploy/backups/` w formacie `backup_YYYYMMDD_HHMMSS.tar.gz` z uprawnieniami `0600`. Szczegóły parametrów i strukturę archiwum opisuje [dokumentacja deploy](../deploy/BACKUP.md).
+Archiwum zapisywane jest w katalogu `deploy/backups/` w formacie `backup_YYYYMMDD_HHMMSS.tar.gz` z uprawnieniami `0600`. Szczegóły parametrów i strukturę archiwum opisuje [dokumentacja deploy](BACKUP.md).
 
 ## Odtwarzanie z kopii
 
@@ -91,6 +91,8 @@ Sklep odtwarza się z archiwum jedną komendą:
 bash deploy/restore.sh --latest
 ```
 
-Skrypt sprawdza kompletność i sumy kontrolne archiwum, prosi o potwierdzenie, wykonuje kopię bezpieczeństwa bieżącego stanu, podmienia bazę, zdjęcia produktów i konfigurację, a na końcu sprawdza działanie sklepu. Błąd cofa zmiany. Odtwarzaj wyłącznie zaufane archiwa. Opcje i ograniczenia opisuje [dokumentacja deploy](../deploy/BACKUP.md#odtwarzanie-sklepu-restoresh).
+Skrypt sprawdza kompletność i sumy kontrolne archiwum, prosi o potwierdzenie, wykonuje kopię bezpieczeństwa bieżącego stanu, podmienia bazę, zdjęcia produktów i konfigurację, a na końcu sprawdza działanie sklepu. Błąd cofa zmiany. Odtwarzaj wyłącznie zaufane archiwa. Opcje i ograniczenia opisuje [dokumentacja deploy](BACKUP.md#odtwarzanie-sklepu-restoresh).
 
-Poprawność i czas odtwarzania na czystym środowisku sprawdza `bash deploy/verify-restore.sh` ([opis](../deploy/BACKUP.md#weryfikacja-odtwarzania-verify-restoresh), [wynik](RESTORE_VERIFICATION.md)).
+Poprawność i czas odtwarzania na czystym środowisku sprawdza `bash deploy/verify-restore.sh` ([opis](BACKUP.md#weryfikacja-odtwarzania-verify-restoresh), [wynik](RESTORE_VERIFICATION.md)).
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

@@ -35,3 +35,5 @@ Ustaw `PS_DOMAIN=localhost`. `TLS_CERT_DIR` musi być bezwzględną ścieżką d
 ## Różnice kontroli początkowego planu
 
 `check-products.php` i `check-stock.php` porównują aktualny sklep ze źródłem i początkowym magazynem. Edycja wagi, ceny albo zakup mogą powodować oczekiwaną różnicę. Bootstrap ze wznowieniem sprawdza trwałe powiązania i spójność danych, zachowując takie operacje.
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

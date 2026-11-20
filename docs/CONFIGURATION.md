@@ -112,3 +112,5 @@ Języki i waluty z pliku muszą istnieć w instalacji, bo ich dodanie wymaga pak
 **Zastosowanie całego pliku:** nowa wersja pliku jest stosowana w całości, a nie jako różnica względem poprzedniej. Lokalne edycje panelu w obszarach z pliku zostaną wtedy zastąpione wartościami z repozytorium.
 
 **Poza zakresem eksportu:** pozycje menu (`configure-menu.php`), bloki linków i reassurance, kafle motywu, pozycje hooków, tryb serwisowy (`PS_SHOP_ENABLE`, ustawiany przez `backup.sh --maintenance`), przyjazne adresy URL (zmiana wymaga regeneracji `.htaccess` w panelu), domena, SSL i Webservice. Na świeżej instalacji odtwarzają je konfiguratory. Zmiany z panelu w tych obszarach trzeba przenieść do konfiguratorów.
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

@@ -115,3 +115,5 @@ Końcowa suite offline: **246 testów i 11 podtestów zaliczonych**, 14 testów 
 Szczegółowe raporty pozostają lokalnie w ignorowanych `logs/d25-real-v2/` i `logs/d25-benchmark/`: `report-activation.json`, `report-idempotent.json`, `report-sync-b.json`, `report-restore-a.json`, `report-cold.json`, `report-interrupted.json`, `report-resumed.json` i kontrole natywne. Zestaw techniczny jest osobno w `logs/d25-benchmark-data/`; `scraper-results/products.json` nadal zawiera 574 rzeczywiste produkty.
 
 Ograniczenia: pomiar dotyczy wskazanego sprzętu i wersji; pełnego uruchomienia nowej komendy na Windows i natywnym Linux nie sprawdzono. Benchmark używa deterministycznych kopii istniejących danych i współdzielonego cache źródłowych URL-i, z osobnymi uploadami do każdej galerii. Nie jest rozszerzeniem katalogu akademickiego.
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)
