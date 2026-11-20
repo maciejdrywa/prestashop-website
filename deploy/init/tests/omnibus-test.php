@@ -104,21 +104,93 @@ try {
     omnibusAssert(abs($info32_89['lowest_price'] - 144.74) < 0.01, "Kombinacja 89 produktu 32 musi mieć najniższą cenę 144.74 PLN, otrzymano: {$info32_89['lowest_price']}");
     omnibusAssert(abs($info32_90['lowest_price'] - 132.44) < 0.01, "Kombinacja 90 produktu 32 musi mieć najniższą cenę 132.44 PLN, otrzymano: {$info32_90['lowest_price']}");
 
-    echo "[4/5] Test automatycznego zapisu historii cen (recordCurrentPrice)...\n";
-    $testDate = date('Y-m-d H:i:s');
-    $recorded = ShopOmnibus::recordCurrentPrice(53, 0, true, $testDate);
-    omnibusAssert($recorded, 'recordCurrentPrice musi zwrócić true.');
+    echo "[4/5] Test automatycznego zapisu historii cen, dirty-checkingu i pełnego cyklu życia hooków...\n";
 
-    $latestRecorded = (float) $db->getValue(
-        "SELECT price_gross FROM `{$tableName}` WHERE `id_product` = 53 AND `date_add` = '{$testDate}'"
-    );
-    omnibusAssert($latestRecorded > 0, 'Zapisany punkt cenowy musi mieć dodatnią kwotę.');
+    // 4a: Test deduplikacji (dirty-check)
+    $testDate = '2026-11-19 12:00:00';
+    $countBefore = (int) $db->getValue("SELECT COUNT(*) FROM `{$tableName}` WHERE `id_product` = 53 AND `id_product_attribute` = 0");
+    ShopOmnibus::recordCurrentPrice(53, 0, true, $testDate);
+    ShopOmnibus::recordCurrentPrice(53, 0, true, $testDate);
+    $countAfter = (int) $db->getValue("SELECT COUNT(*) FROM `{$tableName}` WHERE `id_product` = 53 AND `id_product_attribute` = 0");
+    omnibusAssert($countAfter <= $countBefore + 1, 'Dirty-checking: powtórne wywołanie z identyczną ceną nie może tworzyć duplikatów.');
 
-    echo "[5/5] Test idempotencji i weryfikacji stanu inicjalizacji (omnibusConfigured)...\n";
+    // 4b: Pełny cykl życia (Product update -> SpecificPrice add -> successive promo -> SpecificPrice delete)
+    $testProd = new Product();
+    $testProd->name = [1 => 'Omnibus Lifecycle Test Product'];
+    $testProd->link_rewrite = [1 => 'omnibus-lifecycle-test'];
+    $testProd->id_category_default = 2;
+    $testProd->id_tax_rules_group = 1;
+    $testProd->price = round(140.00 / 1.23, 6);
+    $testProd->active = 1;
+    $testProd->add();
+    $testPid = (int) $testProd->id;
+    omnibusAssert($testPid > 0, 'Utworzenie produktu testowego musi się powieść.');
+
+    try {
+        // Krok 1: Wstępna wyższa cena regularna w historii (140 zł) 20 dni temu
+        ShopOmnibus::recordCurrentPrice($testPid, 0, false, date('Y-m-d H:i:s', strtotime('-20 days')));
+
+        // Krok 2: Zmiana ceny regularnej przez Product->update() na 120 zł brutto (10 dni temu)
+        $testProd->price = round(120.00 / 1.23, 6);
+        $testProd->update();
+        // Zaktualizuj znacznik daty edycji na 10 dni temu dla spójności osi czasu testu
+        $db->execute("UPDATE `{$tableName}` SET `date_add` = '" . date('Y-m-d H:i:s', strtotime('-10 days')) . "' WHERE `id_product` = {$testPid} AND `price_gross` >= 119.9");
+
+        $latestPrice = (float) $db->getValue(
+            "SELECT price_gross FROM `{$tableName}` WHERE `id_product` = {$testPid} ORDER BY `id_price_history` DESC"
+        );
+        omnibusAssert(abs($latestPrice - 120.00) < 0.1, "Po update produktu w historii musi pojawić się 120 zł, otrzymano: {$latestPrice}");
+
+        // Krok 3: Dodanie promocji (-20 zł -> cena 100 zł) przez SpecificPrice->add()
+        $sp1 = new SpecificPrice();
+        $sp1->id_product = $testPid;
+        $sp1->id_product_attribute = 0;
+        $sp1->id_shop = 1;
+        $sp1->id_currency = 0;
+        $sp1->id_country = 0;
+        $sp1->id_group = 0;
+        $sp1->id_customer = 0;
+        $sp1->price = -1;
+        $sp1->from_quantity = 1;
+        $sp1->reduction = round(20.00 / 1.23, 6);
+        $sp1->reduction_type = 'amount';
+        $sp1->reduction_tax = 0;
+        $sp1->from = date('Y-m-d H:i:s', strtotime('-3 days'));
+        $sp1->to = '0000-00-00 00:00:00';
+        $sp1->add();
+
+        // getLowestPriceInfo musi teraz zwrócić 120 zł jako najniższą cenę przed tą obniżką
+        $infoPromo1 = ShopOmnibus::getLowestPriceInfo($testPid, 0, 1);
+        omnibusAssert($infoPromo1 !== null, 'getLowestPriceInfo musi zwrócić dane dla promocji 1.');
+        omnibusAssert(abs($infoPromo1['lowest_price'] - 120.00) < 0.1, "Najniższa cena przed obniżką 1 musi wynosić 120 zł, otrzymano: {$infoPromo1['lowest_price']}");
+
+        // Krok 4: Sukcesywne pogłębienie promocji (-40 zł -> cena 80 zł) przez SpecificPrice->update()
+        $sp1->reduction = round(40.00 / 1.23, 6);
+        $sp1->from = date('Y-m-d H:i:s', strtotime('-1 day'));
+        $sp1->update();
+
+        $infoPromo2 = ShopOmnibus::getLowestPriceInfo($testPid, 0, 1);
+        omnibusAssert($infoPromo2 !== null, 'getLowestPriceInfo musi zwrócić dane dla pogłębionej promocji.');
+        omnibusAssert(abs($infoPromo2['lowest_price'] - 120.00) < 0.1, "Przy sukcesywnej obniżce najniższa cena nadal musi wynosić 120 zł (sprzed serii), otrzymano: {$infoPromo2['lowest_price']}");
+
+        // Krok 5: Zakończenie promocji przez delete()
+        $sp1->delete();
+        $lastRow = $db->getRow(
+            "SELECT is_promotional, price_gross FROM `{$tableName}` WHERE `id_product` = {$testPid} ORDER BY `date_add` DESC, `id_price_history` DESC"
+        );
+        omnibusAssert((int) $lastRow['is_promotional'] === 0, 'Po usunięciu SpecificPrice ostatni wpis musi mieć is_promotional = 0.');
+    } finally {
+        // Sprzątanie po teście
+        $testProd->delete();
+        $db->execute("DELETE FROM `{$tableName}` WHERE `id_product` = {$testPid}");
+        $db->execute("DELETE FROM `{$tableName}` WHERE `id_product` = 53 AND `date_add` = '{$testDate}'");
+    }
+
+    echo "[5/5] Test pokrycia baseline dla katalogu i stanu inicjalizacji (omnibusConfigured)...\n";
+    $activeCount = (int) $db->getValue("SELECT COUNT(*) FROM `" . _DB_PREFIX_ . "product` WHERE `active` = 1");
+    $coveredCount = (int) $db->getValue("SELECT COUNT(DISTINCT id_product) FROM `{$tableName}`");
+    omnibusAssert($coveredCount >= min(25, $activeCount), "Tabela historii musi pokrywać produkty. Aktywne: {$activeCount}, Pokryte: {$coveredCount}");
     omnibusAssert(ShopInit\omnibusConfigured($context), 'omnibusConfigured() musi zwrócić true dla skonfigurowanego modułu.');
-
-    // Usunięcie wpisu testowego z fazy 4
-    $db->execute("DELETE FROM `{$tableName}` WHERE `id_product` = 53 AND `date_add` = '{$testDate}'");
 
     echo "OK: Moduł shopomnibus, tabela historii, 5 scenariuszy prawnych oraz zapis zmian pomyślnie zweryfikowane.\n";
 } catch (Throwable $e) {
