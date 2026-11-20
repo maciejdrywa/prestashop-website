@@ -66,6 +66,8 @@ Przed aktywacją odczytywane są wszystkie produkty, kombinacje, kategorie i mag
 
 `report.json` zapisuje wyniki etapów, utworzone/zaktualizowane/pominięte zasoby, błędy z etapem i źródłowym ID, statusy HTTP, wagi demonstracyjne i placeholdery, trafienia cache, liczby żądań/ponowień i metody API oraz czasy. `compose_seconds` jest mierzone osobno; `import_seconds` obejmuje pozyskanie brakujących zdjęć. Błąd daje niezerowy kod zakończenia. Diagnostyka Compose usuwa klucze, hasła i linie uwierzytelniania.
 
+Sekcja `summary` jest zapisywana w raporcie i wypisywana w terminalu. Dla `categories`, `products`, `combinations` i `images` zawiera liczniki `created`, `updated` i `rejected` bieżącego przebiegu, również gdy import zakończy się błędami. `created` i `updated` oznaczają potwierdzone operacje; aktywacja i zmiana okładki nie są dodatkowym rekordem. `rejected` obejmuje błędy importu kategorii, produkty z nieukończonym importem, nieudane próby synchronizacji kombinacji oraz niepotwierdzone obrazy w nieukończonych galeriach. Błąd kombinacji może więc zwiększyć licznik kombinacji i produktu. Obrazy potwierdzone przed błędem galerii pozostają policzone jako utworzone, zaktualizowane lub pominięte. Błędy infrastruktury pozostają w `errors`, bez przypisywania ich do fikcyjnego rekordu; nieuruchomione etapy mają zerowe liczniki.
+
 `idempotent=true` oznacza przebieg bez błędów i bez tworzenia/aktualizacji kategorii, produktów, słowników, kombinacji, zdjęć i aktywacji. Kontrole GET oraz idempotentne konfiguratory PHP mogą nadal wykonywać odczyty lub aktualizować własne pliki i indeksy.
 
 ## Benchmark 1000 produktów

@@ -55,8 +55,8 @@ def main(argv=None):
             )
             args.state_dir = ROOT / "logs/catalog-import" / host
         report = run_catalog(args)
-        summary = {k: v for k, v in report.items() if k != "stages"}
-        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        console_report = {k: v for k, v in report.items() if k != "stages"}
+        print(json.dumps(console_report, ensure_ascii=False, indent=2))
         return 130 if report.get("interrupted") else int(bool(report["errors"]))
     except (ValueError, OSError, PrestaShopAPIError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

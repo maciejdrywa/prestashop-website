@@ -378,3 +378,42 @@ def test_source_download_does_not_inherit_private_api_ca(tmp_path, monkeypatch):
     )
     cache.download(URL, tmp_path / "download", 10)
     assert cache.session.get.call_args.kwargs["verify"] == requests.certs.where()
+
+
+@pytest.mark.parametrize("confirmed", [0, 1, 2])
+def test_failed_gallery_reports_only_unconfirmed_images(
+    tmp_path, monkeypatch, confirmed
+):
+    from collections import Counter
+
+    from image_import.sync import import_images
+
+    gallery = {**plan(), "reference": "pandomu-5", "urls": [URL, URL + "?second=1"]}
+    monkeypatch.setattr("image_import.sync.read_images", lambda path: [gallery])
+    api = Mock(api_url="https://test.example/api")
+    api.get_instance_identity.return_value = "fixture"
+    store = Mock()
+    store.context = {"shop_id": 1}
+    store.client = api
+    store.all.return_value = [{"id": "1", "active": "1"}]
+    store.find.return_value = {"id": "5", "id_shop_default": "1"}
+    monkeypatch.setattr("image_import.sync.Resources", Mock(return_value=store))
+    monkeypatch.setattr(
+        "image_import.sync.fetch_active_languages", lambda client: ["1"]
+    )
+    monkeypatch.setattr(
+        "image_import.sync.ImageCache",
+        Mock(return_value=SimpleNamespace(counts=Counter(), release_error=None)),
+    )
+
+    def fail(self, plan, product):
+        self.counts["created"] += confirmed
+        raise ValueError("Gallery or cover failed")
+
+    monkeypatch.setattr(GallerySync, "run", fail)
+    report = import_images(
+        api, tmp_path / "products.json", tmp_path, tmp_path / "images.state.json"
+    )
+    assert report["images"]["created"] == confirmed
+    assert report["images"]["rejected"] == 2 - confirmed
+    assert len(report["errors"]) == 1

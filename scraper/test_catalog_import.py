@@ -375,3 +375,219 @@ def test_resume_guard_preserves_completed_fields_until_explicit_sync(tmp_path):
             "products", "123", {"reference": "pandomu-123"}, desired
         )
     assert api.rows[1]["price"] == "1" and api.puts == 1
+
+
+def test_utf8_files_work_with_windows_default_encoding(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from catalog_import.verify import verify_catalog
+
+    original = Path.read_text
+
+    def windows_read(path, encoding=None, errors=None):
+        return original(path, encoding=encoding or "cp1250", errors=errors)
+
+    monkeypatch.setattr(Path, "read_text", windows_read)
+    output = tmp_path / "benchmark"
+    generate(
+        ROOT / "scraper-results/products.json",
+        ROOT / "scraper-results/categories.json",
+        output,
+        574,
+    )
+    products = json.loads((output / "products.json").read_text(encoding="utf-8"))
+    assert products[0]["name"] == "Zamek do drzwi GAMA z wkładką GERDA"
+    manifest_path = tmp_path / "manifest.json"
+    manifest = read_manifest(manifest_path, "https://shop/api", {}, False)
+    manifest["note"] = "Łódź — żółć"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    (tmp_path / "products.state.json").write_text(
+        json.dumps({"records": {}, "note": "Łódź — żółć"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    assert (
+        read_manifest(manifest_path, "https://shop/api", {"new": "input"}, True)["note"]
+        == manifest["note"]
+    )
+    api, state, activation, report = activation_fixture(tmp_path)
+    data = json.loads(state.read_text(encoding="utf-8"))
+    data["note"] = manifest["note"]
+    state.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    assert activate(api, {"shop_id": 1}, report, state, activation, manifest_path) == 1
+    monkeypatch.setattr("catalog_import.verify.preflight", Mock())
+    monkeypatch.setattr("catalog_import.verify.stock_plan", lambda products: {})
+    store = Mock()
+    store.all.return_value = []
+    monkeypatch.setattr("catalog_import.verify.Resources", Mock(return_value=store))
+    assert verify_catalog(Mock(), [], {}, {}, state, {"products": []})["products"] == 0
+
+
+def test_catalog_summary_preserves_successes_and_rejections():
+    from catalog_import.reporting import catalog_summary
+
+    stages = {
+        "categories": {"result": {"created": 2, "updated": 1, "errors": 3}},
+        "products": {
+            "result": {
+                "resources": {
+                    "products": {"created": 4, "updated": 2},
+                    "combinations": {"created": 7, "updated": 1, "rejected": 1},
+                },
+                "errors": [{"source_id": "5"}, {"source_id": "6"}],
+            }
+        },
+        "images": {
+            "result": {
+                "images": {
+                    "created": 8,
+                    "updated": 3,
+                    "rejected": 2,
+                    "covers_updated": 9,
+                }
+            }
+        },
+    }
+    assert catalog_summary(stages) == {
+        "categories": {"created": 2, "updated": 1, "rejected": 3},
+        "products": {"created": 4, "updated": 2, "rejected": 2},
+        "combinations": {"created": 7, "updated": 1, "rejected": 1},
+        "images": {"created": 8, "updated": 3, "rejected": 2},
+    }
+    assert all(
+        v == {"created": 0, "updated": 0, "rejected": 0}
+        for v in catalog_summary({}).values()
+    )
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_cli_prints_summary_and_saved_report_matches(
+    tmp_path, monkeypatch, capsys, failed
+):
+    from catalog_import.reporting import catalog_summary
+    from import_state import atomic_json
+
+    report = {
+        "stages": {},
+        "errors": [{"error": "rejected"}] if failed else [],
+        "summary": catalog_summary({}),
+    }
+    report["summary"]["products"].update(created=2, updated=1, rejected=int(failed))
+
+    def run(args):
+        atomic_json(args.report_file, report)
+        return report
+
+    monkeypatch.setattr("import_catalog.run_catalog", run)
+    path = tmp_path / "report.json"
+    assert main(["--state-dir", str(tmp_path), "--report-file", str(path)]) == int(
+        failed
+    )
+    printed = json.loads(capsys.readouterr().out)
+    assert "stages" not in printed
+    assert printed["summary"] == json.loads(path.read_text(encoding="utf-8"))["summary"]
+    assert printed["summary"]["products"] == {
+        "created": 2,
+        "updated": 1,
+        "rejected": int(failed),
+    }
+
+
+@pytest.mark.parametrize("resource", ["products", "combinations"])
+def test_rejected_resource_is_counted_without_claiming_success(tmp_path, resource):
+    from test_product_import import store
+
+    api = FakeAPI()
+    api.get = Mock(side_effect=PrestaShopAPIError("Forbidden", status_code=403))
+    resources = store(tmp_path, api)
+    with pytest.raises(PrestaShopAPIError):
+        resources.sync(resource, "123", {"reference": "123"}, {"reference": "123"})
+    assert resources.counts[resource] == {"rejected": 1}
+    assert api.posts == 0 and api.puts == 0
+
+
+@pytest.mark.parametrize("failed_stage", ["categories", "products", "images"])
+def test_failed_import_keeps_summary_in_real_runner_report(
+    tmp_path, monkeypatch, capsys, failed_stage
+):
+    from category_import.models import ImportStats
+
+    env = tmp_path / "private.env"
+    env.write_text(
+        "PRESTASHOP_API_URL=https://test.example/api\nPRESTASHOP_API_KEY=" + "a" * 32,
+        encoding="utf-8",
+    )
+    source = tmp_path / "source.json"
+    source.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(
+        "catalog_import.runner.validate_inputs", lambda *args: ([], [], [])
+    )
+    monkeypatch.setattr(
+        "catalog_import.runner.export_context",
+        lambda *args: {"identity": "fixture", "shop_id": 1},
+    )
+    monkeypatch.setattr(
+        "catalog_import.runner.check_dependencies", Mock(return_value={})
+    )
+    monkeypatch.setattr(Compose, "php", Mock(return_value="{}"))
+    stats = ImportStats(
+        created=1,
+        errors=int(failed_stage == "categories"),
+        error_details=["category error"],
+    )
+    monkeypatch.setattr(
+        "catalog_import.runner.import_categories", Mock(return_value=(stats, {}))
+    )
+    products = {
+        "resources": {
+            "products": {"created": 2},
+            "combinations": {"created": 3, "rejected": int(failed_stage == "products")},
+        },
+        "errors": [{"source_id": "5"}] if failed_stage == "products" else [],
+    }
+    monkeypatch.setattr(
+        "catalog_import.runner.import_products", Mock(return_value=products)
+    )
+    images = {"images": {"created": 4, "rejected": 1}, "errors": [{"source_id": "5"}]}
+    monkeypatch.setattr(
+        "catalog_import.runner.import_images", Mock(return_value=images)
+    )
+    state = tmp_path / "state"
+    assert (
+        main(
+            [
+                "--env-file",
+                str(env),
+                "--products-file",
+                str(source),
+                "--categories-file",
+                str(source),
+                "--state-dir",
+                str(state),
+                "--cache-dir",
+                str(tmp_path / "cache"),
+            ]
+        )
+        == 1
+    )
+    report = json.loads((state / "report.json").read_text(encoding="utf-8"))
+    printed = capsys.readouterr().out
+    console = json.loads(printed[printed.index('{\n  "backend"') :])
+    assert console["summary"] == report["summary"]
+    assert report["status"] == "failed"
+    assert report["summary"]["categories"] == {
+        "created": 1,
+        "updated": 0,
+        "rejected": int(failed_stage == "categories"),
+    }
+    if failed_stage in {"products", "images"}:
+        assert report["summary"]["products"]["created"] == 2
+        assert report["summary"]["products"]["rejected"] == int(
+            failed_stage == "products"
+        )
+        assert report["summary"]["combinations"]["created"] == 3
+    if failed_stage == "images":
+        assert report["summary"]["images"] == {
+            "created": 4,
+            "updated": 0,
+            "rejected": 1,
+        }

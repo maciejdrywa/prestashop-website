@@ -23,6 +23,7 @@ from product_import.resources import Resources
 from product_import.sync import preflight
 
 from .config import Compose, environment
+from .reporting import catalog_summary
 from .verify import verify_catalog
 
 
@@ -205,6 +206,7 @@ def run_catalog(args):
         "dry_run": args.dry_run,
         "errors": [],
         "stages": {},
+        "summary": catalog_summary({}),
         "planned": {
             "products": len(products),
             "categories": len(categories),
@@ -255,6 +257,7 @@ def run_catalog(args):
             "seconds": round(time.monotonic() - mark, 3),
             "result": result,
         }
+        report["summary"] = catalog_summary(report["stages"])
         atomic_json(args.report_file or state_dir / "report.json", report)
         return result
 
@@ -360,10 +363,6 @@ def run_catalog(args):
 
                 def import_category_stage():
                     stats, _ = import_categories(client, frozen_categories, mapping)
-                    if stats.errors:
-                        raise ValueError(
-                            "Import kategorii: " + "; ".join(stats.error_details)
-                        )
                     return asdict(stats)
 
                 stage(
@@ -372,7 +371,12 @@ def run_catalog(args):
                         client, compose, identity, products, fingerprints
                     ),
                 )
-                stage("categories", import_category_stage)
+                category_report = stage("categories", import_category_stage)
+                if category_report["errors"]:
+                    raise ValueError(
+                        "Import kategorii: "
+                        + "; ".join(category_report["error_details"])
+                    )
                 context_file = state_dir / "context.json"
                 context = export_context(compose, fingerprints)
                 atomic_json(context_file, context)
@@ -505,6 +509,7 @@ def run_catalog(args):
             manifest["status"] = "failed"
             atomic_json(manifest_path, manifest, compact=True)
     finally:
+        report["summary"] = catalog_summary(report["stages"])
         report["metrics"] = client.metrics
         report["duration_seconds"] = round(time.monotonic() - started, 3)
         report["compose_seconds"] = (
