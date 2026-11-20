@@ -32,7 +32,7 @@ def verify_catalog(
     combinations = store.all("combinations")
     stocks = store.all("stock_availables")
     categories = {int(row["id"]): row for row in store.all("categories")}
-    records = json.loads(product_state.read_text())["records"]
+    records = json.loads(product_state.read_text(encoding="utf-8"))["records"]
     galleries = {row["source_id"]: row for row in image_report["products"]}
     plan = stock_plan(products)
     result = {

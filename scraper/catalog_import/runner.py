@@ -76,7 +76,7 @@ def read_manifest(path, api_url, fingerprints, sync, pending_paths=()):
             "activation": {},
             "status": "new",
         }
-    state = json.loads(path.read_text())
+    state = json.loads(path.read_text(encoding="utf-8"))
     if (
         not isinstance(state, dict)
         or state.get("version") != 1
@@ -98,7 +98,7 @@ def read_manifest(path, api_url, fingerprints, sync, pending_paths=()):
         for journal_path in paths:
             if not journal_path.exists():
                 continue
-            journal = json.loads(journal_path.read_text())
+            journal = json.loads(journal_path.read_text(encoding="utf-8"))
             if not isinstance(journal, dict) or not isinstance(
                 journal.get("records"), dict
             ):
@@ -117,7 +117,7 @@ def read_manifest(path, api_url, fingerprints, sync, pending_paths=()):
 
 
 def activate(client, context, products_report, product_state, manifest, manifest_path):
-    state = json.loads(product_state.read_text())["records"]
+    state = json.loads(product_state.read_text(encoding="utf-8"))["records"]
     store = Resources(client, None, context)
     count = 0
     for row in products_report["products"]:
@@ -421,7 +421,7 @@ def run_catalog(args):
                     lambda: verify_catalog(
                         client,
                         products,
-                        json.loads(mapping.read_text()),
+                        json.loads(mapping.read_text(encoding="utf-8")),
                         context,
                         product_state,
                         image_report,
@@ -457,7 +457,7 @@ def run_catalog(args):
                     lambda: verify_catalog(
                         client,
                         products,
-                        json.loads(mapping.read_text()),
+                        json.loads(mapping.read_text(encoding="utf-8")),
                         context,
                         product_state,
                         image_report,

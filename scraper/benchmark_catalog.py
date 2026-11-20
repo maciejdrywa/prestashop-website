@@ -11,8 +11,8 @@ from import_state import atomic_json
 
 
 def generate(products_file, categories_file, output, count=1000):
-    products = json.loads(products_file.read_text())
-    categories = json.loads(categories_file.read_text())
+    products = json.loads(products_file.read_text(encoding="utf-8"))
+    categories = json.loads(categories_file.read_text(encoding="utf-8"))
     output = output.resolve()
     academic = (ROOT / "scraper-results").resolve()
     if output == academic or academic in output.parents or count < len(products):
