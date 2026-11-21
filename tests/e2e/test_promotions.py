@@ -3,6 +3,8 @@
 import re
 from decimal import Decimal
 
+from helpers.cart import wait_for_shop_scripts
+from helpers.catalog import open_source_product
 from helpers.money import parse_pln_amount
 from helpers.steps import step
 from playwright.sync_api import Page, expect
@@ -11,8 +13,8 @@ from playwright.sync_api import Page, expect
 def test_promotional_product_display_and_cart(page: Page):
     """Sprawdza wyświetlanie ceny pierwotnej, rabatu i ceny promocyjnej oraz naliczanie w koszyku."""
     with step("Open promotional product page"):
-        # Produkt 22 (source 12) - Zamek nawierzchniowy ZN-160, promocja -10% (28,00 zł -> 25,20 zł)
-        page.goto("/index.php?id_product=22&controller=product")
+        # Referencja źródłowa pozostaje stała po ponownym imporcie katalogu.
+        product_id = open_source_product(page, 12, "ZN-160")
         expect(page.locator("body#product")).to_be_attached(timeout=15_000)
 
     with step(
@@ -46,6 +48,7 @@ def test_promotional_product_display_and_cart(page: Page):
         )
 
     with step("Add 2 units of promotional product to cart"):
+        wait_for_shop_scripts(page)
         qty_input = page.locator("#quantity_wanted")
         qty_input.fill("2")
         page.locator("button.add-to-cart").click()
@@ -72,7 +75,9 @@ def test_promotional_product_display_and_cart(page: Page):
         page.goto("/index.php?controller=cart&action=show")
         expect(page.locator("body#cart")).to_be_attached()
 
-        cart_item = page.locator('.cart-item:has(a[href*="id_product=22"])').first
+        cart_item = page.locator(
+            f'.cart-item:has(input.js-cart-line-product-quantity[data-product-id="{product_id}"])'
+        ).first
         expect(cart_item).to_be_visible()
 
         # Regular price and promo price in cart line
