@@ -16,6 +16,7 @@ namespace ShopInit;
 use RuntimeException;
 
 require_once __DIR__ . '/content.php';
+require_once __DIR__ . '/config-export.php';
 
 /**
  * Zwraca nazwy obsługiwanych modułów przelewu i pobrania.
@@ -24,7 +25,24 @@ require_once __DIR__ . '/content.php';
  */
 function allowedPaymentModules(): array
 {
-    return ['ps_wirepayment','ps_cashondelivery'];
+    return ['ps_wirepayment','ps_cashondelivery','shopdemopayments'];
+}
+
+/** Synchronizuje własny moduł z obrazu przed instalacją i odtwarzaniem eksportu. */
+function installDemoPaymentModuleFiles(): void
+{
+    $files = ['shopdemopayments.php', 'controllers/front/validation.php'];
+    $filesystem = new \Symfony\Component\Filesystem\Filesystem();
+    foreach ($files as $file) {
+        $source = '/opt/shop-modules/shopdemopayments/' . $file;
+        if (!is_readable($source)) {
+            throw new RuntimeException('Brak modułu demonstracyjnych płatności w obrazie. Przebuduj obraz shop.');
+        }
+        $target = _PS_MODULE_DIR_ . 'shopdemopayments/' . $file;
+        if (!is_file($target) || hash_file('sha256', $source) !== hash_file('sha256', $target)) {
+            $filesystem->dumpFile($target, file_get_contents($source));
+        }
+    }
 }
 
 /**
@@ -79,6 +97,7 @@ function paymentInputs(\Context $context): array
         ._DB_PREFIX_.'carrier_shop s ON s.id_carrier=c.id_carrier WHERE c.deleted=0 AND s.id_shop='.$shopId.' ORDER BY c.id_reference');
     if($carriers===false || $carriers===[]) throw new RuntimeException('At least one existing carrier is required for payment permissions.');
     foreach(allowedPaymentModules() as $name) {
+        if ($name === 'shopdemopayments' && is_readable('/opt/shop-modules/shopdemopayments/shopdemopayments.php')) continue;
         if(!is_readable(_PS_MODULE_DIR_.$name.'/'.$name.'.php')) throw new RuntimeException('Required offline payment module files are missing: '.$name);
     }
     return ['country'=>$countryId,'currency'=>$currencyId,'groups'=>array_values(array_unique($groups)),
@@ -99,6 +118,7 @@ function paymentInputs(\Context $context): array
  */
 function configurePayments(\Context $context,bool $dryRun=false): void
 {
+    if (!$dryRun) installDemoPaymentModuleFiles();
     $inputs=paymentInputs($context);
     // Lista modułów podpiętych do hooków płatności jest porównywana z allowlistą.
     // Dodatkowe wykryte moduły zostaną wyłączone w ścieżce zapisu.
@@ -109,13 +129,19 @@ function configurePayments(\Context $context,bool $dryRun=false): void
         echo "PLAN: Poland, PLN, visitor/guest/customer groups, current carrier references and test-only bank instructions.\nOK: dry run; no changes.\n";
         return;
     }
-    echo "[1/3] Enabling offline bank transfer and cash on delivery...\n";
+    echo "[1/3] Enabling bank transfer, cash on delivery, BLIK demo and PayPal demo...\n";
     $modules=[];
     foreach(allowedPaymentModules() as $name) {
         $module=\Module::getInstanceByName($name);
         if(!$module instanceof \PaymentModule) throw new RuntimeException('Unexpected payment module implementation: '.$name);
-        if(!\Module::isInstalled($name) && !$module->install()) throw new RuntimeException('Cannot install offline payment module: '.$name);
+        if (!\Module::isInstalled($name)) {
+            bootModuleKernel();
+            if (!$module->install()) throw new RuntimeException('Cannot install offline payment module: '.$name);
+        }
         if(!$module->enable() || !$module->registerHook('paymentOptions')) throw new RuntimeException('Cannot enable offline payment module: '.$name);
+        if ($name === 'shopdemopayments' && !$module->ensureWaitingState()) throw new RuntimeException('Cannot configure demo payment order state.');
+        if ($name === 'shopdemopayments' && !$module->isRegisteredInHook('displayPaymentReturn')
+            && !$module->registerHook('displayPaymentReturn')) throw new RuntimeException('Cannot register demo payment confirmation.');
         \Cache::clean('Module::isEnabled'.$name);
         $modules[$name]=$module;
     }
@@ -164,7 +190,7 @@ function configurePayments(\Context $context,bool $dryRun=false): void
     sort($actual); sort($expected);
     if($actual!==$expected) throw new RuntimeException('Enabled checkout payment methods differ from the offline allowlist.');
     \Tools::clearSmartyCache();
-    echo "OK: only bank transfer and cash on delivery enabled for PL/PLN; test bank data configured.\n";
+    echo "OK: bank transfer, cash on delivery, BLIK demo and PayPal demo enabled for PL/PLN; no real online transactions.\n";
 }
 
 /**

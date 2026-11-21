@@ -1390,9 +1390,6 @@
         "productcomments": {
             "enabled": true
         },
-        "psgdpr": {
-            "enabled": true
-        },
         "ps_banner": {
             "enabled": false
         },
@@ -1498,10 +1495,16 @@
         "ps_wirepayment": {
             "enabled": true
         },
+        "psgdpr": {
+            "enabled": true
+        },
         "shopcategorypagination": {
             "enabled": true
         },
         "shopcookieinfo": {
+            "enabled": true
+        },
+        "shopdemopayments": {
             "enabled": true
         },
         "shopomnibus": {
@@ -1595,7 +1598,7 @@
                     "head_seo_title": "Formy płatności",
                     "meta_description": "Formy płatności — sklep demonstracyjny Twoje Drzwi do Sukcesu.",
                     "meta_keywords": "",
-                    "content": "<h2>Płatności testowe</h2>\n<p>W sklepie demonstracyjnym Twoje Drzwi do Sukcesu wybór płatności służy sprawdzeniu działania zamówienia. Nie wykonuj rzeczywistego przelewu, nie przesyłaj czeków i nie podawaj numeru karty ani kodu zabezpieczającego.</p>\n<h2>Udostępnione formy płatności</h2>\n<ul><li>Płatność przy odbiorze (testowa)</li><li>Przelew bankowy (testowy)</li></ul>\n<p>Metody dostępne dla danego zamówienia pojawią się w ostatnim kroku zakupów. Ich wybór może zależeć od adresu, waluty oraz sposobu dostawy. Brak wybranej metody na tej liście oznacza, że nie jest ona aktualnie udostępniona w tej konfiguracji.</p>\n<h2>Potwierdzenie zamówienia</h2>\n<p>Sprawdź łączną kwotę brutto i koszt dostawy, a następnie wybierz dostępną metodę testową. Potwierdzenie zapisuje zamówienie w sklepie; komunikat o oczekiwaniu na zapłatę jest elementem scenariusza demonstracyjnego. Nie należy na jego podstawie przekazywać pieniędzy.</p>\n<h2>Status płatności i faktura demonstracyjna</h2>\n<p>Po wyborze przelewu zamówienie otrzymuje status „Oczekiwanie na płatność przelewem”, a po wyborze pobrania „Oczekiwanie na płatność przy odbiorze”. W tych statusach faktura nie jest jeszcze dostępna. W scenariuszu testowym administrator potwierdza otrzymanie płatności, zmieniając status na „Płatność zaakceptowana”. Wtedy powstaje demonstracyjna faktura VAT, którą można pobrać po zalogowaniu z sekcji „Historia i szczegóły zamówień” w <a href=\"{{shop_url}}moje-konto\">koncie klienta</a>. Dokument ma fikcyjne dane wystawcy i nie służy do rozliczeń.</p>\n<h2>Pomoc</h2>\n<p>Wątpliwości dotyczące działania płatności zgłoś przez <a href=\"{{shop_url}}kontakt\">formularz kontaktowy</a>. Informacje uzupełniają strony <a href=\"{{cms:regulamin}}\">Regulamin</a>, <a href=\"{{cms:dostawa}}\">Dostawa</a> i <a href=\"{{cms:polityka-prywatnosci}}\">Polityka prywatności</a>.</p>\n",
+                    "content": "<h2>Płatności testowe</h2>\n<p>W sklepie demonstracyjnym Twoje Drzwi do Sukcesu wybór płatności służy sprawdzeniu działania zamówienia. Nie wykonuj rzeczywistego przelewu, nie przesyłaj czeków i nie podawaj numeru karty ani kodu zabezpieczającego.</p>\n<h2>Udostępnione formy płatności</h2>\n<ul><li>Płatność przy odbiorze (testowa)</li><li>Przelew bankowy (testowy)</li><li>BLIK (demo) — bez pobierania pieniędzy</li><li>PayPal (demo) — bez pobierania pieniędzy</li></ul>\n<p>Metody dostępne dla danego zamówienia pojawią się w ostatnim kroku zakupów. Ich wybór może zależeć od adresu, waluty oraz sposobu dostawy. Brak wybranej metody na tej liście oznacza, że nie jest ona aktualnie udostępniona w tej konfiguracji.</p>\n<h2>Potwierdzenie zamówienia</h2>\n<p>Sprawdź łączną kwotę brutto i koszt dostawy, a następnie wybierz dostępną metodę testową. Potwierdzenie zapisuje zamówienie w sklepie; komunikat o oczekiwaniu na zapłatę jest elementem scenariusza demonstracyjnego. Nie należy na jego podstawie przekazywać pieniędzy.</p>\n<h2>Status płatności i faktura demonstracyjna</h2>\n<p>Po wyborze przelewu zamówienie otrzymuje status „Oczekiwanie na płatność przelewem”, a po wyborze pobrania „Oczekiwanie na płatność przy odbiorze”. W tych statusach faktura nie jest jeszcze dostępna. W scenariuszu testowym administrator potwierdza otrzymanie płatności, zmieniając status na „Płatność zaakceptowana”. Wtedy powstaje demonstracyjna faktura VAT, którą można pobrać po zalogowaniu z sekcji „Historia i szczegóły zamówień” w <a href=\"{{shop_url}}moje-konto\">koncie klienta</a>. Dokument ma fikcyjne dane wystawcy i nie służy do rozliczeń.</p>\n<h2>BLIK i PayPal — tryb demonstracyjny</h2>\n<p>Opcje BLIK (demo) i PayPal (demo) zapisują wyłącznie zamówienie testowe, bez połączenia z operatorem i bez pobierania pieniędzy. Nie wpisuj prawdziwego kodu BLIK ani danych logowania do PayPal. Zamówienie otrzymuje status „Oczekiwanie na potwierdzenie płatności testowej”; administrator może potwierdzić je w panelu w ramach scenariusza demonstracyjnego.</p>\n<h2>Pomoc</h2>\n<p>Wątpliwości dotyczące działania płatności zgłoś przez <a href=\"{{shop_url}}kontakt\">formularz kontaktowy</a>. Informacje uzupełniają strony <a href=\"{{cms:regulamin}}\">Regulamin</a>, <a href=\"{{cms:dostawa}}\">Dostawa</a> i <a href=\"{{cms:polityka-prywatnosci}}\">Polityka prywatności</a>.</p>\n",
                     "link_rewrite": "formy-platnosci"
                 }
             }
@@ -1957,6 +1960,27 @@
             ]
         },
         "ps_wirepayment": {
+            "countries": [
+                "PL"
+            ],
+            "currencies": [
+                "PLN"
+            ],
+            "groups": [
+                "@customer",
+                "@guest",
+                "@visitor"
+            ],
+            "carriers": [
+                "EXPRESS",
+                "INSTALLER_DEFAULT",
+                "INSTALLER_ECONOMY",
+                "INSTALLER_LIGHT",
+                "INSTALLER_PICKUP",
+                "STANDARD"
+            ]
+        },
+        "shopdemopayments": {
             "countries": [
                 "PL"
             ],

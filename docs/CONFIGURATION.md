@@ -10,7 +10,13 @@ Strony „O sklepie”, „Regulamin”, „Polityka prywatności”, „Dostawa
 
 ## Płatności
 
-Aktywne są `ps_wirepayment` i `ps_cashondelivery`. Czek jest wyłączony. Dane przelewu mają charakter demonstracyjny. Uprawnienia obejmują Polskę, PLN, standardowe grupy klientów i referencje przewoźników. Brak integracji z rzeczywistymi operatorami.
+Aktywne są przelew (`ps_wirepayment`), pobranie (`ps_cashondelivery`) oraz **BLIK (demo)** i **PayPal (demo)** z własnego modułu `shopdemopayments`. Czek jest wyłączony. Wszystkie metody mają charakter demonstracyjny; uprawnienia obejmują Polskę, PLN, standardowe grupy klientów i referencje przewoźników.
+
+BLIK i PayPal nie łączą się z operatorami, nie wymagają kont ani kluczy i nie pobierają kodów BLIK, haseł ani pieniędzy. Tworzą zamówienie ze statusem „Oczekiwanie na potwierdzenie płatności testowej”, bez oznaczania go jako opłacone i bez faktury. Dalsze potwierdzenie w panelu działa tak jak dla pozostałych metod demonstracyjnych. Kontroler sprawdza metodę, token formularza, klienta, koszyk, PL/PLN i dostępność modułu; kwotę wylicza serwer. Ponowienie zatwierdzenia tego samego koszyka prowadzi do istniejącego zamówienia.
+
+Pliki modułu są kopiowane z obrazu podczas `configure-payments.php`, przed instalacją modułu i odtwarzaniem eksportu. Po zmianie kodu przebuduj obraz `shop`, odtwórz jego kontener i uruchom `php /opt/shop/init/configure-payments.php` jako `www-data`. Inicjalizacja świeżego sklepu wykonuje ten krok automatycznie.
+
+`php /opt/shop/init/tests/demo-payments-test.php` sprawdza obie opcje i walidację kontrolera na tymczasowym koszyku, bez tworzenia zamówień, płatności i wiadomości. Wymaga istniejącego klienta z koszykiem i polskimi adresami oraz dostępnego prostego produktu. Koszyk testowy jest usuwany po sprawdzeniu.
 
 ## Dostawa
 
@@ -30,6 +36,7 @@ Dodatnia waga źródłowa jest zachowana. Przy jej braku importer wyznacza demon
 |---|---|---|---|
 | Zakup przelewem | Oczekiwanie na płatność przelewem | Nie | Oczekuje |
 | Zakup za pobraniem | Oczekiwanie na płatność przy odbiorze | Nie | Oczekuje |
+| Zakup BLIK (demo) lub PayPal (demo) | Oczekiwanie na potwierdzenie płatności testowej | Nie | Oczekuje |
 | Potwierdzenie otrzymania pieniędzy przez administratora | Płatność zaakceptowana | Tak | Generowana i dostępna |
 
 Administrator symuluje otrzymanie pieniędzy w panelu „Zamówienia”, zmieniając status na „Płatność zaakceptowana”. Natywny `OrderHistory` rejestruje płatność, generuje fakturę i wysyła polski e-mail z PDF do Mailpit. Klient pobiera dokument z historii i szczegółów zamówienia.

@@ -5,6 +5,7 @@ COPY config/php.ini /usr/local/etc/php/conf.d/zz-shop.ini
 COPY modules/shopcookieinfo /opt/shop-modules/shopcookieinfo
 COPY modules/shopcategorypagination /opt/shop-modules/shopcategorypagination
 COPY modules/shopomnibus /opt/shop-modules/shopomnibus
+COPY modules/shopdemopayments /opt/shop-modules/shopdemopayments
 # Inicjalizator kopiuje motyw z obrazu do trwałego wolumenu shop_data.
 COPY themes/pandomu /opt/shop-themes/pandomu
 # Konfiguracją zarządza init-shop.php. Restart Apache zachowuje ustawienia panelu.
