@@ -16,6 +16,12 @@ Skrypty uruchamiaj jako `www-data`. Instalacja i galerie korzystają z zapisywal
 
 ## Przerwany import
 
+### Windows: UnicodeDecodeError w subprocess / CP1250
+
+Kontenery wypisują komunikaty w UTF-8. Importer jawnie odczytuje wyjście Compose jako UTF-8 i zastępuje niepoprawne bajty diagnostyczne, aby nie przerywać wątku odczytu ani nie ukrywać kodu zakończenia procesu. W starszej wersji użyj `python -X utf8 scraper/import_catalog.py --resume` z tym samym `--state-dir`, jeżeli był podany wcześniej. Sprawdź końcowy raport: sam wyjątek wątku odczytu nie dowodzi, że import lub instalacja zostały wycofane. Nie usuwaj dzienników ani wolumenów.
+
+### Wznowienie
+
 Popraw przyczynę wskazaną w komunikacie i ponów bootstrap. Dziennik zachowuje ukończone rekordy, a mapowanie galerii umożliwia regenerację brakujących plików. Blokada jest zwalniana przez system po zakończeniu procesu.
 
 Przy zmianie źródeł wykonaj kopię danych i zastosuj świadomy import zgodnie z [opisem inicjalizacji](INITIALIZATION.md). Konflikt tożsamości lub brak zapisanego rekordu wymaga wyjaśnienia przed dalszym importem.
