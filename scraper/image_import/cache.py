@@ -7,11 +7,13 @@ import stat
 import tempfile
 import zipfile
 from collections import Counter
+from functools import partial
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 import requests
 from PIL import Image
+from robots_policy import source_get
 from scrapping_images.process_and_save_images import (
     image_meets_requirements,
     process_and_save_images,
@@ -172,7 +174,8 @@ class ImageCache:
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = None
         try:
-            with self.session.get(
+            get = self.session.get if url == RELEASE_URL else partial(source_get, self.session)
+            with get(
                 url, stream=True, timeout=(10, 60), verify=requests.certs.where()
             ) as response:
                 response.raise_for_status()

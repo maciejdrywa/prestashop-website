@@ -163,9 +163,11 @@ class VariantPriceTests(unittest.TestCase):
         def post(endpoint, **kwargs):
             """Przechwytuje żądanie odświeżenia i sprawdza jego adres oraz argumenty."""
             calls.append((endpoint, kwargs))
-            return SimpleNamespace(ok=True, json=lambda: {"product_details": details(returned)})
+            return SimpleNamespace(ok=True, status=200, json=lambda: {"product_details": details(returned)})
 
         crawler = store_crawler.__new__(store_crawler)
+        from robots_policy import RobotsPolicy
+        crawler.robots = RobotsPolicy()
         crawler.context = SimpleNamespace(request=SimpleNamespace(post=post))
         product = source()
         product.product_url = "https://pandomu.com.pl/category/5-item.html#/color"
@@ -175,6 +177,7 @@ class VariantPriceTests(unittest.TestCase):
         self.assertEqual(calls[0][0], "https://pandomu.com.pl/category/5-item.html")
         self.assertEqual(calls[0][1]["form"]["action"], "refresh")
         self.assertNotIn("add", calls[0][1]["form"])
+        self.assertEqual(calls[0][1]["max_redirects"], 0)
 
     def test_legacy_breadcrumbs_are_removed(self):
         """Sprawdza migrację starego pola breadcrumbs bez utraty przypisań."""

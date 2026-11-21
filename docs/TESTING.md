@@ -5,6 +5,7 @@ Polecenia wykonuj z głównego katalogu repozytorium. Używaj Pythona 3.11+; CI 
 ## Instalacja zależności
 
 ```powershell
+$env:PYTHONUTF8="1"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r scraper/requirements-dev.txt -r tests/requirements.txt
@@ -37,6 +38,8 @@ python -m pytest -c pytest-e2e.ini tests/unit
 Pierwsza komenda używa `pytest.ini`: zbiera wyłącznie `scraper/`, blokuje sieć i pomija testy integracyjne oraz kontrolę żywego API. Nie uruchamia `tests/unit` ani E2E.
 
 Druga komenda korzysta z ustawień Playwright i raportowania z `pytest-e2e.ini`. Nie wymaga działającego sklepu ani nie składa zamówień; część testów otwiera Chromium i lokalny serwer HTTP. `tests/unit/test_backup_script.py` uruchamia skrypt Bash, również bezpośrednio jako plik wykonywalny, dlatego pełny zestaw wymaga środowiska POSIX (Linux/macOS lub WSL z linuksowym Pythonem). Samo zainstalowanie Bash w Windows nie zapewnia zgodności tych testów.
+
+Na natywnym Windows uruchamiaj testy w trybie UTF-8 (`$env:PYTHONUTF8="1"` przed uruchomieniem Pythona lub `python -X utf8 -m pytest ...`), ponieważ część testów odczytuje pliki bez jawnego kodowania. Jest też znany błąd testu ZIP `test_unsafe_zip_never_writes_outside_cache[images\escape.jpg]`: Windows normalizuje ścieżkę przy tworzeniu testowego archiwum. Tego błędu nie należy opisywać jako poprawnego przejścia pełnego zestawu; CI działa na Linux.
 
 Kod wyjścia 0 oznacza sukces. Szczegóły zestawów i dodatkowych narzędzi opisano poniżej.
 
@@ -113,6 +116,8 @@ Wyniki trzech przebiegów kontroli odbiorowej zapisuje się w [wynikach E2E](E2E
 `pytest-e2e.ini` konfiguruje testy przeglądarkowe. Domyślny `pytest.ini` służy testom scrapera offline i blokuje połączenia sieciowe.
 
 ## Scenariusz
+
+Domyślny zestaw `pytest-e2e.ini` zbiera pliki z `tests/e2e/`, w tym scenariusz zakupowy oraz kontrole promocji i Omnibusa. Sam scenariusz zakupowy można wybrać poleceniem `python -m pytest -c pytest-e2e.ini tests/e2e/test_checkout.py`.
 
 Test `tests/e2e/test_checkout.py` wykonuje pełny zakup w jednej sesji klienta, od koszyka do pobrania faktury VAT. Każdy etap jest nazwany w `with step("...")`. Tabela podaje etapy w kolejności wykonania. Etapy pomocnicze nie odpowiadają osobnemu krokowi prowadzącego, ale są potrzebne do kolejnych.
 
@@ -194,7 +199,7 @@ Sesja panelu administratora nie jest nagrywana, żeby ślad nie zawierał hasła
 Start-Process ".\tests\playwright-report\python\index.html"
 ```
 
-Wyniki są wykluczone z Git. Kolejne uruchomienie zastępuje wcześniejsze wyniki E2E.
+Wyniki są wykluczone z Git. Kolejne uruchomienie z `pytest-e2e.ini`, również dla `tests/unit`, zastępuje raporty HTML i JUnit w tych samych ścieżkach.
 
 ## Python i JavaScript
 
@@ -245,7 +250,33 @@ Testy D2.4 w `scraper/test_image_import.py` sprawdzają ZIP, limity pobierania, 
 
 `python -m pytest -q scraper/test_catalog_import.py` sprawdza walidację offline, dry run bez Compose i plików, granice `--resume`/`--sync`, backend i adres stanu, aktywację tylko własnych nowych produktów, wznowienie po utracie odpowiedzi, zachowanie dezaktywacji administratora, blokadę innych procesów, filtrowanie sekretów i izolowany generator benchmarku. W kontenerze odrębnej instalacji API `php /opt/shop/init/tests/api-initialization-test.php` sprawdza podział faz i odmowę uruchomienia backendu PHP. Pełne przebiegi i benchmark są uruchamiane jawnie komendami z [D2.5](CATALOG_IMPORT.md), poza domyślną suite offline.
 
+## Regresje uruchamiania na Windows
+
+```sh
+python -X utf8 -m pytest -q scraper/test_compose_encoding.py scraper/test_import_state.py
+```
+
+Testy sprawdzają UTF-8 wyjścia Compose, zachowanie właściwego błędu procesu oraz atomowy zapis dziennika przy krótkotrwałych blokadach plików Windows. Nie uruchamiają sklepu ani importu.
+
+## Płatności demonstracyjne BLIK i PayPal
+
+Na przygotowanej instancji testowej z zainstalowanym `shopdemopayments`:
+
+```sh
+docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/tests/demo-payments-test.php
+```
+
+Test wymaga istniejącego klienta z koszykiem i polskimi adresami oraz prostego produktu na stanie. Tworzy i usuwa tymczasowy koszyk; zastępuje zapis zamówienia obiektem testowym. Sprawdza obie opcje, status bez opłacenia, kwotę wyliczoną przez serwer, token, klienta, błędne żądania i ponowienie. Nie tworzy zamówień ani wiadomości i nie jest pełnym testem E2E zapisu zamówienia w bazie.
+
 ## Kontrola jakości i CI
+
+Regresje obsługi lokalnego `robots.txt` uruchom bez dostępu do sieci:
+
+```sh
+python -X utf8 -m pytest scraper/test_robots_policy.py scraper/test_variant_prices.py -q
+```
+
+Testy sprawdzają reguły ścieżek i agentów, zakres domeny, błędny plik polityki, blokowanie żądań oraz przekierowań w Playwright i Requests. Nie pobierają stron źródłowego sklepu.
 
 ```sh
 python -m ruff check scraper

@@ -2,6 +2,8 @@
 
 Importer Python obsługuje produkty, kategorie produktów, opcjonalne cechy, atrybuty, kombinacje i magazyn. Używa istniejącego klienta API i macierzy uprawnień D2.1. Importer jest częścią wspólnej komendy [D2.5](CATALOG_IMPORT.md); dotychczasowa ścieżka bootstrapu PHP pozostaje dostępna.
 
+Wielowierszowe bloki `sh` w tej instrukcji są przeznaczone dla Bash (Linux/macOS/WSL). Nie wklejaj ich bez zmian do PowerShell, zwłaszcza przekierowań JSON. Do zwykłego uruchomienia na Windows używaj wspólnej [komendy importu](CATALOG_IMPORT.md), która obsługuje eksporty wewnętrznie.
+
 ## Uruchomienie
 
 Wymagane: działający sklep PrestaShop 8.2.8, konfiguracja API w istniejącym `.env`, Python z `scraper/requirements.txt`, polski kraj domyślny, PLN, kg, aktywne podatki i magazyn. API nie tworzy podatków. Import kategorii D2.2 musi wcześniej zapisać mapę dla tej samej instalacji.

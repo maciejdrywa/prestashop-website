@@ -4,7 +4,7 @@
 
 Domyślne ustawienia instalacji to Polska, język polski, PLN i kg. Inicjalizacja ustawia nazwę „Twoje Drzwi do Sukcesu”, usuwa rozpoznane produkty demonstracyjne i wyłącza slajdy, baner oraz tekst demonstracyjny. Menu odwzorowuje sześć głównych gałęzi i ich podkategorie.
 
-Strony „O sklepie”, „Regulamin”, „Polityka prywatności”, „Dostawa” i „Formy płatności” powstają z `deploy/init/content`. Stopka prowadzi do właściwych CMS. Bloki „Bezpieczeństwo”, „Dostawa” i „Zasady zakupów” są spolszczone. Moduł cookies udostępnia informację z odnośnikiem do polityki prywatności.
+Strony „O sklepie”, „Regulamin”, „Polityka prywatności”, „Dostawa” i „Formy płatności” powstają z `deploy/init/content`. Stopka prowadzi do właściwych CMS. Bloki „Bezpieczeństwo”, „Dostawa” i „Zasady zakupów” mają polskie treści w konfiguracji, ale motyw PAN DOMU nie wyświetla ich na kartach produktów. Motyw ukrywa też komentarze i udostępnianie oraz usuwa formularz subskrypcji ze stopki; opisują to [instrukcje sklepu](SHOP.md#karta-produktu-i-stopka). Moduł cookies udostępnia informację z odnośnikiem do polityki prywatności.
 
 `configure-mail.php` zapisuje SMTP `mailpit:1025` i generuje pełny polski motyw poczty natywnym `prestashop:mail:generate`. Odpowiada to funkcji „Generuj e-maile” w panelu. Gotowe pliki HTML/TXT trafiają do `mails/pl` i katalogów modułów w wolumenie sklepu. Uwzględniane są istniejące nadpisania poczty motywu. Powitanie, oczekiwanie na przelew, potwierdzenie zamówienia i płatności korzystają z tych polskich szablonów.
 
@@ -43,7 +43,7 @@ Administrator symuluje otrzymanie pieniędzy w panelu „Zamówienia”, zmienia
 
 Wystawca ma jawnie fikcyjne dane „Adres demonstracyjny 1”, „Sklep demonstracyjny”, „00-000 Miasto testowe”, Polska. Prefiks to `#FV/DEMO/`, a dokument zawiera informację o edukacyjnym charakterze. Konfiguracja zachowuje numery istniejących faktur i statusy zapisanych zamówień.
 
-Ręcznie sprawdź początkowy status i oczekiwanie na fakturę, następnie zmień status w panelu, odśwież historię klienta i pobierz PDF. Sprawdź produkty, VAT, kwoty i wiadomość w Mailpit. Powtórz dla obu metod płatności.
+Ręcznie sprawdź początkowy status i oczekiwanie na fakturę, następnie zmień status w panelu, odśwież historię klienta i pobierz PDF. Sprawdź produkty, VAT, kwoty i wiadomość w Mailpit. Powtórz dla przelewu i pobrania; dla BLIK/PayPal (demo) początkowy status to „Oczekiwanie na potwierdzenie płatności testowej”.
 
 ## Odtwarzanie
 
@@ -89,7 +89,7 @@ Tę samą kontrolę bez Dockera wykonuje `tests/unit/test_config_export.py`.
 
 ### Eksport po zmianie w panelu
 
-Po zmianie ustawień w panelu wyeksportuj konfigurację i dołącz diff pliku do PR. W PowerShell nie przekierowuj wyjścia operatorem `>`, bo zapisze plik w UTF-16. Użyj `--output` i `docker compose cp`:
+Po zmianie ustawień w panelu wyeksportuj konfigurację i dołącz diff pliku do PR. W Windows PowerShell 5.1 przekierowanie `>` zapisuje tekst domyślnie w UTF-16. Nowsze wersje PowerShell mają inne reguły, dlatego poniższy sposób jest zalecany niezależnie od wersji powłoki. Użyj `--output` i `docker compose cp`:
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/export-config.php --output=/tmp/shop-config.json
@@ -108,7 +108,7 @@ Eksport odmawia zapisu stanu sprzecznego z warunkami etapów inicjalizacji, np. 
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-from-export.php --dry-run
 ```
 
-W inicjalizacji jest to etap 23, po wszystkich konfiguratorach. Tryb pełny stosuje plik zawsze. `--resume`, czyli bootstrap, stosuje go tylko wtedy, gdy jego odcisk różni się od zapisanego. Dzięki temu nowy plik z repozytorium trafia do każdej instancji przy kolejnym starcie, a późniejsze edycje w panelu pozostają do czasu następnej zmiany pliku.
+W pełnej inicjalizacji PHP jest to etap 23, po wszystkich konfiguratorach. W torze API jest to ostatni krok `--api-finalize`, również po przygotowaniu menu, promocji, Omnibusa i treści motywu. Tryb pełny stosuje plik zawsze. `--resume`, czyli bootstrap, stosuje go tylko wtedy, gdy jego odcisk różni się od zapisanego. Dzięki temu nowy plik z repozytorium trafia do każdej instancji przy kolejnym starcie, a późniejsze edycje w panelu pozostają do czasu następnej zmiany pliku.
 
 Elementy obecne w sklepie, a nieobecne w pliku, pozostają bez zmian, np. dodatkowa strona CMS albo moduł. Wyjątkiem jest lista aktywnych krajów, odtwarzana w całości. Języki dodane w sklepie po eksporcie nie są różnicą: teksty z pliku trafiają do języków z pliku, a puste pola nowych obiektów w pozostałych językach są uzupełniane tekstem języka domyślnego.
 

@@ -43,7 +43,7 @@ Do zwykłego uruchomienia sklepu używaj wersjonowanych `products.json` i `categ
 
 ## Ograniczenia i aktualizacje
 
-Dotychczasowa dokumentacja eksportu podaje 574 produkty, 80 kategorii, 1269 kombinacji i 1388 zdjęć. Są to dane konkretnego eksportu; po ponownym scrapowaniu sprawdź bieżące pliki i raport. Produkt źródłowy 539 nie ma galerii i jest jawnie raportowany; obsługę jego placeholdera opisuje [import zdjęć](IMAGE_IMPORT.md).
+Dotychczasowa dokumentacja eksportu podaje 574 produkty, 80 kategorii, 1269 kombinacji i 1388 rzeczywistych zdjęć. Import API dodatkowo wykorzystuje jeden placeholder produktu 539, co daje 1389 obrazów w sklepie. Są to dane konkretnego eksportu; po ponownym scrapowaniu sprawdź bieżące pliki i raport. Produkt źródłowy 539 nie ma galerii i jest jawnie raportowany; obsługę jego placeholdera opisuje [import zdjęć](IMAGE_IMPORT.md).
 
 Podczas importu nie zmieniaj danych wejściowych. Zmiana eksportu wymaga świadomej synchronizacji zgodnie z [instrukcją importu](CATALOG_IMPORT.md), ponieważ wznowienie kontroluje odciski danych.
 

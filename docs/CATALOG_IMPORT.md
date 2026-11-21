@@ -4,7 +4,7 @@ Domyślny tor inicjalizacji katalogu działa na hoście w Pythonie i zapisuje ka
 
 ## Uruchomienie
 
-Wymagane: Docker z Compose v2, Python 3.10+, zależności `scraper/requirements.txt`, `.env` uzupełniony na podstawie istniejącego `.env.example` oraz eksport produktów i kategorii. Pełny lokalny katalog zdjęć nie jest wymagany — przygotuje go cache D2.4.
+Wymagane: Docker z Compose v2, Python 3.11+, zależności `scraper/requirements.txt`, `.env` uzupełniony na podstawie istniejącego `.env.example` oraz eksport produktów i kategorii. Pełny lokalny katalog zdjęć nie jest wymagany — przygotuje go cache D2.4.
 
 ```sh
 python -m pip install -r scraper/requirements.txt
@@ -68,7 +68,13 @@ Przed aktywacją odczytywane są wszystkie produkty, kombinacje, kategorie i mag
 
 Sekcja `summary` jest zapisywana w raporcie i wypisywana w terminalu. Dla `categories`, `products`, `combinations` i `images` zawiera liczniki `created`, `updated` i `rejected` bieżącego przebiegu, również gdy import zakończy się błędami. `created` i `updated` oznaczają potwierdzone operacje; aktywacja i zmiana okładki nie są dodatkowym rekordem. `rejected` obejmuje błędy importu kategorii, produkty z nieukończonym importem, nieudane próby synchronizacji kombinacji oraz niepotwierdzone obrazy w nieukończonych galeriach. Błąd kombinacji może więc zwiększyć licznik kombinacji i produktu. Obrazy potwierdzone przed błędem galerii pozostają policzone jako utworzone, zaktualizowane lub pominięte. Błędy infrastruktury pozostają w `errors`, bez przypisywania ich do fikcyjnego rekordu; nieuruchomione etapy mają zerowe liczniki.
 
+Zera w `summary` po przerwaniu etapu błędem infrastruktury nie dowodzą braku zapisów: etap mógł wykonać część operacji, zanim zwrócił raport. Do kontynuacji zachowaj dzienniki i użyj `--resume`.
+
 `idempotent=true` oznacza przebieg bez błędów i bez tworzenia/aktualizacji kategorii, produktów, słowników, kombinacji, zdjęć i aktywacji. Kontrole GET oraz idempotentne konfiguratory PHP mogą nadal wykonywać odczyty lub aktualizować własne pliki i indeksy.
+
+## Potwierdzenie uruchomienia na Windows — 21 listopada 2026 r.
+
+Końcowy raport lokalnego uruchomienia na Windows 11 z Pythonem 3.14 wskazał `status=complete`, brak błędów, utworzenie 80 kategorii, 574 produktów, 1269 kombinacji i 1389 obrazów oraz kontrolę HTTP 200. Czas całej komendy wyniósł 642,379 s, w tym Compose 55,807 s. Jest to wynik z raportu konsoli przekazanego podczas weryfikacji projektu; osobnego pliku tego raportu nie dodano do repozytorium. Nie potwierdza ponownie historycznych wyników E2E ani działania wszystkich późniejszych zmian.
 
 ## Benchmark 1000 produktów
 
@@ -114,6 +120,6 @@ Końcowa suite offline: **246 testów i 11 podtestów zaliczonych**, 14 testów 
 
 Szczegółowe raporty pozostają lokalnie w ignorowanych `logs/d25-real-v2/` i `logs/d25-benchmark/`: `report-activation.json`, `report-idempotent.json`, `report-sync-b.json`, `report-restore-a.json`, `report-cold.json`, `report-interrupted.json`, `report-resumed.json` i kontrole natywne. Zestaw techniczny jest osobno w `logs/d25-benchmark-data/`; `scraper-results/products.json` nadal zawiera 574 rzeczywiste produkty.
 
-Ograniczenia: pomiar dotyczy wskazanego sprzętu i wersji; pełnego uruchomienia nowej komendy na Windows i natywnym Linux nie sprawdzono. Benchmark używa deterministycznych kopii istniejących danych i współdzielonego cache źródłowych URL-i, z osobnymi uploadami do każdej galerii. Nie jest rozszerzeniem katalogu akademickiego.
+Ograniczenia pomiaru z 20 listopada: dotyczył wskazanego sprzętu i wersji; w ramach tamtej weryfikacji nie sprawdzono pełnego uruchomienia na Windows ani na natywnym Linuksie. Późniejszy przebieg Windows opisano w osobnej sekcji powyżej. Benchmark używa deterministycznych kopii istniejących danych i współdzielonego cache źródłowych URL-i, z osobnymi uploadami do każdej galerii. Nie jest rozszerzeniem katalogu akademickiego.
 
 [Indeks dokumentacji](README.md) · [Główne README](../README.md)

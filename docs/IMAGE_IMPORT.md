@@ -2,6 +2,8 @@
 
 Importer dodaje zdjęcia do produktów utworzonych w D2.3, rozpoznawanych po referencji `pandomu-ID`. Obsługuje cache, przypięte wydanie zdjęć, źródło, kolejność i okładki, aktualizację zawartości oraz wznowienie. Zachowuje aktywność produktów i magazyn. Wspólna komenda [D2.5](CATALOG_IMPORT.md) uruchamia pełny tor API; historyczny bootstrap PHP pozostaje dostępny.
 
+Wielowierszowe bloki `sh` w tej instrukcji są przeznaczone dla Bash (Linux/macOS/WSL). Nie wklejaj ich bez zmian do PowerShell, zwłaszcza przekierowań JSON. Do zwykłego uruchomienia na Windows używaj wspólnej [komendy importu](CATALOG_IMPORT.md), która obsługuje eksporty wewnętrznie.
+
 ## Uruchomienie
 
 W aktywnym środowisku Pythona z `scraper/requirements.txt`, po imporcie D2.3, korzystając z istniejącego `.env`:

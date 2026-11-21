@@ -2,6 +2,8 @@
 
 Edukacyjny sklep internetowy realizowany w ramach przedmiotu **Biznes elektroniczny** na Politechnice Gdańskiej. Odwzorowuje katalog i wygląd sklepu Pan Domu. Obsługuje polskie treści, warianty i galerie produktów, dostawy, płatności, demonstracyjne faktury VAT i pocztę testową.
 
+Płatności obejmują przelew, pobranie, BLIK (demo) i PayPal (demo); żadna metoda nie pobiera prawdziwych pieniędzy.
+
 Projekt łączy PrestaShop **8.2.8**, PHP **8.1**, MariaDB **10.11.14**, Nginx i Mailpit w Docker Compose z Pythonowym scraperem i importerami Webservice API. Testy wykorzystują pytest i Playwright. Dane źródłowe służą dydaktyce; sklepu z tymi danymi nie udostępniaj publicznie w internecie.
 
 ## Wymagania
@@ -24,16 +26,19 @@ git clone https://github.com/maciejdrywa/prestashop-website.git
 cd prestashop-website
 ```
 
-Wszystkie dalsze polecenia wykonuj z tego katalogu.
+Wszystkie dalsze polecenia wykonuj z tego katalogu. Jeżeli korzystasz z dokumentacji na gałęzi, której nie scalono jeszcze do `main`, przełącz się na tę samą gałąź przed instalacją zależności i uruchomieniem sklepu.
 
 PowerShell (Windows):
 
 ```powershell
+$env:PYTHONUTF8="1"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r scraper/requirements.txt
 Copy-Item .env.example .env
 ```
+
+Jeśli PowerShell blokuje aktywację środowiska, używaj bezpośrednio `.\.venv\Scripts\python.exe` zamiast `python` w dalszych poleceniach.
 
 Bash (Linux/macOS):
 
@@ -50,6 +55,10 @@ Ustaw `DB_PASSWORD`, `DB_ROOT_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` oraz `P
 
 Dla domyślnego startu pozostaw `PS_DOMAIN=localhost`, `PRESTASHOP_API_URL=https://localhost/api` i domyślne porty. `PRESTASHOP_API_VERIFY_SSL=false` dotyczy lokalnego samopodpisanego certyfikatu. Plik `.env` pozostaje poza Gitem. Pełny opis ustawień znajduje się we [wdrożeniu](docs/DEPLOYMENT.md) i [instrukcji API](docs/WEBSERVICE.md).
 
+Nowy klon nie usuwa istniejących kontenerów ani wolumenów Dockera. Aby utworzyć osobną, pustą instalację na komputerze z wcześniejszym sklepem, ustaw nieużywaną dotąd nazwę `COMPOSE_PROJECT_NAME` (np. `prestashop-fresh`) i pozostaw `DB_VOLUME_NAME` oraz `SHOP_VOLUME_NAME` nieustawione. Zatrzymaj poprzedni sklep, jeśli zajmuje porty 80, 443 lub 8025. Nie kopiuj jego katalogu `logs` do nowej instalacji.
+
+Klucz API możesz wygenerować w PowerShell poleceniem `[guid]::NewGuid().ToString("N")` i wkleić wynik do `.env`.
+
 ### 3. Uruchom sklep i inicjalizację danych
 
 W aktywnym środowisku Pythona:
@@ -60,7 +69,7 @@ python scraper/import_catalog.py --bootstrap --resume
 
 Komenda przygotowuje zdjęcia i certyfikat, uruchamia kontenery, instaluje sklep i importuje katalog przez API. Po kontroli aktywuje nowe produkty. Sukces potwierdza zakończenie polecenia kodem 0 oraz dostępność usług poniżej. Przy błędzie sprawdź komunikat i [rozwiązywanie problemów](docs/TROUBLESHOOTING.md).
 
-Po przerwaniu można wykonać tę samą komendę. Wznowienie zachowuje istniejące produkty, treści, zamówienia i magazyn; zmiany danych źródłowych wymagają świadomej synchronizacji opisanej w [imporcie katalogu](docs/CATALOG_IMPORT.md).
+Po przerwaniu można wykonać tę samą komendę. Wznowienie zachowuje istniejące produkty, treści, zamówienia i magazyn; zmiany danych źródłowych wymagają świadomej synchronizacji opisanej w [imporcie katalogu](docs/CATALOG_IMPORT.md). Jeśli podano własny `--state-dir`, zachowuj ten sam katalog przy kolejnych uruchomieniach tej instalacji.
 
 ### 4. Otwórz usługi
 
@@ -97,7 +106,7 @@ Na Linux brakujące biblioteki systemowe przeglądarki instaluje `python -m play
 python -m pytest -q
 ```
 
-Ta komenda zbiera wyłącznie testy `scraper/` i pomija integracje API. Odpowiada zestawowi uruchamianemu w CI.
+Ta komenda zbiera wyłącznie testy `scraper/` i pomija integracje API. Odpowiada zestawowi uruchamianemu w CI na Linux. Znane ograniczenia natywnego Windows, w tym testu archiwum ZIP, opisuje [instrukcja testów](docs/TESTING.md#szybki-start-testów-jednostkowych).
 
 **Pomocniki i konfiguracja**, bez działającego sklepu:
 

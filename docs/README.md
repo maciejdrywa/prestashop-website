@@ -7,6 +7,7 @@ Zacznij od [głównego README](../README.md): opisu projektu, pierwszego uruchom
 | Dokument | Zakres |
 |---|---|
 | [Architektura](ARCHITECTURE.md) | Komponenty, kontenery, zależności i przepływ danych |
+| [Decyzje architektoniczne (ADR)](adr/README.md) | Kontekst, rozważane opcje, decyzje i konsekwencje rozwiązań |
 | [Wdrożenie](DEPLOYMENT.md) | Wymagania, `.env`, Compose, HTTPS, platformy i zatrzymanie |
 | [Sklep](SHOP.md) | Obraz PrestaShop, motyw potomny, moduły i aktualizacja wyglądu |
 | [Konfiguracja](CONFIGURATION.md) | Sprzedaż, dostawy, faktury, poczta, treści i eksport ustawień |

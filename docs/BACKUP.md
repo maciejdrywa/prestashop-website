@@ -8,10 +8,10 @@ Przygotowanie środowiska opisuje [wdrożenie](DEPLOYMENT.md), a eksport samych 
 
 ## Kopia zapasowa sklepu (backup.sh)
 
-Skrypt `deploy/backup.sh` umożliwia wykonanie spójnej, kompletnej i bezpiecznej kopii zapasowej działającego sklepu PrestaShop za pomocą jednej komendy.
+Skrypt `deploy/backup.sh` tworzy kopię bazy, zdjęć produktów i wybranych plików konfiguracyjnych. Nie jest to kopia całego wolumenu sklepu; szczegółowy zakres i ograniczenia opisano poniżej.
 
 ```sh
-# Standardowe wykonanie kopii zapasowej w tle (bez przestoju sklepu)
+# Wykonanie kopii bez trybu konserwacji (polecenie działa na pierwszym planie)
 bash deploy/backup.sh
 
 # Wykonanie z przełączeniem sklepu w tryb konserwacji na czas backupu
@@ -30,12 +30,12 @@ bash deploy/backup.sh --output-dir /sciezka/do/kopii
 
 ### Bezpieczeństwo i uprawnienia
 
-- **Poufność poświadczeń**: hasła bazy danych nie są przekazywane jako argumenty CLI na hoście ani wewnątrz kontenera (`ps aux`). Zmienna `MYSQL_PWD` jest przekazywana bezpośrednio do środowiska procesu `mariadb-dump` za pomocą `env`, eliminując poświadczenia z listy procesów (`/proc/$PID/cmdline`).
+- **Przekazanie poświadczeń**: `mariadb-dump` otrzymuje hasło przez `MYSQL_PWD` w kontenerze zamiast opcji `-p` z hasłem. Procesy z odpowiednimi uprawnieniami nadal mogą odczytać środowisko; archiwum zawierające `.env` także pozostaje poufne.
 - **Kompatybilność z Windows / Git Bash**: skrypt definiuje `MSYS_NO_PATHCONV=1`, zapobiegając błędnej konwersji uniksowych ścieżek kontenerów (np. `/var/www/...`) na ścieżki Windows przez interpreter MSYS2 w środowisku Git Bash.
 - **Restrykcyjne uprawnienia**: katalog docelowy `deploy/backups` tworzony jest z uprawnieniami `0700` (`drwx------`), a plik archiwum `0600` (`-rw-------`).
 - **Ochrona przed wyciekiem do Git**: katalog `deploy/backups/` jest wykluczony w głównym `.gitignore` oraz zawiera lokalny plik `.gitignore` blokujący przypadkowe śledzenie archiwów.
 - **Sprzątanie zasobów i diagnostyka awarii**: wszelkie operacje pośrednie realizowane są w katalogu tymczasowym `mktemp -d` usuwanym przez pułapkę sygnałów (`trap ... EXIT INT TERM`). W razie wystąpienia błędu (`set -e`) skrypt natychmiast rejestruje czytelny komunikat `[ERROR]` ze wskazaniem kodu wyjścia i usuwa pliki tymczasowe.
-- **Gwarancja przywrócenia**: przy użyciu opcji `--maintenance` sklep jest automatycznie przywracany do stanu aktywnego nawet w przypadku przerwania działania skryptu błędem lub sygnałem SIGINT.
+- **Wyjście z konserwacji**: jeśli skrypt sam włączył `--maintenance`, przy zakończeniu i obsługiwanych sygnałach próbuje ponownie włączyć sklep. Nie daje to gwarancji przy awarii Dockera, utracie zasilania lub SIGKILL. Sklep wyłączony przed kopią pozostaje wyłączony.
 
 ### Spójność transakcyjna bazy a synchronizacja zdjęć
 
@@ -43,22 +43,13 @@ Zrzut bazy MariaDB realizowany jest z flagami `--single-transaction` oraz `--qui
 
 Zdjęcia produktów (`img/p`) są kopiowane z kontenera w osobnym kroku (`docker compose cp`). Jeśli w trakcie wykonywania kopii na sklepie odbywa się intensywny ruch (np. administrator dodaje, edytuje lub usuwa produkty w Back Office), stan plików graficznych na dysku może minimalnie rozbiec się ze zrzutem bazy SQL. Dodatkowo tryb konserwacji (`PS_SHOP_ENABLE=0`) wyłącza widok sklepu dla klientów, ale nie blokuje aktywności zalogowanych administratorów.
 
-> **Rekomendacja:** W celu zagwarantowania 100% atomowej spójności całego środowiska (baza danych + pliki multimedialne) zaleca się wykonywanie kopii zapasowej z parametrem `--maintenance` poza godzinami szczytu lub w planowanym oknie serwisowym.
+> **Spójność kopii:** Użyj `--maintenance` oraz wstrzymaj importy i zapisy administratorów na czas kopii. Sam tryb konserwacji nie zapewnia atomowej kopii bazy i zdjęć, ponieważ są odczytywane w osobnych krokach.
 
 ### Uprawnienia na partycjach NTFS / Windows
 
 Restrykcyjne uprawnienia katalogu `0700` (`drwx------`) oraz pliku archiwum `0600` (`-rw-------`) opierają się na standardowym modelu uprawnień POSIX i działają w pełni na systemach Linux oraz macOS.
 
 Na maszynach deweloperskich z systemem Windows korzystających z systemów plików NTFS / FAT32 (np. pod Git Bash lub WSL na ścieżkach `/mnt/c/...`), semantyka uprawnień POSIX może być emulowana lub ignorowana przez domyślne listy kontroli dostępu (ACL). W przypadku kopiowania lub przenoszenia archiwum na nośniki zewnętrzne lub do współdzielonych katalogów na platformie Windows zaleca się dodatkowe zabezpieczenie archiwum przed niepowołanym dostępem (np. szyfrowanie za pomocą GPG lub archiwizatora z szyfrowaniem AES-256).
-
-## Odtwarzanie na nowym komputerze
-
-**Na nowym komputerze:**
-
-1. Sklonuj repozytorium i przygotuj `scraper-results/` (`products.json`, `categories.json`, komplet zdjęć w `images/` z GitHub Releases). Kopia ich nie zawiera, a usługa `certificates`, od której zależy start bazy, sprawdza ten katalog.
-2. Skopiuj archiwum do `deploy/backups/`.
-3. Utwórz `.env` z `.env.example` albo użyj `--use-backup-env` (tworzy `.env` z kopii). W obu przypadkach ustaw `TLS_CERT_DIR` na katalog certyfikatów tego komputera.
-4. Uruchom `bash deploy/restore.sh --latest` (lub `--latest --use-backup-env`). Skrypt uruchomi kontenery, zainstaluje pusty PrestaShop i zastąpi go kopią. Nie uruchamiaj potem bootstrapu z importem.
 
 ## Odtwarzanie sklepu (restore.sh)
 
@@ -105,10 +96,10 @@ Na Linuksie i macOS skrypt można też uruchomić bezpośrednio: `./deploy/resto
    - zrzut trafia do bazy tymczasowej `<DB_NAME>_restore_tmp`; po sprawdzeniu liczby tabel jedna instrukcja `RENAME TABLE` podmienia tabele, a poprzednie przenosi do `<DB_NAME>_pre_restore`,
    - jeśli import się nie uda, bieżąca baza zostaje bez zmian,
    - widoki (np. `ps_omnibus_price_history` modułu `shopomnibus`) nie mogą być przenoszone przez `RENAME TABLE` między bazami, a ich `DEFINER` ze zrzutu wymagałby uprawnienia `SUPER`. Zrzut jest importowany z widokami `SQL SECURITY INVOKER` bez `DEFINER`. Po podmianie tabel konto importu tworzy widoki w bazie sklepu na nowo, a root ustawia jako `DEFINER` konto aplikacji (`DB_USER`). Zrzut z wyzwalaczami, procedurami lub zdarzeniami z `DEFINER` jest odrzucany. Rollback nie zmienia widoków: odwołują się do tabel po nazwie, więc działają z przywróconymi tabelami,
-   - przerwanie (Ctrl+C, `kill`, zamknięcie okna terminala) na dowolnym etapie po imporcie kończy się rollbackiem; gdy przerwanie trafi w podmianę tabel, skrypt czeka, aż MariaDB zakończy `RENAME TABLE`, i dopiero wtedy ustala, czy podmiana nastąpiła.
+   - obsłużone przerwanie (np. Ctrl+C lub SIGTERM) uruchamia rollback; SIGKILL, utrata zasilania lub awaria Dockera mogą uniemożliwić jego wykonanie; gdy przerwanie trafi w podmianę tabel, skrypt czeka, aż MariaDB zakończy `RENAME TABLE`, i dopiero wtedy ustala, czy podmiana nastąpiła.
 5. **Zdjęcia i konfiguracja:**
    - `img/p` trafia najpierw do katalogu tymczasowego, a poprzednia wersja zostaje jako `img/p.pre-restore`,
-   - z kopii pochodzą `cookie_key`, `cookie_iv`, `secret` i klucze API z `parameters.php`, więc hasła klientów i administratora z kopii działają,
+   - z kopii pochodzą `cookie_key`, `cookie_iv` i `secret` z `parameters.php` oraz dane kont z bazy, więc hasła klientów i administratora z kopii działają; klucz Webservice znajduje się w bazie i jest później dopasowywany do bieżącego `.env`,
    - dane połączenia z bazą pochodzą z bieżącego środowiska kontenera `shop`,
    - przywracane są też `parameters.yml`, `defines_custom.inc.php` i `.htaccess`,
    - poprzednie wersje tych plików trafiają do `var/restore-previous/` (właściciel root, uprawnienia `0600`).
@@ -156,7 +147,7 @@ Na Linuksie i macOS skrypt można też uruchomić bezpośrednio: `./deploy/resto
 2. Skopiuj archiwum do `deploy/backups/`.
 3. Uruchom `bash deploy/restore.sh --latest`. Skrypt uruchomi środowisko, poczeka na instalację pustego sklepu i zastąpi go kopią.
 
-Kopia nie zawiera dziennika inicjalizacji `var/import/`. Po odtworzeniu nie uruchamiaj bootstrapu z importem (`run bootstrap`, `init-shop.php --resume`). Na nowym wolumenie dziennika nie ma wcale, a na istniejącym opisuje dane sprzed odtworzenia.
+Kopia nie zawiera dziennika inicjalizacji `var/import/`. Po odtworzeniu nie uruchamiaj bootstrapu z importem (`run bootstrap`, `init-shop.php --resume`). Na nowym wolumenie dziennika nie ma wcale, a na istniejącym opisuje dane sprzed odtworzenia. Dotyczy to również `python scraper/import_catalog.py --bootstrap --resume`: odtworzenie kopii i inicjalizacja katalogu to osobne ścieżki.
 
 ### Ręczne odzyskanie po przerwanym rollbacku
 

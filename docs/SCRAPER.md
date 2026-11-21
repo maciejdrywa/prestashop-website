@@ -2,7 +2,7 @@
 
 ## Uruchamianie
 
-Wymagany jest Python 3.10+ oraz zależności z `scraper/requirements.txt`. BeautifulSoup odczytuje HTML, Pydantic opisuje eksport, Playwright utrzymuje sesję i odświeża kombinacje, a Pillow normalizuje zdjęcia.
+Wymagany jest Python 3.11+ oraz zależności z `scraper/requirements.txt`. BeautifulSoup odczytuje HTML, Pydantic opisuje eksport, Playwright utrzymuje sesję i odświeża kombinacje, a Pillow normalizuje zdjęcia.
 
 ```powershell
 python -m venv .venv
@@ -17,7 +17,17 @@ Na macOS/Linux aktywuj środowisko przez `source .venv/bin/activate`, a następn
 
 ## Tempo i sesja pobierania
 
-`StoreCrawler.fetch_page` odczekuje sekundę przed nawigacją, a narzędzie zdjęć stosuje sekundową przerwę. Te opóźnienia nie są globalnym limitem wszystkich żądań przeglądarki, np. zasobów strony i zapytań wariantów. Crawler używa domyślnego User-Agent Chromium, a narzędzie zdjęć ustawia własny nagłówek przeglądarki. Zapisany `robots.txt` znajduje się w `scraper/html_files_and_robots/`; sam zapis pliku nie oznacza automatycznego egzekwowania jego reguł przez crawler.
+`StoreCrawler.fetch_page` odczekuje sekundę przed nawigacją, a narzędzie zdjęć stosuje sekundową przerwę. Te opóźnienia nie są globalnym limitem wszystkich żądań przeglądarki, np. zasobów strony i zapytań wariantów.
+
+## Reguły robots.txt
+
+Moduł `scraper/robots_policy.py` odczytuje lokalny plik `scraper/html_files_and_robots/robots.txt`. Przed nowym pobieraniem zaktualizuj tę kopię zgodnie z plikiem publikowanym przez źródło. Scraper nie pobiera jej automatycznie; zmiany pliku wymagają ponownego uruchomienia procesu. Brak pliku, błąd odczytu lub brak poprawnej dyrektywy `User-agent` zatrzymuje pobieranie.
+
+Parser Protego obsługuje `Allow`, `Disallow`, wzorce `*`, zakończenie `$` oraz reguły dla konkretnego agenta. Wspólny User-Agent żądań to `TwojeDrzwiScraper/1.0 (+https://github.com/maciejdrywa/prestashop-website)`. Reguły obowiązują dla `https://pandomu.com.pl` na domyślnym porcie HTTPS; inne domeny, protokoły i adresy z danymi logowania są blokowane, ponieważ nie mają przypisanej polityki.
+
+Kontrola obejmuje strony kategorii i produktów, zasoby przeglądarki, odświeżanie wariantów, pobieranie zdjęć oraz narzędzia odświeżania opisów i okładek. Każdy krok przekierowania GET/HEAD jest sprawdzany przed wysłaniem kolejnego żądania; limit wynosi sześć żądań w łańcuchu. Przekierowania zapytań POST wariantów nie są wykonywane. Service workers są wyłączone, aby nie omijały kontroli zasobów. Zablokowane żądanie jest raportowane jako błąd lub komunikat w logu.
+
+Odczyt poprawnych zdjęć z lokalnego cache i pobieranie przypiętego archiwum GitHub Releases nie korzystają z reguł domeny źródłowej. Kontrola nie dotyczy też Webservice własnego sklepu. Implementacja nie wymusza `Crawl-delay` ani `Request-rate`.
 
 ## Odkrywanie katalogu
 

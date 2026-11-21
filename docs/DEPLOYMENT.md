@@ -4,9 +4,9 @@ Domyślna inicjalizacja przez API: `python scraper/import_catalog.py --bootstrap
 
 ## Wymagania
 
-Zainstaluj Docker Engine lub Docker Desktop z Compose v2 i uruchom silnik. Przygotuj aktualne `scraper-results/products.json` i `categories.json` oraz Python z zależnościami `scraper/requirements.txt`. Importer API pobiera brakujące zdjęcia. Historyczny tor PHP wymaga gotowego katalogu JPEG; Node służy testom modułu cookies.
+Zainstaluj Docker Engine lub Docker Desktop z Compose v2 i uruchom silnik. Przygotuj aktualne `scraper-results/products.json` i `categories.json` oraz Python 3.11+ z zależnościami `scraper/requirements.txt`. Importer API pobiera brakujące zdjęcia. Historyczny tor PHP wymaga gotowego katalogu JPEG; Node służy testom modułu cookies.
 
-Skopiuj `.env.example` do `.env` i uzupełnij hasła bazy oraz administratora. Ustaw bezwzględną ścieżkę `TLS_CERT_DIR` do lokalnego katalogu certyfikatów. Przykładowe wartości to `C:/Users/Jan/.prestashop-website/certs` na Windows albo `/home/jan/.prestashop-website/certs` na Linux. Użyj `PS_DOMAIN=localhost`, zgodnego z lokalnym Nginx i certyfikatem.
+Skopiuj `.env.example` do `.env` i uzupełnij hasła bazy, dane administratora oraz `PRESTASHOP_API_KEY` (32 znaki alfanumeryczne). Ustaw bezwzględną ścieżkę `TLS_CERT_DIR` do lokalnego katalogu certyfikatów. Przykładowe wartości to `C:/Users/Jan/.prestashop-website/certs` na Windows albo `/home/jan/.prestashop-website/certs` na Linux. Użyj `PS_DOMAIN=localhost`, zgodnego z lokalnym Nginx i certyfikatem.
 
 | Zmienna | Znaczenie |
 |---|---|
@@ -16,7 +16,13 @@ Skopiuj `.env.example` do `.env` i uzupełnij hasła bazy oraz administratora. U
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Konto administratora tworzone podczas pierwszej instalacji |
 | `PS_DOMAIN` | Lokalna domena sklepu, obecnie `localhost` |
 | `TLS_CERT_DIR` | Katalog pary `localhost.crt` i `localhost.key` |
+| `PRESTASHOP_API_URL`, `PRESTASHOP_API_KEY` | Adres lokalnego API i klucz importera; szczegóły w [instrukcji API](WEBSERVICE.md) |
+| `PRESTASHOP_API_VERIFY_SSL` | Weryfikacja TLS API; lokalny przykład z samopodpisanym certyfikatem używa `false` |
 | `BOOTSTRAP_TIMEOUT` | Limit oczekiwania bootstrapu na instalację i HTTPS w sekundach, domyślnie 900 |
+
+## Nowa instalacja a istniejące dane
+
+Katalog repozytorium i wolumeny Dockera mają osobny cykl życia. Kolejny klon z tą samą nazwą projektu Compose korzysta z wcześniejszych wolumenów. Dla nowej instalacji wybierz nieużywaną nazwę `COMPOSE_PROJECT_NAME`, pozostaw `DB_VOLUME_NAME` i `SHOP_VOLUME_NAME` nieustawione oraz zwolnij porty zajęte przez poprzednią instancję. Nie przenoś jej dzienników `logs/catalog-import/`. Przy wznowieniu istniejącej instalacji zachowaj dotychczasowe `.env`, wolumeny i katalog stanu.
 
 ## Jedna komenda API
 
@@ -46,9 +52,9 @@ Na Windows zaimportuj `localhost.crt` do zaufanych głównych urzędów certyfik
 
 `deploy/generate-cert.ps1` i `deploy/generate-cert.sh` wywołują tę samą implementację kontenerową. `start-macos.sh` wywołuje pełny bootstrap i zachowuje opcję `--trust`.
 
-## Uruchamianie ręczne
+## Uruchamianie ręczne — backend PHP
 
-Przygotuj certyfikat skryptem zgodności, uruchom usługi i poczekaj na zakończenie instalatora widoczne w logach.
+Ta ścieżka wymaga lokalnych zdjęć i dotyczy backendu PHP. Nie uruchamiaj jej na instalacji oznaczonej backendem API; dla niej używaj wspólnej komendy Python. Przygotuj certyfikat skryptem zgodności, uruchom usługi i poczekaj na zakończenie instalatora widoczne w logach. Podgląd `logs -f shop` zakończ przez Ctrl+C przed kolejną komendą; nie zatrzymuje to sklepu.
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml up -d --build
@@ -69,7 +75,7 @@ Nazwy wolumenów domyślnie wynikają z projektu Compose. Dla istniejącego skle
 
 ## Platformy i zatrzymanie
 
-Obrazy PrestaShop i MariaDB korzystają z `linux/amd64`. Na Apple Silicon wymagają emulacji w Docker Desktop. Historyczny bootstrap PHP testowano na Windows z kontenerami Linux. Tor API D2.5 i benchmark sprawdzono na macOS z Apple M4 Pro; pełny odbiór nowej komendy na Windows i natywnym Linux wymaga osobnego potwierdzenia.
+Obrazy PrestaShop i MariaDB korzystają z `linux/amd64`. Na Apple Silicon wymagają emulacji w Docker Desktop. Historyczny bootstrap PHP testowano na Windows z kontenerami Linux. Tor API D2.5 i benchmark sprawdzono na macOS z Apple M4 Pro. 21 listopada 2026 r. raport czystej inicjalizacji na Windows 11 z Pythonem 3.14 potwierdził 574 aktywne produkty, 1269 kombinacji, 1389 obrazów i HTTP 200; całość trwała około 642 s. Jest to wynik konkretnego przebiegu, nie gwarancja czasu na innym komputerze. Nie zastępuje kontroli E2E, backupu i każdej późniejszej zmiany modułów. Pełny start na natywnym Linuksie pozostaje osobno do potwierdzenia.
 
 `docker compose --env-file .env -f deploy/compose.yaml stop` zatrzymuje usługi z zachowaniem danych. `down` usuwa kontenery i sieć. Opcja `down -v` usuwa bazę, pliki sklepu i dziennik, dlatego służy wyłącznie do świadomego odtworzenia środowiska po wykonaniu kopii.
 

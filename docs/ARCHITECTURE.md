@@ -1,5 +1,7 @@
 # Architektura
 
+Uzasadnienia wyboru technologii i sposobu organizacji projektu opisują [decyzje architektoniczne (ADR)](adr/README.md): migrację E2E do Pythona, import przez Webservice, podział kontenerów oraz przechowywanie zdjęć.
+
 ## Komponenty
 
 PrestaShop 8.2.8 działa na PHP 8.1 i Apache w usłudze `shop`. MariaDB 10.11.14 przechowuje dane sklepu w wolumenie `db_data`. Pliki instalacji, galerie, cache i dziennik inicjalizacji znajdują się w `shop_data`. Nginx udostępnia lokalne HTTPS i przekierowuje HTTP. Mailpit odbiera SMTP na porcie 1025 i udostępnia skrzynkę na 8025.
@@ -40,6 +42,10 @@ Referencje produktów mają postać `pandomu-ID`, a kombinacji `pandomu-ID-combi
 ## Moduł cookies
 
 `shopcookieinfo` rejestruje `displayAfterBodyOpeningTag` i `actionFrontControllerSetMedia`. PHP tworzy komunikat oraz odnośnik CMS, JavaScript obsługuje zamknięcie, a CSS jego układ. Cookie zamknięcia jest odrębny dla sklepu i ważny 180 dni. Pliki autorskiego modułu są synchronizowane z obrazu podczas inicjalizacji. Ustawienia istniejącego modułu pozostają zachowane przy wznowieniu.
+
+## Pozostałe własne moduły
+
+`shopcategorypagination` ustawia limit strony kategorii, `shopomnibus` przechowuje historię cen i prezentuje cenę sprzed obniżki, a `shopdemopayments` udostępnia lokalne opcje BLIK (demo) i PayPal (demo). Ostatni moduł nie komunikuje się z operatorami. Jego status oczekiwania nie oznacza otrzymania pieniędzy; szczegóły zawiera [konfiguracja płatności](CONFIGURATION.md#płatności).
 
 ## Trwałość i aktualizacje
 
