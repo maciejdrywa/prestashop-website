@@ -19,7 +19,7 @@ from scrapping_images.process_and_save_images import (
     process_and_save_images,
 )
 
-RELEASE_URL = "https://github.com/maciejdrywa/prestashop-website/releases/download/product-images-v1/product_images.zip"
+RELEASE_URL = "https://github.com/maciejdrywa/prestashop-website/releases/download/etap1/product_images.zip"
 RELEASE_SHA256 = "2f48130e0b586ff40bcfd74803918dd607c34a91714cb0cfc216793bd5a870d7"
 MAX_DOWNLOAD = 20_000_000
 MAX_ARCHIVE = 128_000_000
