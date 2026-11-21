@@ -1,7 +1,7 @@
 {extends file='parent:_partials/footer.tpl'}
 
 {block name='hook_footer_before'}
-  {hook h='displayFooterBefore' excl='ps_linklist'}
+  {hook h='displayFooterBefore' excl='ps_linklist,ps_emailsubscription'}
 {/block}
 
 {block name='copyright_link'}

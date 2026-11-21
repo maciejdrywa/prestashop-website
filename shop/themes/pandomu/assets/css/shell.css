@@ -278,6 +278,7 @@
 
 #footer .footer-container { border-top: 1px solid var(--pd-border); box-shadow: none; }
 #footer .footer-container .h3, #footer .footer-container .h4, .pd-footer-toggle { color: var(--pd-link); font-size: .85rem; font-weight: 500; text-transform: uppercase; }
+#footer #block_myaccount_infos .myaccount-title a { color: inherit; font: inherit; }
 #footer .footer-container li a { color: var(--pd-text); font-size: .875rem; }
 #footer .footer-container li a:hover { color: var(--pd-link); }
 #footer #contact-infos { color: var(--pd-muted); }
