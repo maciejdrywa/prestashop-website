@@ -56,7 +56,7 @@ Dotychczasowy bootstrap PHP pozostaje dostępny dla instalacji używających bac
 docker compose --env-file .env -f deploy/compose.yaml run --build --rm bootstrap
 ```
 
-Wewnętrzne fazy PHP `init-shop.php --api-prepare` i `--api-finalize` wykonują wyłącznie konfiguratory. Przygotowanie poprzedza zapis katalogu. Finalizacja obejmuje menu, promocje, Omnibus, wyszukiwanie i filtry po aktywacji odebranego katalogu. Utrata wymaganych powiązań ukończonego konfiguratora zatrzymuje wznowienie bez nadpisywania ustawień administratora. Wszystkie tryby korzystają z jednego pliku Compose.
+Wewnętrzne fazy PHP `init-shop.php --api-prepare` i `--api-finalize` wykonują wyłącznie konfiguratory. Przygotowanie poprzedza zapis katalogu. Finalizacja obejmuje menu, promocje, Omnibus, wyszukiwanie i filtry po aktywacji odebranego katalogu. Ostatnim krokiem finalizacji jest `configure-from-export.php`: wymaga plików modułów oraz poprawnej konfiguracji wcześniejszych etapów, więc nie może działać podczas przygotowania pustego sklepu. Utrata wymaganych powiązań ukończonego konfiguratora zatrzymuje wznowienie bez nadpisywania ustawień administratora. Wszystkie tryby korzystają z jednego pliku Compose.
 
 Blokada orkiestratora obejmuje całą sesję API na tym hoście i dopuszcza wyłącznie jawnie zagnieżdżone etapy tej samej sesji. Blokady PHP chronią fazy konfiguracji. Znacznik backendu chroni przed uruchomieniem drugiego toru katalogowego; nie jest blokadą panelu administratora. Na czas importu wstrzymaj równoległą edycję katalogu.
 
