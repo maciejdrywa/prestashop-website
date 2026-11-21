@@ -130,7 +130,8 @@ def test_export_contains_required_shop_settings(export):
     assert configuration["PS_CARRIER_DEFAULT"] in export["carriers"]
     assert configuration["PS_CONDITIONS_CMS_ID"] in export["cms"]
     assert export["modules"]["ps_wirepayment"]["enabled"] and export["modules"]["ps_cashondelivery"]["enabled"]
-    for module in ("ps_wirepayment", "ps_cashondelivery"):
+    for module in ("ps_wirepayment", "ps_cashondelivery", "shopdemopayments"):
+        assert export["modules"][module]["enabled"]
         permissions = export["payments"][module]
         assert "PL" in permissions["countries"] and permissions["currencies"] and permissions["carriers"]
         assert set(permissions["carriers"]) <= set(export["carriers"])

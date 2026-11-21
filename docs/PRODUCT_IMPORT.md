@@ -2,6 +2,8 @@
 
 Importer Python obsługuje produkty, kategorie produktów, opcjonalne cechy, atrybuty, kombinacje i magazyn. Używa istniejącego klienta API i macierzy uprawnień D2.1. Importer jest częścią wspólnej komendy [D2.5](CATALOG_IMPORT.md); dotychczasowa ścieżka bootstrapu PHP pozostaje dostępna.
 
+Wielowierszowe bloki `sh` w tej instrukcji są przeznaczone dla Bash (Linux/macOS/WSL). Nie wklejaj ich bez zmian do PowerShell, zwłaszcza przekierowań JSON. Do zwykłego uruchomienia na Windows używaj wspólnej [komendy importu](CATALOG_IMPORT.md), która obsługuje eksporty wewnętrznie.
+
 ## Uruchomienie
 
 Wymagane: działający sklep PrestaShop 8.2.8, konfiguracja API w istniejącym `.env`, Python z `scraper/requirements.txt`, polski kraj domyślny, PLN, kg, aktywne podatki i magazyn. API nie tworzy podatków. Import kategorii D2.2 musi wcześniej zapisać mapę dla tej samej instalacji.
@@ -71,10 +73,12 @@ Wyniki z 19 listopada 2026 r., PrestaShop 8.2.8, projekt Compose `prestashop-d21
 - Kontrola natywnym `check-products.php --all --with-combinations` potwierdziła pola, tłumaczenia, kategorie, brutto i wszystkie kombinacje. Osobne porównanie tylko do odczytu potwierdziło magazyn względem `stockPlans()` PHP, zachowując nieaktywność produktów.
 - Pierwszy pełny przebieg: około 617 s, w tym tworzenie 571 produktów po wcześniejszej próbce trzech produktów. Ostatnia pełna synchronizacja trwała 41,911 s: 574 produkty i 1269 kombinacji pominięto, bez tworzenia, aktualizacji, resetowania magazynu i zmiany wariantów domyślnych.
 
-Szczegółowe komendy testów są w [instrukcji testów](../tests/README.md). Dane wykonania pozostają lokalnie w ignorowanym `logs/d23-test/`. Pomiar nie stanowi benchmarku D2.5: nie obejmuje 1000 produktów ani zdjęć.
+Szczegółowe komendy testów są w [instrukcji testów](TESTING.md). Dane wykonania pozostają lokalnie w ignorowanym `logs/d23-test/`. Pomiar nie stanowi benchmarku D2.5: nie obejmuje 1000 produktów ani zdjęć.
 
 Weryfikacja kodu: Ruff bez błędów, 159 testów offline i 11 subtestów; 9 testów integracyjnych przez HTTP oraz te same 9 przez HTTPS z weryfikacją certyfikatu; PHP lint eksportera bez błędów. Kontrola obejmowała również publiczny CLI i brak plików stanu/raportu po `--dry-run`.
 
 Ręczny odbiór panelu pozostaje do wykonania: produkt prosty `pandomu-539`, produkt wariantowy `pandomu-5`, produkty z wagą `demo` oraz zerowym stanem wskazane w raporcie. Sprawdź opisy, ceny i ilości kombinacji. Zdjęcia, aktywacja i prezentacja kompletnych galerii na stronie sklepu pozostają poza D2.3.
 
 Wspólną komendę przygotowania, importu API i finalizacji opisuje [D2.5](CATALOG_IMPORT.md).
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

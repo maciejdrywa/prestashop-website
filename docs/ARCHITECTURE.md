@@ -1,5 +1,7 @@
 # Architektura
 
+Uzasadnienia wyboru technologii i sposobu organizacji projektu opisują [decyzje architektoniczne (ADR)](adr/README.md): migrację E2E do Pythona, import przez Webservice, podział kontenerów oraz przechowywanie zdjęć.
+
 ## Komponenty
 
 PrestaShop 8.2.8 działa na PHP 8.1 i Apache w usłudze `shop`. MariaDB 10.11.14 przechowuje dane sklepu w wolumenie `db_data`. Pliki instalacji, galerie, cache i dziennik inicjalizacji znajdują się w `shop_data`. Nginx udostępnia lokalne HTTPS i przekierowuje HTTP. Mailpit odbiera SMTP na porcie 1025 i udostępnia skrzynkę na 8025.
@@ -13,16 +15,21 @@ flowchart LR
     Source[Pan Domu] --> Scraper[Scraper i parsery]
     Scraper --> JSON[products.json i categories.json]
     Scraper --> Images[images i próbki]
-    JSON --> Init[Inicjalizacja PHP]
-    Images --> Init
-    Init --> DB[(MariaDB)]
-    Init --> Volume[Wolumen sklepu i galerie]
+    JSON --> Import[Importer Python Webservice API]
+    Images --> Import
+    Import --> API[PrestaShop Webservice]
+    API --> DB[(MariaDB)]
+    API --> Volume[Wolumen sklepu i galerie]
+    Init[Konfiguratory PHP] --> DB
+    Init --> Volume
     Browser[Klient] --> Nginx[Nginx HTTPS]
     Nginx --> Shop[PrestaShop Apache]
     Shop --> DB
     Shop --> Volume
     Shop --> Mailpit[Mailpit]
 ```
+
+Domyślny orkiestrator `scraper/import_catalog.py --bootstrap --resume` przygotowuje środowisko przez Compose i konfiguratory PHP, importuje katalog przez Webservice, a następnie finalizuje sklep. Historyczny pełny import PHP pozostaje osobnym backendem ([import katalogu](CATALOG_IMPORT.md)).
 
 ## Odpowiedzialności kodu
 
@@ -36,6 +43,12 @@ Referencje produktów mają postać `pandomu-ID`, a kombinacji `pandomu-ID-combi
 
 `shopcookieinfo` rejestruje `displayAfterBodyOpeningTag` i `actionFrontControllerSetMedia`. PHP tworzy komunikat oraz odnośnik CMS, JavaScript obsługuje zamknięcie, a CSS jego układ. Cookie zamknięcia jest odrębny dla sklepu i ważny 180 dni. Pliki autorskiego modułu są synchronizowane z obrazu podczas inicjalizacji. Ustawienia istniejącego modułu pozostają zachowane przy wznowieniu.
 
+## Pozostałe własne moduły
+
+`shopcategorypagination` ustawia limit strony kategorii, `shopomnibus` przechowuje historię cen i prezentuje cenę sprzed obniżki, a `shopdemopayments` udostępnia lokalne opcje BLIK (demo) i PayPal (demo). Ostatni moduł nie komunikuje się z operatorami. Jego status oczekiwania nie oznacza otrzymania pieniędzy; szczegóły zawiera [konfiguracja płatności](CONFIGURATION.md#płatności).
+
 ## Trwałość i aktualizacje
 
 Restart kontenera uruchamia serwer z zachowaniem konfiguracji. Wspólną konfigurację i import wykonuje inicjalizator. Skrypty `configure-*.php` oraz importery pozostają dostępne do jawnych aktualizacji. Transakcje wykorzystują natywne klasy PrestaShop. Hooki modułów mogą wykonać `TRUNCATE` i zatwierdzić wcześniejsze zapisy, dlatego dziennik oraz mapowania uwzględniają częściowe wykonanie.
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

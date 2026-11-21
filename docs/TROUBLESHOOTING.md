@@ -8,7 +8,7 @@ Stan usług pokaże `docker compose --env-file .env -f deploy/compose.yaml ps`. 
 
 ## Brak danych albo zdjęć
 
-Przygotuj oba JSON-y oraz `scraper-results/images/`. Importer wymaga jednego lokalnego JPEG na każdy URL galerii. Zweryfikuj nazwę pliku, wymiary i limit 300000 bajtów. Pole `products_without_images` raportu źródła dotyczy produktów bez galerii w samym źródle.
+Przygotuj oba JSON-y. Domyślny importer API uzupełnia brakujące zdjęcia z cache, wydania lub źródłowych URL-i; wymaga dostępu do sieci, gdy lokalnych plików brakuje. Starszy backend PHP wymaga gotowego `scraper-results/images/` z lokalnym JPEG dla każdego URL galerii. Zweryfikuj nazwę pliku, wymiary i limit 300000 bajtów. Pole `products_without_images` raportu źródła dotyczy produktów bez galerii w samym źródle.
 
 ## Uprawnienia
 
@@ -16,9 +16,23 @@ Skrypty uruchamiaj jako `www-data`. Instalacja i galerie korzystają z zapisywal
 
 ## Przerwany import
 
+### Windows: UnicodeDecodeError w subprocess / CP1250
+
+Kontenery wypisują komunikaty w UTF-8. Importer jawnie odczytuje wyjście Compose jako UTF-8 i zastępuje niepoprawne bajty diagnostyczne, aby nie przerywać wątku odczytu ani nie ukrywać kodu zakończenia procesu. W starszej wersji użyj `python -X utf8 scraper/import_catalog.py --resume` z tym samym `--state-dir`, jeżeli był podany wcześniej. Sprawdź końcowy raport: sam wyjątek wątku odczytu nie dowodzi, że import lub instalacja zostały wycofane. Nie usuwaj dzienników ani wolumenów.
+
+### Wznowienie
+
 Popraw przyczynę wskazaną w komunikacie i ponów bootstrap. Dziennik zachowuje ukończone rekordy, a mapowanie galerii umożliwia regenerację brakujących plików. Blokada jest zwalniana przez system po zakończeniu procesu.
 
 Przy zmianie źródeł wykonaj kopię danych i zastosuj świadomy import zgodnie z [opisem inicjalizacji](INITIALIZATION.md). Konflikt tożsamości lub brak zapisanego rekordu wymaga wyjaśnienia przed dalszym importem.
+
+## Konflikt tożsamości instalacji
+
+„Stan katalogu dotyczy innej instalacji pod tym adresem” oznacza różnicę między `catalog-state.json` i tożsamością aktualnego sklepu. Najpierw sprawdź `.env`, nazwę projektu Compose oraz podłączone wolumeny. Jeżeli to ten sam sklep, użyj jego dotychczasowego `--state-dir`. Jeżeli świadomie utworzono nowy sklep, wybierz dla niego nowy katalog stanu i zachowuj go przy kolejnych uruchomieniach. Nie zmieniaj ręcznie `identity` ani nie przenoś starych mapowań do nowej bazy.
+
+## Windows: odmowa dostępu przy zapisie stanu
+
+`WinError 5`, 32 lub 33 przy podmianie `products.state.json` może oznaczać krótkotrwałą blokadę pliku. Zapis dzienników ponawia te błędy przez ograniczony czas, zachowując poprzedni stan. Jeśli błąd wraca, sprawdź uprawnienia i proces trzymający plik. Nie uruchamiaj drugiego importera; kontynuuj z tym samym katalogiem stanu.
 
 ## Logowanie administratora
 
@@ -35,3 +49,5 @@ Ustaw `PS_DOMAIN=localhost`. `TLS_CERT_DIR` musi być bezwzględną ścieżką d
 ## Różnice kontroli początkowego planu
 
 `check-products.php` i `check-stock.php` porównują aktualny sklep ze źródłem i początkowym magazynem. Edycja wagi, ceny albo zakup mogą powodować oczekiwaną różnicę. Bootstrap ze wznowieniem sprawdza trwałe powiązania i spójność danych, zachowując takie operacje.
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

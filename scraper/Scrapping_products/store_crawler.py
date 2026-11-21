@@ -5,6 +5,7 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
+from robots_policy import USER_AGENT, RobotsPolicy
 from Scrapping_products.catalog_discovery import discover_catalog, scan_category
 from Scrapping_products.variant_prices import collect_variants
 
@@ -14,13 +15,17 @@ class StoreCrawler:
     def __init__(self, cookies: str = "", *, headless: bool = False):
 
         """Otwiera trwały profil Chromium z polską lokalizacją i opcjonalnym cookie sesji źródła."""
+        self.robots = RobotsPolicy()
         self.playwright = sync_playwright().start()
 
         self.context = self.playwright.chromium.launch_persistent_context(
             user_data_dir=str(Path(__file__).resolve().parents[2] / ".browser_profile"),
             headless=headless,
             locale="pl-PL",
+            user_agent=USER_AGENT,
+            service_workers="block",
         )
+        self.context.route("**/*", self.robots.route)
 
         if cookies:
             self.context.add_cookies([
@@ -39,6 +44,7 @@ class StoreCrawler:
 
     def fetch_page(self, url:str) -> str | None:
         """Pobiera HTML z kontrolą odpowiedzi i wyzwania Cloudflare. Nieudana próba zwraca None."""
+        self.robots.require_allowed(url)
         time.sleep(1)
 
         try:
@@ -91,6 +97,7 @@ class StoreCrawler:
             # Formularz wskazuje kontroler koszyka. Odświeżenie wariantu kierujemy do
             # kontrolera produktu, zgodnie z żądaniem wariantu w sklepie źródłowym.
             endpoint = product.product_url.split("#", 1)[0]
+            self.robots.require_allowed(endpoint)
             fields = {
                 node["name"]: node.get("value", "")
                 for node in form.select('input[type="hidden"][name]')
@@ -103,10 +110,10 @@ class StoreCrawler:
             fields.update({f"group[{group}]": value for group, value in selection.items()})
             time.sleep(1)
             response = self.context.request.post(
-                endpoint, form=fields, timeout=30000,
+                endpoint, form=fields, timeout=30000, max_redirects=0,
                 headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
             )
-            if not response.ok:
+            if not response.ok or 300 <= response.status < 400:
                 raise RuntimeError(f"Błąd HTTP {response.status} przy pobieraniu wariantu {selection}.")
             try:
                 return response.json()

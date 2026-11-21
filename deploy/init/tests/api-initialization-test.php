@@ -10,6 +10,16 @@ try {
     if (!in_array('configure-webservice.php', $before, true) || in_array('configure-menu.php', $before, true)
         || !in_array('configure-menu.php', $after, true) || !in_array('configure-promotions.php', $after, true)
         || array_intersect($before, $after) !== []) throw new RuntimeException('Invalid API stage split.');
+    if (in_array('configure-from-export.php', $before, true)
+        || end($after) !== 'configure-from-export.php') {
+        throw new RuntimeException('Configuration export must run last, after catalog finalization.');
+    }
+    foreach (['configure-menu.php', 'configure-promotions.php', 'configure-omnibus.php', 'configure-theme-content.php'] as $dependency) {
+        $position = array_search($dependency, $after, true);
+        if ($position === false || $position >= count($after) - 1) {
+            throw new RuntimeException('Missing export prerequisite in API finalization: ' . $dependency);
+        }
+    }
     foreach ([...$before, ...$after] as $script) {
         if (!str_starts_with($script, 'configure-')) throw new RuntimeException('Native catalog write in API pipeline.');
     }

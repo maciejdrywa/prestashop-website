@@ -59,15 +59,18 @@ class Compose:
             env=self.env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
+        stdout, stderr = result.stdout or "", result.stderr or ""
         if result.returncode:
-            diagnostic = self.safe_output(result.stdout + "\n" + result.stderr)[-2000:]
+            diagnostic = self.safe_output(stdout + "\n" + stderr)[-2000:]
             raise ValueError(
                 f"Compose {args[0]} zakończył się kodem {result.returncode}: {diagnostic}"
             )
-        if not capture and result.stdout:
-            print(self.safe_output(result.stdout), flush=True)
-        return result.stdout
+        if not capture and stdout:
+            print(self.safe_output(stdout), flush=True)
+        return stdout
 
     def php(self, script, *args, capture=False):
         return self.run(

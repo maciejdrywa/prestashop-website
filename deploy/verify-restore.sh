@@ -337,7 +337,7 @@ write_report() {
     {
         echo "# Weryfikacja odtwarzania sklepu z kopii zapasowej"
         echo ""
-        echo "Raport wygenerowany przez \`deploy/verify-restore.sh\`. Instrukcję tworzenia i przywracania kopii opisuje [README](../README.md#kopie-zapasowe-i-odtwarzanie)."
+        echo "Raport wygenerowany przez \`deploy/verify-restore.sh\`. Instrukcję tworzenia i przywracania kopii opisuje [dokumentacja backupu](BACKUP.md)."
         echo ""
         echo "## Wynik: $( [[ "$overall" == "PASS" ]] && echo "✅ POZYTYWNY" || echo "❌ NEGATYWNY")"
         echo ""

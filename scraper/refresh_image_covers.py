@@ -6,10 +6,11 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.parse import urldefrag, urlsplit
-from urllib.request import Request, urlopen
 
+import requests
 from bs4 import BeautifulSoup
 from catalog_files import read_products, save_json
+from robots_policy import source_get
 from scraper_elements.scrap_id import scrap_id
 from scraper_elements.scrap_images import scrap_cover_image
 
@@ -19,12 +20,13 @@ def fetch_source_soup(product):
     url = urldefrag(product["product_url"])[0]
     if urlsplit(url).scheme != "https" or urlsplit(url).hostname != "pandomu.com.pl":
         raise ValueError("Unexpected source product URL.")
-    headers = {"User-Agent": "Mozilla/5.0", "Accept": "text/html"}
+    headers = {"Accept": "text/html"}
     cookie = os.environ.get("SCRAPER_CF_CLEARANCE")
     if cookie:
         headers["Cookie"] = "cf_clearance=" + cookie
-    with urlopen(Request(url, headers=headers), timeout=30) as response:
-        html = response.read().decode("utf-8")
+    with requests.Session() as session, source_get(session, url, headers=headers, timeout=30) as response:
+        response.raise_for_status()
+        html = response.content.decode("utf-8")
     soup = BeautifulSoup(html, "html.parser")
     if str(scrap_id(soup)) != str(product["product_id"]):
         raise ValueError("Source product ID mismatch.")

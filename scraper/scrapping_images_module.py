@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
+from robots_policy import USER_AGENT, source_policy
 from scrapping_images.create_zip_archive import create_zip_archive
 from scrapping_images.process_and_save_images import (
     image_meets_requirements,
@@ -57,6 +58,7 @@ def download_image(page, img_url) -> bool:
     logging.info(f"Pobieram {filename}")
 
     try:
+        source_policy().require_allowed(img_url)
         response = page.goto(img_url, wait_until="load", timeout=15000)
         if response and response.status == 200:
             image_bytes = response.body()
@@ -110,13 +112,16 @@ def main():
 
     cookies = ""
 
+    robots = source_policy()
     with sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(
             user_data_dir=str(Path(__file__).parent / ".browser_profile"),
             headless=False,
-            user_agent="Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0",
+            user_agent=USER_AGENT,
+            service_workers="block",
             locale="pl-PL"
         )
+        context.route("**/*", robots.route)
         context.add_cookies([{
             "name": "cf_clearance",
             "value": cookies,

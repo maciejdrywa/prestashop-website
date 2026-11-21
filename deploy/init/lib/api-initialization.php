@@ -26,7 +26,9 @@ function claimCatalogBackend(string $backend, bool $switch = false): void
 /** Konfiguratory przed API i po odebraniu/aktywacji katalogu. Żadnych importerów PHP. */
 function apiInitializationStages(string $phase): array
 {
-    $after = ['configure-menu.php', 'configure-promotions.php', 'configure-omnibus.php', 'configure-theme-content.php'];
+    // Eksport sprawdza warunki wszystkich konfiguratorów i wymaga ich modułów.
+    // Musi pozostać ostatni, po utworzeniu katalogu i konfiguracji jego treści.
+    $after = ['configure-menu.php', 'configure-promotions.php', 'configure-omnibus.php', 'configure-theme-content.php', 'configure-from-export.php'];
     return array_values(array_filter(initializationStages(), fn (array $stage): bool =>
         str_starts_with($stage['script'], 'configure-')
         && (in_array($stage['script'], $after, true) === ($phase === 'finalize'))));

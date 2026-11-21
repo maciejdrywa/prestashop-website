@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -32,7 +33,7 @@ _held_locks = ContextVar("prestashop_import_locks", default=frozenset())
 
 
 def atomic_json(path: Path, data: dict, *, compact: bool = False) -> None:
-    """Zapisuje i synchronizuje plik przed atomową podmianą."""
+    """Zapisuje atomowo, ponawiając krótkotrwałe blokady plików Windows."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -49,7 +50,17 @@ def atomic_json(path: Path, data: dict, *, compact: bool = False) -> None:
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
-        temporary.replace(path)
+        # Windows nie pozwala podmienić pliku otwartego bez FILE_SHARE_DELETE,
+        # np. podczas krótkiego odczytu przez skaner lub obserwatora katalogu.
+        # Ponawiamy tę samą atomową operację, nigdy nie kasując starego stanu.
+        for attempt in range(10):
+            try:
+                temporary.replace(path)
+                break
+            except OSError as exc:
+                if getattr(exc, "winerror", None) not in {5, 32, 33} or attempt == 9:
+                    raise
+                time.sleep(min(0.025 * 2**attempt, 0.25))
         temporary = None
     finally:
         if temporary is not None:

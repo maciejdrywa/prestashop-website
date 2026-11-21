@@ -130,6 +130,7 @@ function configurationPresent(string $script, \Context $context): bool
             return true;
         case 'configure-payments.php':
             return \Module::isInstalled('ps_wirepayment') && \Module::isInstalled('ps_cashondelivery')
+                && \Module::isInstalled('shopdemopayments') && \Module::isEnabled('shopdemopayments')
                 && trim((string) \Configuration::get('BANK_WIRE_DETAILS')) !== '';
         case 'configure-orders.php':
             $state = new \OrderState((int) \Configuration::get('PS_OS_PAYMENT'));

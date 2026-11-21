@@ -54,11 +54,25 @@
     </section>
   {/foreach}
 {else}
+  {* Konfigurator może pozostawić domyślny blok obok bloku projektu. *}
+  {assign var='has_project_company' value=false}
+  {foreach $linkBlocks as $block}
+    {if $block.title === 'Informacje o sklepie'}
+      {assign var='has_project_company' value=true}
+    {/if}
+  {/foreach}
+  {assign var='company_rendered' value=false}
   <div class="col-md-6 links pd-footer-links">
     <div class="row">
       {foreach $linkBlocks as $block}
         {assign var='footer_title' value=$block.title}
         {if $footer_title === 'Informacje o sklepie'}{assign var='footer_title' value='Nasza firma'}{/if}
+        {if $footer_title === 'Nasza firma'}
+          {if $company_rendered || ($has_project_company && $block.title !== 'Informacje o sklepie')}
+            {continue}
+          {/if}
+          {assign var='company_rendered' value=true}
+        {/if}
         <div class="col-md-6 wrapper">
           <h3 class="h3 hidden-sm-down">{$footer_title|escape:'html':'UTF-8'}</h3>
           <button type="button" class="title hidden-md-up pd-footer-toggle"

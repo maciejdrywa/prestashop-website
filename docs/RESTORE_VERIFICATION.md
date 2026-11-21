@@ -1,6 +1,6 @@
 # Weryfikacja odtwarzania sklepu z kopii zapasowej
 
-Raport wygenerowany przez `deploy/verify-restore.sh`. Instrukcję tworzenia i przywracania kopii opisuje [README](../README.md#kopie-zapasowe-i-odtwarzanie).
+Raport wygenerowany przez `deploy/verify-restore.sh`. Instrukcję tworzenia i przywracania kopii opisuje [README](BACKUP.md).
 
 ## Wynik: ✅ POZYTYWNY
 

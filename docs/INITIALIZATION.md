@@ -2,6 +2,8 @@
 
 Domyślna inicjalizacja przez API: `python scraper/import_catalog.py --bootstrap --resume`. Przygotowanie, finalizację i zachowaną ścieżkę PHP opisuje [D2.5](CATALOG_IMPORT.md).
 
+Poniższe tryby, kolejność i dziennik dotyczą inicjalizatora PHP `init-shop.php`. Podział przygotowania i finalizacji oraz stan domyślnego importera Python opisuje [import katalogu](CATALOG_IMPORT.md).
+
 ## Tryby
 
 `init-shop.php --dry-run` sprawdza wejście i wyświetla plan. `--resume` rozpoznaje istniejące rekordy, uzupełnia niedokończoną inicjalizację i zachowuje edycje oraz sprzedaż. Wywołanie bez opcji wykonuje pełne, jawne odtworzenie konfiguracji, danych produktów i początkowych stanów. Ten ostatni tryb może nadpisać zmiany administratora.
@@ -56,3 +58,30 @@ Wymagany jest pełny lokalny katalog `scraper-results/images/`. Nazwa JPEG powst
 Importer zapisuje mapowanie przed generowaniem obrazów i atomowo zastępuje pliki. Ponowienie niedokończonej galerii wykorzystuje istniejące ID. Hash źródła, miniatur i konfiguracji chroni przed uznaniem niekompletnych plików za gotowe. Kolejność i okładka pochodzą z `images` i `cover_image`.
 
 W czasie inicjalizacji pozostaw źródła bez zmian. Samodzielne importery są narzędziami świadomej aktualizacji i należy uruchamiać je po zakończeniu wspólnego procesu.
+
+## Mapa skryptów
+
+Wszystkie skrypty PHP uruchamiaj jako `www-data` w kontenerze `shop`, zgodnie ze wzorcem powyżej.
+
+| Skrypty | Odpowiedzialność |
+|---|---|
+| `init-shop.php` | Walidacja wejścia, blokada i wykonanie etapów lub wznowienie |
+| `import-category.php`, `import-products.php` | Drzewo kategorii, nazwy, dwa opisy, ceny, VAT i masa |
+| `import-attributes.php`, `import-combinations.php` | Słownik atrybutów i kombinacje z modyfikatorami netto |
+| `import-images.php` | Lokalne JPEG, galerie, okładki, miniatury i trwałe mapowanie |
+| `import-stock.php` | Początkowe ilości 0–10, rozdział na warianty i aktywacja |
+| `configure-storefront.php`, `configure-menu.php` | Nazwa, usunięcie demonstracji i menu źródłowe |
+| `configure-theme.php` | Synchronizacja i aktywacja motywu potomnego PAN DOMU |
+| `configure-theme-content.php` | Linki motywu, popularne produkty i przygotowanie wyszukiwania oraz filtrów po aktywacji katalogu |
+| `configure-content.php`, `configure-cookies.php`, `configure-module-texts.php` | CMS, stopka, cookies i polskie treści |
+| `configure-webservice.php` | Włączenie Webservice API i uprawnienia klucza Least Privilege |
+| `configure-carriers.php`, `configure-payments.php`, `configure-orders.php` | Dostawa, płatności, statusy i demonstracyjne faktury |
+| `configure-mail.php` | SMTP Mailpit i natywne polskie szablony e-mail |
+| `export-config.php`, `configure-from-export.php` | Eksport konfiguracji do `deploy/config/shop-config.json` i jej odtworzenie (ostatni etap) |
+| `check-environment.php`, `check-price-settings.php` | Diagnostyka środowiska, waluty i VAT |
+| `check-products.php`, `check-images.php`, `check-stock.php` | Porównanie zapisu z początkowym planem |
+| `plan-variants.php`, `audit-sales.php` | Podgląd wariantów i konfiguracji sprzedaży |
+
+`lib/` zawiera wspólną logikę, `content/` początkowe szablony HTML, a `tests/` zachowane testy jednostkowe i integracyjne. Format źródła opisuje [scraper](SCRAPER.md), reguły biznesowe [konfiguracja](CONFIGURATION.md), a polecenia testów [instrukcja testów](TESTING.md).
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

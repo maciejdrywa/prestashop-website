@@ -1,6 +1,6 @@
 # Wyniki testu E2E
 
-Wyniki kontroli odbiorowej scenariusza zakupu z `tests/e2e/test_checkout.py`. Opis testu i raportów: [instrukcja testów](../tests/README.md).
+Wyniki kontroli odbiorowej scenariusza zakupu z `tests/e2e/test_checkout.py`. Opis testu i raportów: [instrukcja testów](TESTING.md).
 
 ## Środowisko
 

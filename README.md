@@ -1,125 +1,143 @@
 # Twoje Drzwi do Sukcesu
 
-Sklep edukacyjny na PrestaShop 8.2.8 realizowany w ramach Biznesu elektronicznego na Politechnice Gdańskiej. Katalog odwzorowuje sklep Pan Domu. Projekt obsługuje polskie treści, warianty i galerie produktów, przelew, pobranie, dostawy, demonstracyjne faktury VAT i pocztę w Mailpit.
+Edukacyjny sklep internetowy realizowany w ramach przedmiotu **Biznes elektroniczny** na Politechnice Gdańskiej. Odwzorowuje katalog i wygląd sklepu Pan Domu. Obsługuje polskie treści, warianty i galerie produktów, dostawy, płatności, demonstracyjne faktury VAT i pocztę testową.
 
-## Uruchomienie
+Płatności obejmują przelew, pobranie, BLIK (demo) i PayPal (demo); żadna metoda nie pobiera prawdziwych pieniędzy.
 
-Wymagane są Docker Engine z Compose v2, Python z zależnościami `scraper/requirements.txt`, plik `.env` uzupełniony na podstawie `.env.example` oraz `products.json` i `categories.json`. Brakujące zdjęcia pobiera importer.
+Projekt łączy PrestaShop **8.2.8**, PHP **8.1**, MariaDB **10.11.14**, Nginx i Mailpit w Docker Compose z Pythonowym scraperem i importerami Webservice API. Testy wykorzystują pytest i Playwright. Dane źródłowe służą dydaktyce; sklepu z tymi danymi nie udostępniaj publicznie w internecie.
 
-Z głównego katalogu repozytorium wykonaj jedną komendę.
+## Wymagania
+
+- Git oraz działający Docker Engine lub Docker Desktop z Compose v2, w trybie kontenerów Linux.
+- Python 3.11+ z pip i venv. CI scrapera używa Pythona 3.14.
+- Wolne porty 80, 443 i 8025 dla domyślnej instalacji lokalnej.
+- Pliki `scraper-results/products.json` i `categories.json` z repozytorium. Brakujące zdjęcia przygotuje importer.
+
+Obrazy korzystają z `linux/amd64`; Apple Silicon wymaga emulacji. Szczegóły platform i dotychczasowej weryfikacji zawiera [wdrożenie](docs/DEPLOYMENT.md#platformy-i-zatrzymanie).
+
+## Uruchomienie krok po kroku
+
+### 1. Przygotuj repozytorium i Pythona
+
+Sklonuj repozytorium i przejdź do jego katalogu głównego:
+
+```sh
+git clone https://github.com/maciejdrywa/prestashop-website.git
+cd prestashop-website
+```
+
+Wszystkie dalsze polecenia wykonuj z tego katalogu. Jeżeli korzystasz z dokumentacji na gałęzi, której nie scalono jeszcze do `main`, przełącz się na tę samą gałąź przed instalacją zależności i uruchomieniem sklepu.
+
+PowerShell (Windows):
+
+```powershell
+$env:PYTHONUTF8="1"
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r scraper/requirements.txt
+Copy-Item .env.example .env
+```
+
+Jeśli PowerShell blokuje aktywację środowiska, używaj bezpośrednio `.\.venv\Scripts\python.exe` zamiast `python` w dalszych poleceniach.
+
+Bash (Linux/macOS):
+
+```sh
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r scraper/requirements.txt
+cp .env.example .env
+```
+
+### 2. Uzupełnij lokalny `.env`
+
+Ustaw `DB_PASSWORD`, `DB_ROOT_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` oraz `PRESTASHOP_API_KEY` (32 znaki alfanumeryczne). `TLS_CERT_DIR` musi być bezwzględną ścieżką katalogu certyfikatów na Twoim komputerze, np. `C:/Users/Jan/.prestashop-website/certs` lub `/home/jan/.prestashop-website/certs`.
+
+Dla domyślnego startu pozostaw `PS_DOMAIN=localhost`, `PRESTASHOP_API_URL=https://localhost/api` i domyślne porty. `PRESTASHOP_API_VERIFY_SSL=false` dotyczy lokalnego samopodpisanego certyfikatu. Plik `.env` pozostaje poza Gitem. Pełny opis ustawień znajduje się we [wdrożeniu](docs/DEPLOYMENT.md) i [instrukcji API](docs/WEBSERVICE.md).
+
+Nowy klon nie usuwa istniejących kontenerów ani wolumenów Dockera. Aby utworzyć osobną, pustą instalację na komputerze z wcześniejszym sklepem, ustaw nieużywaną dotąd nazwę `COMPOSE_PROJECT_NAME` (np. `prestashop-fresh`) i pozostaw `DB_VOLUME_NAME` oraz `SHOP_VOLUME_NAME` nieustawione. Zatrzymaj poprzedni sklep, jeśli zajmuje porty 80, 443 lub 8025. Nie kopiuj jego katalogu `logs` do nowej instalacji.
+
+Klucz API możesz wygenerować w PowerShell poleceniem `[guid]::NewGuid().ToString("N")` i wkleić wynik do `.env`.
+
+### 3. Uruchom sklep i inicjalizację danych
+
+W aktywnym środowisku Pythona:
 
 ```sh
 python scraper/import_catalog.py --bootstrap --resume
 ```
 
-Polecenie przygotowuje zdjęcia i certyfikat, uruchamia usługi, instaluje sklep i importuje katalog przez Webservice API. Po kontroli aktywuje nowe produkty. Przy ponownym wykonaniu zachowuje istniejące produkty, treści, zamówienia i magazyn. Zmienione dane źródłowe wymagają świadomego importu opisanego w dokumentacji.
+Komenda przygotowuje zdjęcia i certyfikat, uruchamia kontenery, instaluje sklep i importuje katalog przez API. Po kontroli aktywuje nowe produkty. Sukces potwierdza zakończenie polecenia kodem 0 oraz dostępność usług poniżej. Przy błędzie sprawdź komunikat i [rozwiązywanie problemów](docs/TROUBLESHOOTING.md).
 
-Sklep jest dostępny pod `https://localhost`, panel pod `https://localhost/admin-dev/`, a poczta pod `http://localhost:8025`. Dane administratora określa `.env` podczas pierwszej instalacji. Lokalny certyfikat wymaga dodania do zaufanych zgodnie z instrukcją systemu.
+Po przerwaniu można wykonać tę samą komendę. Wznowienie zachowuje istniejące produkty, treści, zamówienia i magazyn; zmiany danych źródłowych wymagają świadomej synchronizacji opisanej w [imporcie katalogu](docs/CATALOG_IMPORT.md). Jeśli podano własny `--state-dir`, zachowuj ten sam katalog przy kolejnych uruchomieniach tej instalacji.
 
-### Webservice API
+### 4. Otwórz usługi
 
-Webservice API jest konfigurowane podczas inicjalizacji. Importer Python synchronizuje kategorie oraz produkty, cechy, kombinacje, magazyn i galerie; wspólna komenda używa API, a historyczny bootstrap PHP pozostaje dostępny jako osobny backend. Parametry połączenia określa `.env`:
-- `PRESTASHOP_API_URL` — adres API (domyślnie `https://localhost/api`),
-- `PRESTASHOP_API_KEY` — 32-znakowy klucz alfanumeryczny z uprawnieniami *Least Privilege* (zasoby katalogu, bez dostępu do zamówień i klientów),
-- `PRESTASHOP_API_VERIFY_SSL` — weryfikacja certyfikatu TLS (`false` dla środowiska lokalnego).
+| Usługa | Adres |
+|---|---|
+| Sklep | [https://localhost](https://localhost) |
+| Panel administratora | [https://localhost/admin-dev/](https://localhost/admin-dev/) |
+| Poczta testowa Mailpit | [http://localhost:8025](http://localhost:8025) |
 
-Kontrolę połączenia, tożsamości instalacji i uprawnień, bez zapisywania danych, wykonuje:
+Dane administratora pochodzą z `.env` podczas pierwszej instalacji. Ich późniejsza zmiana w pliku nie resetuje hasła istniejącego konta.
 
-```sh
-python3 scraper/test_api_client.py
-```
+Certyfikat `localhost.crt` powstaje w `TLS_CERT_DIR`. Dodaj go do zaufanych certyfikatów systemu lub przeglądarki zgodnie z [instrukcją HTTPS](docs/DEPLOYMENT.md#https).
 
-Konfigurację i wznowienie kategorii opisuje [Webservice](docs/WEBSERVICE.md), a komendy i wyniki D2.3 — [import produktów](docs/PRODUCT_IMPORT.md). Zdjęcia i wznowienie galerii opisuje [import zdjęć D2.4](docs/IMAGE_IMPORT.md). Klucz importera nie ma uprawnień DELETE; stary test tworzący i usuwający kategorię zastąpiła kontrola tylko do odczytu.
-## Kopie zapasowe i odtwarzanie
-
-Polecenia uruchamiamy z głównego katalogu repozytorium w Bashu: na Linuksie i macOS w terminalu, na Windows w PowerShellu przez `bash …` (WSL) albo w Git Bash. Wymagany jest działający Docker i plik `.env`.
-
-**Kopia zapasowa** działającego sklepu (baza MariaDB, zdjęcia produktów `img/p`, pliki konfiguracyjne i manifest z sumami SHA-256):
+Aby zatrzymać usługi z zachowaniem danych:
 
 ```sh
-bash deploy/backup.sh                 # bez przerwy w działaniu sklepu
-bash deploy/backup.sh --maintenance   # sklep wyłączony na czas kopii, pełna spójność bazy i zdjęć
+docker compose --env-file .env -f deploy/compose.yaml stop
 ```
 
-Archiwum `backup_RRRRMMDD_GGMMSS.tar.gz` trafia do `deploy/backups/` (katalog wykluczony z Gita). Zawiera `.env` i klucze sklepu, więc przechowuj je jak hasła.
+## Testy jednostkowe
 
-**Odtworzenie** sklepu z archiwum:
+W aktywnym środowisku `.venv` zainstaluj zależności testowe:
 
 ```sh
-bash deploy/restore.sh --verify-only deploy/backups/backup_RRRRMMDD_GGMMSS.tar.gz   # tylko kontrola archiwum
-bash deploy/restore.sh deploy/backups/backup_RRRRMMDD_GGMMSS.tar.gz                 # odtworzenie wskazanej kopii
-bash deploy/restore.sh --latest                                                     # odtworzenie najnowszej kopii
+python -m pip install -r scraper/requirements-dev.txt -r tests/requirements.txt
+python -m playwright install chromium
 ```
 
-Skrypt sprawdza archiwum, prosi o wpisanie nazwy bazy, robi kopię bezpieczeństwa bieżącego stanu, podmienia bazę, zdjęcia i konfigurację, a na końcu sprawdza odpowiedź sklepu. Błąd na dowolnym etapie cofa zmiany. Odtwarzaj wyłącznie archiwa z zaufanego źródła.
+Na Linux brakujące biblioteki systemowe przeglądarki instaluje `python -m playwright install --with-deps chromium`.
 
-**Na nowym komputerze:**
-
-1. Sklonuj repozytorium i przygotuj `scraper-results/` (`products.json`, `categories.json`, komplet zdjęć w `images/` z GitHub Releases). Kopia ich nie zawiera, a usługa `certificates`, od której zależy start bazy, sprawdza ten katalog.
-2. Skopiuj archiwum do `deploy/backups/`.
-3. Utwórz `.env` z `.env.example` albo użyj `--use-backup-env` (tworzy `.env` z kopii). W obu przypadkach ustaw `TLS_CERT_DIR` na katalog certyfikatów tego komputera.
-4. Uruchom `bash deploy/restore.sh --latest` (lub `--latest --use-backup-env`). Skrypt uruchomi kontenery, zainstaluje pusty PrestaShop i zastąpi go kopią. Nie uruchamiaj potem bootstrapu z importem.
-
-**Weryfikacja odtwarzania** na czystym, odizolowanym środowisku (osobny projekt Compose, nowe wolumeny, hasła i port 19443):
+**Scraper offline**, bez działającego sklepu i z zablokowaną siecią:
 
 ```sh
-bash deploy/verify-restore.sh              # kopia działającego sklepu, odtworzenie, porównanie, testy, raport
-bash deploy/verify-restore.sh --recreate   # ponowienie na nowo utworzonym środowisku
-bash deploy/verify-restore.sh --cleanup    # usunięcie środowiska weryfikacyjnego
-```
-
-Skrypt mierzy czas odtwarzania (limit 10 minut), porównuje kategorie, produkty, warianty, promocje, zdjęcia i konfigurację z działającym sklepem oraz sprawdza stronę główną, kategorię, produkt, zdjęcia, wyszukiwarkę, koszyk, start zamówienia, panel i API. Wynik zapisuje w [docs/RESTORE_VERIFICATION.md](docs/RESTORE_VERIFICATION.md). Odtworzony sklep zostaje uruchomiony pod `https://localhost:19443` do pokazania podczas odbioru. Szczegóły, opcje i ograniczenia opisuje [deploy/BACKUP.md](deploy/BACKUP.md).
-
-## Testy E2E
-
-Test Playwright sprawdza pełny zakup: koszyk, rejestrację, dostawę, płatność przy odbiorze, status zamówienia i pobranie faktury VAT. W aktywnym środowisku wirtualnym z zależnościami z `tests/requirements.txt`:
-
-```sh
-BASE_URL=https://localhost python -m pytest -c pytest-e2e.ini
-```
-
-```powershell
-$env:BASE_URL="https://localhost"; python -m pytest -c pytest-e2e.ini
-```
-
-Instalację, zmienne środowiskowe, scenariusz i raporty opisuje [instrukcja testów](tests/README.md).
-
-Pełny przepływ, tryby `--resume`/`--sync`, raporty i benchmark opisuje [D2.5](docs/CATALOG_IMPORT.md).
-
-## Sprawdzanie jakości kodu scrapera
-
-W aktywnym środowisku wirtualnym Pythona uruchom poniższe polecenia z głównego katalogu repozytorium. Ruff sprawdza pliki Pythona w `scraper/` według reguł z [`ruff.toml`](ruff.toml), a pytest uruchamia [testy scrapera offline](tests/README.md#python-i-javascript).
-
-```sh
-python -m pip install -r scraper/requirements-dev.txt
-python -m ruff check scraper
 python -m pytest -q
 ```
 
-GitHub Actions uruchamia `Scraper CI` przy każdym pull requeście. W zakładce **Checks** są wyniki zadań **Ruff** i **Scraper unit tests**. Scalaj PR do `main`, gdy oba zadania mają status **Success** dla najnowszej wersji PR-a i recenzent zaakceptował zmiany.
+Ta komenda zbiera wyłącznie testy `scraper/` i pomija integracje API. Odpowiada zestawowi uruchamianemu w CI na Linux. Znane ograniczenia natywnego Windows, w tym testu archiwum ZIP, opisuje [instrukcja testów](docs/TESTING.md#szybki-start-testów-jednostkowych).
 
-## Dokumentacja
+**Pomocniki i konfiguracja**, bez działającego sklepu:
 
-- Przygotowanie `.env`, certyfikat i uruchamianie ręczne opisuje [wdrożenie](docs/DEPLOYMENT.md).
-- Kolejność etapów, wznowienie i jawne aktualizacje opisuje [inicjalizacja](docs/INITIALIZATION.md).
-- Pobieranie katalogu i zdjęć opisuje [scraper](docs/SCRAPER.md).
-- Konfigurację i uprawnienia Webservice API opisuje [API](docs/WEBSERVICE.md).
-- Reguły sprzedaży, treści i faktury opisuje [konfiguracja](docs/CONFIGURATION.md).
-- Kopie zapasowe, odtwarzanie i jego weryfikację opisuje [deploy/BACKUP.md](deploy/BACKUP.md), a wynik ostatniej weryfikacji [raport](docs/RESTORE_VERIFICATION.md).
-- Pozostałe dokumenty i testy zbiera [indeks dokumentacji](docs/README.md).
+```sh
+python -m pytest -c pytest-e2e.ini tests/unit
+```
 
-## Struktura
+Część tych testów używa Chromium i lokalnego serwera HTTP. Pełny zestaw obejmuje też bezpośrednie uruchamianie skryptów Bash i wymaga Linux/macOS lub WSL z linuksowym Pythonem; natywny Windows nie spełnia wszystkich wymagań tych testów. Szczegóły, dodatkowe testy JavaScript/PHP oraz kontrolę Ruff opisuje [testowanie](docs/TESTING.md).
 
-| Katalog | Odpowiedzialność |
-|---|---|
-| `shop/` | Obraz PHP 8.1, konfiguracja i autorski moduł cookies |
-| `scraper/` | Crawler Playwright, parsery i testy lokalnych danych |
-| `scraper-results/` | Eksport UTF-8 i do 20 próbek zdjęć, pełne zdjęcia lokalnie |
-| `deploy/` | Compose, HTTPS, inicjalizacja i testy klas PHP |
-| `docs/` | Instrukcje, audyt i dziennik AI |
-| `tests/` | Testy E2E Playwright scenariusza zakupu i testy jednostkowe pomocników |
+## Testy E2E
 
-Baza korzysta z MariaDB 10.11.14, HTTPS obsługuje Nginx. Pełny katalog danych zawiera obecnie 574 produkty, 80 kategorii, 1269 kombinacji i 1388 zdjęć. Produkt 539 nie ma galerii źródłowej. Zestaw zdjęć i archiwum są wykluczone z Gita, a do dystrybucji służy GitHub Releases.
+Po instalacji zależności testowych i Chromium, na uruchomionym sklepie:
+
+```sh
+python -m pytest -c pytest-e2e.ini --base-url https://localhost
+```
+
+Testy sprawdzają m.in. pełny zakup z rejestracją, dostawą, płatnością i fakturą. Tworzą konta i zamówienia oraz zmieniają stany magazynowe. Przygotowanie sklepu, dane administratora i raporty opisuje [instrukcja testów](docs/TESTING.md).
+
+## Struktura projektu i dokumentacja
+
+| Katalog | Odpowiedzialność | Instrukcja |
+|---|---|---|
+| `shop/` | Obraz sklepu, motyw potomny i własne moduły | [Sklep](docs/SHOP.md) |
+| `scraper/` | Pobieranie, parsowanie i import danych | [Scraper](docs/SCRAPER.md), [import](docs/CATALOG_IMPORT.md) |
+| `scraper-results/` | Eksport katalogu i próbki zdjęć | [Dane](docs/DATA.md) |
+| `deploy/` | Kontenery, HTTPS, inicjalizacja i kopie | [Wdrożenie](docs/DEPLOYMENT.md), [backup](docs/BACKUP.md) |
+| `tests/` | Testy jednostkowe i E2E | [Testowanie](docs/TESTING.md) |
+| `docs/` | Instrukcje, raporty, audyty i dziennik AI | [Indeks dokumentacji](docs/README.md) |
+
+Przepływ danych opisuje [architektura](docs/ARCHITECTURE.md), a reguły sprzedaży [konfiguracja sklepu](docs/CONFIGURATION.md).
 
 ## Zespół
 

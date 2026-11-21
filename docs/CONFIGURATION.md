@@ -4,13 +4,19 @@
 
 Domyślne ustawienia instalacji to Polska, język polski, PLN i kg. Inicjalizacja ustawia nazwę „Twoje Drzwi do Sukcesu”, usuwa rozpoznane produkty demonstracyjne i wyłącza slajdy, baner oraz tekst demonstracyjny. Menu odwzorowuje sześć głównych gałęzi i ich podkategorie.
 
-Strony „O sklepie”, „Regulamin”, „Polityka prywatności”, „Dostawa” i „Formy płatności” powstają z `deploy/init/content`. Stopka prowadzi do właściwych CMS. Bloki „Bezpieczeństwo”, „Dostawa” i „Zasady zakupów” są spolszczone. Moduł cookies udostępnia informację z odnośnikiem do polityki prywatności.
+Strony „O sklepie”, „Regulamin”, „Polityka prywatności”, „Dostawa” i „Formy płatności” powstają z `deploy/init/content`. Stopka prowadzi do właściwych CMS. Bloki „Bezpieczeństwo”, „Dostawa” i „Zasady zakupów” mają polskie treści w konfiguracji, ale motyw PAN DOMU nie wyświetla ich na kartach produktów. Motyw ukrywa też komentarze i udostępnianie oraz usuwa formularz subskrypcji ze stopki; opisują to [instrukcje sklepu](SHOP.md#karta-produktu-i-stopka). Moduł cookies udostępnia informację z odnośnikiem do polityki prywatności.
 
 `configure-mail.php` zapisuje SMTP `mailpit:1025` i generuje pełny polski motyw poczty natywnym `prestashop:mail:generate`. Odpowiada to funkcji „Generuj e-maile” w panelu. Gotowe pliki HTML/TXT trafiają do `mails/pl` i katalogów modułów w wolumenie sklepu. Uwzględniane są istniejące nadpisania poczty motywu. Powitanie, oczekiwanie na przelew, potwierdzenie zamówienia i płatności korzystają z tych polskich szablonów.
 
 ## Płatności
 
-Aktywne są `ps_wirepayment` i `ps_cashondelivery`. Czek jest wyłączony. Dane przelewu mają charakter demonstracyjny. Uprawnienia obejmują Polskę, PLN, standardowe grupy klientów i referencje przewoźników. Brak integracji z rzeczywistymi operatorami.
+Aktywne są przelew (`ps_wirepayment`), pobranie (`ps_cashondelivery`) oraz **BLIK (demo)** i **PayPal (demo)** z własnego modułu `shopdemopayments`. Czek jest wyłączony. Wszystkie metody mają charakter demonstracyjny; uprawnienia obejmują Polskę, PLN, standardowe grupy klientów i referencje przewoźników.
+
+BLIK i PayPal nie łączą się z operatorami, nie wymagają kont ani kluczy i nie pobierają kodów BLIK, haseł ani pieniędzy. Tworzą zamówienie ze statusem „Oczekiwanie na potwierdzenie płatności testowej”, bez oznaczania go jako opłacone i bez faktury. Dalsze potwierdzenie w panelu działa tak jak dla pozostałych metod demonstracyjnych. Kontroler sprawdza metodę, token formularza, klienta, koszyk, PL/PLN i dostępność modułu; kwotę wylicza serwer. Ponowienie zatwierdzenia tego samego koszyka prowadzi do istniejącego zamówienia.
+
+Pliki modułu są kopiowane z obrazu podczas `configure-payments.php`, przed instalacją modułu i odtwarzaniem eksportu. Po zmianie kodu przebuduj obraz `shop`, odtwórz jego kontener i uruchom `php /opt/shop/init/configure-payments.php` jako `www-data`. Inicjalizacja świeżego sklepu wykonuje ten krok automatycznie.
+
+`php /opt/shop/init/tests/demo-payments-test.php` sprawdza obie opcje i walidację kontrolera na tymczasowym koszyku, bez tworzenia zamówień, płatności i wiadomości. Wymaga istniejącego klienta z koszykiem i polskimi adresami oraz dostępnego prostego produktu. Koszyk testowy jest usuwany po sprawdzeniu.
 
 ## Dostawa
 
@@ -30,13 +36,14 @@ Dodatnia waga źródłowa jest zachowana. Przy jej braku importer wyznacza demon
 |---|---|---|---|
 | Zakup przelewem | Oczekiwanie na płatność przelewem | Nie | Oczekuje |
 | Zakup za pobraniem | Oczekiwanie na płatność przy odbiorze | Nie | Oczekuje |
+| Zakup BLIK (demo) lub PayPal (demo) | Oczekiwanie na potwierdzenie płatności testowej | Nie | Oczekuje |
 | Potwierdzenie otrzymania pieniędzy przez administratora | Płatność zaakceptowana | Tak | Generowana i dostępna |
 
 Administrator symuluje otrzymanie pieniędzy w panelu „Zamówienia”, zmieniając status na „Płatność zaakceptowana”. Natywny `OrderHistory` rejestruje płatność, generuje fakturę i wysyła polski e-mail z PDF do Mailpit. Klient pobiera dokument z historii i szczegółów zamówienia.
 
 Wystawca ma jawnie fikcyjne dane „Adres demonstracyjny 1”, „Sklep demonstracyjny”, „00-000 Miasto testowe”, Polska. Prefiks to `#FV/DEMO/`, a dokument zawiera informację o edukacyjnym charakterze. Konfiguracja zachowuje numery istniejących faktur i statusy zapisanych zamówień.
 
-Ręcznie sprawdź początkowy status i oczekiwanie na fakturę, następnie zmień status w panelu, odśwież historię klienta i pobierz PDF. Sprawdź produkty, VAT, kwoty i wiadomość w Mailpit. Powtórz dla obu metod płatności.
+Ręcznie sprawdź początkowy status i oczekiwanie na fakturę, następnie zmień status w panelu, odśwież historię klienta i pobierz PDF. Sprawdź produkty, VAT, kwoty i wiadomość w Mailpit. Powtórz dla przelewu i pobrania; dla BLIK/PayPal (demo) początkowy status to „Oczekiwanie na potwierdzenie płatności testowej”.
 
 ## Odtwarzanie
 
@@ -82,7 +89,7 @@ Tę samą kontrolę bez Dockera wykonuje `tests/unit/test_config_export.py`.
 
 ### Eksport po zmianie w panelu
 
-Po zmianie ustawień w panelu wyeksportuj konfigurację i dołącz diff pliku do PR. W PowerShell nie przekierowuj wyjścia operatorem `>`, bo zapisze plik w UTF-16. Użyj `--output` i `docker compose cp`:
+Po zmianie ustawień w panelu wyeksportuj konfigurację i dołącz diff pliku do PR. W Windows PowerShell 5.1 przekierowanie `>` zapisuje tekst domyślnie w UTF-16. Nowsze wersje PowerShell mają inne reguły, dlatego poniższy sposób jest zalecany niezależnie od wersji powłoki. Użyj `--output` i `docker compose cp`:
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/export-config.php --output=/tmp/shop-config.json
@@ -101,7 +108,7 @@ Eksport odmawia zapisu stanu sprzecznego z warunkami etapów inicjalizacji, np. 
 docker compose --env-file .env -f deploy/compose.yaml exec -T --user www-data shop php /opt/shop/init/configure-from-export.php --dry-run
 ```
 
-W inicjalizacji jest to etap 23, po wszystkich konfiguratorach. Tryb pełny stosuje plik zawsze. `--resume`, czyli bootstrap, stosuje go tylko wtedy, gdy jego odcisk różni się od zapisanego. Dzięki temu nowy plik z repozytorium trafia do każdej instancji przy kolejnym starcie, a późniejsze edycje w panelu pozostają do czasu następnej zmiany pliku.
+W pełnej inicjalizacji PHP jest to etap 23, po wszystkich konfiguratorach. W torze API jest to ostatni krok `--api-finalize`, również po przygotowaniu menu, promocji, Omnibusa i treści motywu. Tryb pełny stosuje plik zawsze. `--resume`, czyli bootstrap, stosuje go tylko wtedy, gdy jego odcisk różni się od zapisanego. Dzięki temu nowy plik z repozytorium trafia do każdej instancji przy kolejnym starcie, a późniejsze edycje w panelu pozostają do czasu następnej zmiany pliku.
 
 Elementy obecne w sklepie, a nieobecne w pliku, pozostają bez zmian, np. dodatkowa strona CMS albo moduł. Wyjątkiem jest lista aktywnych krajów, odtwarzana w całości. Języki dodane w sklepie po eksporcie nie są różnicą: teksty z pliku trafiają do języków z pliku, a puste pola nowych obiektów w pozostałych językach są uzupełniane tekstem języka domyślnego.
 
@@ -112,3 +119,5 @@ Języki i waluty z pliku muszą istnieć w instalacji, bo ich dodanie wymaga pak
 **Zastosowanie całego pliku:** nowa wersja pliku jest stosowana w całości, a nie jako różnica względem poprzedniej. Lokalne edycje panelu w obszarach z pliku zostaną wtedy zastąpione wartościami z repozytorium.
 
 **Poza zakresem eksportu:** pozycje menu (`configure-menu.php`), bloki linków i reassurance, kafle motywu, pozycje hooków, tryb serwisowy (`PS_SHOP_ENABLE`, ustawiany przez `backup.sh --maintenance`), przyjazne adresy URL (zmiana wymaga regeneracji `.htaccess` w panelu), domena, SSL i Webservice. Na świeżej instalacji odtwarzają je konfiguratory. Zmiany z panelu w tych obszarach trzeba przenieść do konfiguratorów.
+
+[Indeks dokumentacji](README.md) · [Główne README](../README.md)

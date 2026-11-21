@@ -175,9 +175,14 @@ function informationalMethods(\Context $context): array
     $deliveryLabels = ['Click and collect'=>'Odbiór osobisty (testowy)', 'My carrier'=>'Dostawa kurierska (testowa)',
         'My cheap carrier'=>'Dostawa ekonomiczna (testowa)', 'My light carrier'=>'Dostawa lekkich przesyłek (testowa)'];
     $paymentLabels = ['ps_cashondelivery'=>'Płatność przy odbiorze (testowa)',
-        'ps_wirepayment'=>'Przelew bankowy (testowy)', 'ps_checkpayment'=>'Czek (testowy)'];
+        'ps_wirepayment'=>'Przelew bankowy (testowy)', 'ps_checkpayment'=>'Czek (testowy)',
+        'shopdemopayments'=>['BLIK (demo) — bez pobierania pieniędzy', 'PayPal (demo) — bez pobierania pieniędzy']];
     $delivery = array_map(fn (array $row): string => $deliveryLabels[$row['name']] ?? $row['name'], $carriers);
-    $payment = array_map(fn (array $row): string => $paymentLabels[$row['name']] ?? 'Inna metoda udostępniona w podsumowaniu zamówienia', $payments);
+    $payment = [];
+    foreach ($payments as $row) {
+        $labels = $paymentLabels[$row['name']] ?? 'Inna metoda udostępniona w podsumowaniu zamówienia';
+        array_push($payment, ...(array) $labels);
+    }
     // Etykiety metod pochodzą z bazy i są escapowane jako tekst HTML.
     // Gotowe fragmenty list są podstawiane do dedykowanych tokenów szablonów CMS.
     $list = function (array $labels): string {
